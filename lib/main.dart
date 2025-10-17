@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_osm_plugin/flutter_osm_plugin.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:location/location.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
 
@@ -33,29 +36,53 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
 
+  final MapController _mapController = MapController();
+
+  Future<void> _goToMyLocation() async {
+    Location location = Location();
+    bool serviceEnabled = await location.serviceEnabled();
+    if (!serviceEnabled) {
+      serviceEnabled = await location.requestService();
+      if (!serviceEnabled) return;
+    }
+    PermissionStatus permissionGranted = await location.hasPermission();
+    if (permissionGranted == PermissionStatus.denied) {
+      permissionGranted = await location.requestPermission();
+      if (permissionGranted != PermissionStatus.granted) return;
+    }
+    final userLocation = await location.getLocation();
+    if (userLocation.latitude != null && userLocation.longitude != null) {
+      _mapController.move(
+        LatLng(userLocation.latitude!, userLocation.longitude!),
+        _mapController.camera.zoom,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         title: Text(widget.title),
+        
       ),
-      body: OSMFlutter(
-        controller: MapController(
-          initPosition: GeoPoint(latitude: 13.74, longitude: 100.53), // Example: Bangkok
+      body: FlutterMap(
+        mapController: _mapController,
+        options: const MapOptions(
+          initialCenter: LatLng(13.7563, 100.5018), // Bangkok
+          initialZoom: 12.0,
         ),
-        osmOption: OSMOption(
-          zoomOption: ZoomOption(
-            initZoom: 12,
-            minZoomLevel: 2,
-            maxZoomLevel: 18,
-            stepZoom: 1.0,
+        children: [
+          TileLayer(
+            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+            userAgentPackageName: 'com.example.route',
           ),
-          userTrackingOption: UserTrackingOption(
-            enableTracking: false,
-            unFollowUser: false,
-          ),
-        ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _goToMyLocation,
+        child: const Icon(Icons.my_location),
       ),
     );
   }
