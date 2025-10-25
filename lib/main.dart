@@ -41,11 +41,61 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   final MapController _mapController = MapController();
-  List<gtfs.Stop> btsStops = [];
   List<gtfs.Stop> allStops = [];
-  List<gtfs.Stop> destinationResults = [];
-  List<gtfs.Stop> silomStops = [];
+  Map<String, List<gtfs.Stop>> lineStops = {};
   String selectedLine = 'Auto';
+
+  Map<String, List<String>> linePrefixes = {};
+  Map<String, Color> lineColors = {};
+  Map<String, String> lineColorHex = {};
+  List<gtfs.Route> allRoutes = [];
+
+  // Helper to get line name by stopId
+  String? _getLineName(String stopId) {
+    for (var entry in linePrefixes.entries) {
+      for (var prefix in entry.value) {
+        if (stopId.startsWith(prefix)) return entry.key;
+      }
+    }
+    return null;
+  }
+  Future<List<gtfs.Route>> _parseRoutesFromAsset(String assetPath) async {
+    try {
+      final content = await rootBundle.loadString(assetPath);
+      final lines = content.split('\n');
+      if (lines.length <= 1) return [];
+      final routes = <gtfs.Route>[];
+      final header = lines[0].split(',');
+      final idxRouteId = header.indexOf('route_id');
+      final idxAgencyId = header.indexOf('agency_id');
+      final idxShortName = header.indexOf('route_short_name');
+      final idxLongName = header.indexOf('route_long_name');
+      final idxType = header.indexOf('route_type');
+      final idxColor = header.indexOf('route_color');
+      final idxTextColor = header.indexOf('route_text_color');
+      final idxLinePrefixes = header.indexOf('line_prefixes');
+      for (var i = 1; i < lines.length; i++) {
+        final row = lines[i].split(',');
+        if (row.length < 7) continue;
+        final linePrefixes = idxLinePrefixes >= 0 && row.length > idxLinePrefixes
+          ? row.sublist(idxLinePrefixes).map((s) => s.trim()).toList().cast<String>()
+          : <String>[];
+        routes.add(gtfs.Route(
+          routeId: row[idxRouteId],
+          agencyId: row[idxAgencyId],
+          shortName: row[idxShortName],
+          longName: row[idxLongName],
+          type: row[idxType],
+          color: idxColor >= 0 ? row[idxColor] : null,
+          textColor: idxTextColor >= 0 ? row[idxTextColor] : null,
+          linePrefixes: linePrefixes,
+        ));
+      }
+      return routes;
+    } catch (_) {
+      return [];
+    }
+  }
 
     String? selectedStartStopId;
     String? selectedDestinationStopId;
@@ -55,84 +105,160 @@ class _MyHomePageState extends State<MyHomePage> {
 
     void _findDirection() {
       if (selectedStartStopId == null || selectedDestinationStopId == null) return;
-      // Cross-line navigation: find route across Sukhumvit and Silom, transfer at Siam if needed
-    final allBtsStops = [...btsStops, ...silomStops];
-    final startStop = allBtsStops.where((s) => s.stopId == selectedStartStopId).isNotEmpty
-      ? allBtsStops.firstWhere((s) => s.stopId == selectedStartStopId)
-      : null;
-    final endStop = allBtsStops.where((s) => s.stopId == selectedDestinationStopId).isNotEmpty
-      ? allBtsStops.firstWhere((s) => s.stopId == selectedDestinationStopId)
-      : null;
-    if (startStop == null || endStop == null) return;
+      final allStopsFlat = lineStops.values.expand((l) => l).toList();
+      gtfs.Stop? startStop;
+      gtfs.Stop? endStop;
+      for (var s in allStopsFlat) {
+        if (s.stopId == selectedStartStopId) { startStop = s; break; }
+      }
+      for (var s in allStopsFlat) {
+        if (s.stopId == selectedDestinationStopId) { endStop = s; break; }
+      }
+      if (startStop == null || endStop == null) return;
 
-      bool startIsSukhumvit = btsStops.any((s) => s.stopId == startStop.stopId);
-      bool endIsSukhumvit = btsStops.any((s) => s.stopId == endStop.stopId);
-      bool startIsSilom = silomStops.any((s) => s.stopId == startStop.stopId);
-      bool endIsSilom = silomStops.any((s) => s.stopId == endStop.stopId);
-
-      List<gtfs.Stop> route = [];
-      if ((startIsSukhumvit && endIsSukhumvit) || (startIsSilom && endIsSilom)) {
-        // Same line navigation
-        final stops = startIsSukhumvit ? btsStops : silomStops;
-        final startIdx = stops.indexWhere((s) => s.stopId == startStop.stopId);
-        final endIdx = stops.indexWhere((s) => s.stopId == endStop.stopId);
-        if (startIdx == -1 || endIdx == -1) return;
-        route = startIdx <= endIdx
-            ? stops.sublist(startIdx, endIdx + 1)
-            : stops.sublist(endIdx, startIdx + 1).reversed.toList();
-      } else {
-        // Cross-line navigation, transfer at Siam (E16/S2)
-        final siamSukhumvitIdx = btsStops.indexWhere((s) => s.stopId == 'E16');
-        final siamSilomIdx = silomStops.indexWhere((s) => s.stopId == 'S2');
-        if (siamSukhumvitIdx == -1 || siamSilomIdx == -1) return;
-        if (startIsSukhumvit && endIsSilom) {
-          final startIdx = btsStops.indexWhere((s) => s.stopId == startStop.stopId);
-          final siamIdx = siamSukhumvitIdx;
-          final endIdx = silomStops.indexWhere((s) => s.stopId == endStop.stopId);
-          if (startIdx == -1 || endIdx == -1) return;
-          final seg1 = startIdx <= siamIdx
-              ? btsStops.sublist(startIdx, siamIdx + 1)
-              : btsStops.sublist(siamIdx, startIdx + 1).reversed.toList();
-          final seg2 = siamSilomIdx <= endIdx
-              ? silomStops.sublist(siamSilomIdx, endIdx + 1)
-              : silomStops.sublist(endIdx, siamSilomIdx + 1).reversed.toList();
-          route = [...seg1, ...seg2];
-        } else if (startIsSilom && endIsSukhumvit) {
-          final startIdx = silomStops.indexWhere((s) => s.stopId == startStop.stopId);
-          final siamIdx = siamSilomIdx;
-          final endIdx = btsStops.indexWhere((s) => s.stopId == endStop.stopId);
-          if (startIdx == -1 || endIdx == -1) return;
-          final seg1 = startIdx <= siamIdx
-              ? silomStops.sublist(startIdx, siamIdx + 1)
-              : silomStops.sublist(siamIdx, startIdx + 1).reversed.toList();
-          final seg2 = siamSukhumvitIdx <= endIdx
-              ? btsStops.sublist(siamSukhumvitIdx, endIdx + 1)
-              : btsStops.sublist(endIdx, siamSukhumvitIdx + 1).reversed.toList();
-          route = [...seg1, ...seg2];
+      // Build adjacency map: stopId -> list of directly connected stopIds (including transfers)
+      Map<String, List<String>> adjacency = {};
+      // Connect consecutive stops within each line
+      for (var stops in lineStops.values) {
+        for (int i = 0; i < stops.length; i++) {
+          final curr = stops[i].stopId;
+          adjacency.putIfAbsent(curr, () => []);
+          if (i > 0) adjacency[curr]!.add(stops[i - 1].stopId);
+          if (i < stops.length - 1) adjacency[curr]!.add(stops[i + 1].stopId);
         }
+      }
+      // Add transfer connections: connect stops with the same coordinates (lat/lon) across all lines
+      Map<String, List<gtfs.Stop>> stopsByCoord = {};
+      for (var stop in allStopsFlat) {
+        final key = '${stop.lat.toStringAsFixed(5)},${stop.lon.toStringAsFixed(5)}';
+        stopsByCoord.putIfAbsent(key, () => []).add(stop);
+      }
+      for (var entry in stopsByCoord.entries) {
+        final stopsAtCoord = entry.value;
+        for (var a in stopsAtCoord) {
+          for (var b in stopsAtCoord) {
+            if (a.stopId != b.stopId) {
+              adjacency[a.stopId] ??= [];
+              if (!adjacency[a.stopId]!.contains(b.stopId)) adjacency[a.stopId]!.add(b.stopId);
+            }
+          }
+        }
+      }
+      // BFS to find shortest path
+      Map<String, String?> prev = {};
+      Set<String> visited = {};
+      List<String> queue = [startStop.stopId];
+      visited.add(startStop.stopId);
+      while (queue.isNotEmpty) {
+        final current = queue.removeAt(0);
+        if (current == endStop.stopId) break;
+        for (final neighbor in adjacency[current] ?? []) {
+          if (!visited.contains(neighbor)) {
+            visited.add(neighbor);
+            prev[neighbor] = current;
+            queue.add(neighbor);
+          }
+        }
+      }
+      // Reconstruct path
+      List<String> pathIds = [];
+      String? curr = endStop.stopId;
+      while (curr != null && curr != startStop.stopId) {
+        pathIds.insert(0, curr);
+        curr = prev[curr];
+      }
+      if (curr != null && curr == startStop.stopId) pathIds.insert(0, curr);
+      if (pathIds.isEmpty || pathIds.first != startStop.stopId || pathIds.last != endStop.stopId) return;
+      // Map stopIds to gtfs.Stop objects
+      List<gtfs.Stop> route = [];
+      for (var id in pathIds) {
+        gtfs.Stop? found;
+        for (var s in allStopsFlat) {
+          if (s.stopId == id) { found = s; break; }
+        }
+        if (found != null) route.add(found);
       }
       setState(() {
         directionOptions = [route, List<gtfs.Stop>.from(route.reversed)];
         selectedDirectionIndex = 0;
       });
     }
+  Color _getLineColor(String stopId) {
+    final lineName = _getLineName(stopId);
+    if (lineName != null && lineColors.containsKey(lineName)) {
+      return lineColors[lineName]!;
+    }
+    return Colors.purple;
+  }
+
+  Color _getPolylineColor(List<gtfs.Stop> stops) {
+    if (stops.isEmpty) return Colors.purple;
+    final lineName = _getLineName(stops.first.stopId);
+    if (lineName != null && lineColors.containsKey(lineName)) {
+      return lineColors[lineName]!;
+    }
+    return Colors.purple;
+  }
+
+  List<List<gtfs.Stop>> _splitRouteByLine(List<gtfs.Stop> route) {
+    if (route.isEmpty) return [];
+    List<List<gtfs.Stop>> segments = [];
+    List<gtfs.Stop> current = [route.first];
+    String lastLine = _getLineName(route.first.stopId) ?? '';
+    for (int i = 1; i < route.length; i++) {
+      String line = _getLineName(route[i].stopId) ?? '';
+      if (line != lastLine) {
+        segments.add(current);
+        current = [route[i]];
+        lastLine = line;
+      } else {
+        current.add(route[i]);
+      }
+    }
+    if (current.isNotEmpty) segments.add(current);
+    return segments;
+  }
 
   List<gtfs.Stop> get directionStopsView =>
     directionOptions.isNotEmpty ? directionOptions[selectedDirectionIndex] : [];
   @override
+  @override
   void initState() {
     super.initState();
-    _loadStops();
+    _loadRoutesAndStops();
   }
 
-  Future<void> _loadStops() async {
+  Future<void> _loadRoutesAndStops() async {
+    final routes = await _parseRoutesFromAsset('assets/gtfs_data/routes.txt');
     final stops = await _parseStopsFromAsset('assets/gtfs_data/stops.txt');
+    // Build linePrefixes and lineColors from routes
+    Map<String, List<String>> prefixMap = {};
+    Map<String, Color> colorMap = {};
+    Map<String, String> colorHexMap = {};
+    for (var route in routes) {
+      prefixMap[route.longName] = route.linePrefixes;
+      if (route.color != null && route.color!.isNotEmpty) {
+        colorHexMap[route.longName] = route.color!;
+        colorMap[route.longName] = Color(int.parse('0xFF${route.color!}'));
+      }
+    }
     setState(() {
+      allRoutes = routes;
       allStops = stops;
-      btsStops = stops.where((s) => s.stopId.startsWith('E')).toList();
-      silomStops = stops.where((s) => s.stopId.startsWith('S')).toList();
+      linePrefixes = prefixMap;
+      lineColors = colorMap;
+      lineColorHex = colorHexMap;
+      lineStops = {};
+      for (var stop in stops) {
+        final lineName = _getLineName(stop.stopId);
+        if (lineName != null) {
+          lineStops.putIfAbsent(lineName, () => []).add(stop);
+        }
+      }
     });
   }
+
+  // _loadStops is now replaced by _loadRoutesAndStops
 
   Future<List<gtfs.Stop>> _parseStopsFromAsset(String assetPath) async {
     try {
@@ -221,7 +347,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       border: OutlineInputBorder(),
                       prefixIcon: Icon(Icons.search),
                     ),
-                    items: [...btsStops, ...silomStops]
+                    items: lineStops.values.expand((l) => l)
                         .map((stop) => DropdownMenuItem(
                               value: stop.stopId,
                               child: Text(stop.name),
@@ -245,7 +371,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       border: OutlineInputBorder(),
                       prefixIcon: Icon(Icons.flag),
                     ),
-                    items: [...btsStops, ...silomStops]
+                    items: lineStops.values.expand((l) => l)
                         .map((stop) => DropdownMenuItem(
                               value: stop.stopId,
                               child: Text(stop.name),
@@ -304,19 +430,24 @@ class _MyHomePageState extends State<MyHomePage> {
                     userAgentPackageName: 'com.example.route',
                   ),
                   MarkerLayer(
-                    markers: [...btsStops, ...silomStops]
+                    markers: lineStops.values.expand((l) => l)
                         .map((stop) => Marker(
                               point: LatLng(stop.lat, stop.lon),
-                              width: 40,
-                              height: 40,
+                              width: 15,
+                              height: 15,
                               child: Tooltip(
                                 message: stop.name,
-                                child: Icon(
-                                  Icons.location_on,
-                                  color: btsStops.any((s) => s.stopId == stop.stopId)
-                                      ? Colors.green
-                                      : Colors.orange,
-                                  size: 32,
+                                child: Container(
+                                  width: 16,
+                                  height: 16,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: _getLineColor(stop.stopId),
+                                      width: 4,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ))
@@ -325,15 +456,12 @@ class _MyHomePageState extends State<MyHomePage> {
                   if (directionStopsView.isNotEmpty)
                     PolylineLayer(
                       polylines: [
-                        Polyline(
-                          points: directionStopsView.map((stop) => LatLng(stop.lat, stop.lon)).toList(),
-                          color: directionStopsView.every((s) => btsStops.any((b) => b.stopId == s.stopId))
-                              ? Colors.green
-                              : directionStopsView.every((s) => silomStops.any((b) => b.stopId == s.stopId))
-                                  ? Colors.orange
-                                  : Colors.purple,
-                          strokeWidth: 6.0,
-                        ),
+                        for (var segment in _splitRouteByLine(directionStopsView))
+                          Polyline(
+                            points: segment.map((stop) => LatLng(stop.lat, stop.lon)).toList(),
+                            color: _getPolylineColor(segment),
+                            strokeWidth: 6.0,
+                          ),
                       ],
                     ),
                 ],
