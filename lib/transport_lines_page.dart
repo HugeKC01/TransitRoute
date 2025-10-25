@@ -29,7 +29,8 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
       for (var i = 1; i < lines.length; i++) {
         final row = lines[i].split(',');
         debugPrint('Row $i: $row');
-        if (row.length < 5) continue;
+        if (row.length < 8) continue;
+        final linePrefixes = row.sublist(7).map((s) => s.trim()).toList();
         loadedRoutes.add(gtfs.Route(
           routeId: row[0],
           agencyId: row[1],
@@ -38,6 +39,7 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
           type: row[4],
           color: row.length > 5 ? row[5] : null,
           textColor: row.length > 6 ? row[6] : null,
+          linePrefixes: linePrefixes,
         ));
       }
       debugPrint('Loaded routes count: ${loadedRoutes.length}');

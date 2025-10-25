@@ -29,6 +29,7 @@ class Route {
   final String type; // e.g., "BTS", "MRT", "Train", "Bus", "Ferry"
   final String? color;
   final String? textColor;
+  final List<String> linePrefixes;
 
   Route({
     required this.routeId,
@@ -38,6 +39,7 @@ class Route {
     required this.type,
     this.color,
     this.textColor,
+    required this.linePrefixes,
   });
 }
 
