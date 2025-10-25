@@ -1,4 +1,3 @@
-// ...existing code...
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -45,6 +44,8 @@ class _MyHomePageState extends State<MyHomePage> {
   List<gtfs.Stop> btsStops = [];
   List<gtfs.Stop> allStops = [];
   List<gtfs.Stop> destinationResults = [];
+  List<gtfs.Stop> silomStops = [];
+  String selectedLine = 'Auto';
 
     String? selectedStartStopId;
     String? selectedDestinationStopId;
@@ -54,17 +55,65 @@ class _MyHomePageState extends State<MyHomePage> {
 
     void _findDirection() {
       if (selectedStartStopId == null || selectedDestinationStopId == null) return;
-      // Find indices in BTS Sukhumvit Line
-      final stops = btsStops;
-      final startIdx = stops.indexWhere((s) => s.stopId == selectedStartStopId);
-      final endIdx = stops.indexWhere((s) => s.stopId == selectedDestinationStopId);
-      if (startIdx == -1 || endIdx == -1) return;
-      final range = startIdx <= endIdx
-          ? stops.sublist(startIdx, endIdx + 1)
-          : stops.sublist(endIdx, startIdx + 1).reversed.toList();
+      // Cross-line navigation: find route across Sukhumvit and Silom, transfer at Siam if needed
+    final allBtsStops = [...btsStops, ...silomStops];
+    final startStop = allBtsStops.where((s) => s.stopId == selectedStartStopId).isNotEmpty
+      ? allBtsStops.firstWhere((s) => s.stopId == selectedStartStopId)
+      : null;
+    final endStop = allBtsStops.where((s) => s.stopId == selectedDestinationStopId).isNotEmpty
+      ? allBtsStops.firstWhere((s) => s.stopId == selectedDestinationStopId)
+      : null;
+    if (startStop == null || endStop == null) return;
+
+      bool startIsSukhumvit = btsStops.any((s) => s.stopId == startStop.stopId);
+      bool endIsSukhumvit = btsStops.any((s) => s.stopId == endStop.stopId);
+      bool startIsSilom = silomStops.any((s) => s.stopId == startStop.stopId);
+      bool endIsSilom = silomStops.any((s) => s.stopId == endStop.stopId);
+
+      List<gtfs.Stop> route = [];
+      if ((startIsSukhumvit && endIsSukhumvit) || (startIsSilom && endIsSilom)) {
+        // Same line navigation
+        final stops = startIsSukhumvit ? btsStops : silomStops;
+        final startIdx = stops.indexWhere((s) => s.stopId == startStop.stopId);
+        final endIdx = stops.indexWhere((s) => s.stopId == endStop.stopId);
+        if (startIdx == -1 || endIdx == -1) return;
+        route = startIdx <= endIdx
+            ? stops.sublist(startIdx, endIdx + 1)
+            : stops.sublist(endIdx, startIdx + 1).reversed.toList();
+      } else {
+        // Cross-line navigation, transfer at Siam (E16/S2)
+        final siamSukhumvitIdx = btsStops.indexWhere((s) => s.stopId == 'E16');
+        final siamSilomIdx = silomStops.indexWhere((s) => s.stopId == 'S2');
+        if (siamSukhumvitIdx == -1 || siamSilomIdx == -1) return;
+        if (startIsSukhumvit && endIsSilom) {
+          final startIdx = btsStops.indexWhere((s) => s.stopId == startStop.stopId);
+          final siamIdx = siamSukhumvitIdx;
+          final endIdx = silomStops.indexWhere((s) => s.stopId == endStop.stopId);
+          if (startIdx == -1 || endIdx == -1) return;
+          final seg1 = startIdx <= siamIdx
+              ? btsStops.sublist(startIdx, siamIdx + 1)
+              : btsStops.sublist(siamIdx, startIdx + 1).reversed.toList();
+          final seg2 = siamSilomIdx <= endIdx
+              ? silomStops.sublist(siamSilomIdx, endIdx + 1)
+              : silomStops.sublist(endIdx, siamSilomIdx + 1).reversed.toList();
+          route = [...seg1, ...seg2];
+        } else if (startIsSilom && endIsSukhumvit) {
+          final startIdx = silomStops.indexWhere((s) => s.stopId == startStop.stopId);
+          final siamIdx = siamSilomIdx;
+          final endIdx = btsStops.indexWhere((s) => s.stopId == endStop.stopId);
+          if (startIdx == -1 || endIdx == -1) return;
+          final seg1 = startIdx <= siamIdx
+              ? silomStops.sublist(startIdx, siamIdx + 1)
+              : silomStops.sublist(siamIdx, startIdx + 1).reversed.toList();
+          final seg2 = siamSukhumvitIdx <= endIdx
+              ? btsStops.sublist(siamSukhumvitIdx, endIdx + 1)
+              : btsStops.sublist(endIdx, siamSukhumvitIdx + 1).reversed.toList();
+          route = [...seg1, ...seg2];
+        }
+      }
       setState(() {
-          directionOptions = [range, List<gtfs.Stop>.from(range.reversed)];
-          selectedDirectionIndex = 0;
+        directionOptions = [route, List<gtfs.Stop>.from(route.reversed)];
+        selectedDirectionIndex = 0;
       });
     }
 
@@ -81,6 +130,7 @@ class _MyHomePageState extends State<MyHomePage> {
     setState(() {
       allStops = stops;
       btsStops = stops.where((s) => s.stopId.startsWith('E')).toList();
+      silomStops = stops.where((s) => s.stopId.startsWith('S')).toList();
     });
   }
 
@@ -159,58 +209,63 @@ class _MyHomePageState extends State<MyHomePage> {
       body: SafeArea(
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      initialValue: selectedStartStopId,
-                      decoration: const InputDecoration(
-                        labelText: 'Start',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.search),
-                      ),
-                      items: btsStops.map((stop) => DropdownMenuItem(
-                        value: stop.stopId,
-                        child: Text(stop.name),
-                      )).toList(),
-                      onChanged: (value) {
-                        setState(() {
-                          selectedStartStopId = value;
-                        });
-                      },
+            Row(
+              children: [
+                const Text('Start:'),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: selectedStartStopId,
+                    decoration: const InputDecoration(
+                      labelText: 'Start',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.search),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      initialValue: selectedDestinationStopId,
-                      decoration: const InputDecoration(
-                        labelText: 'Destination',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.flag),
-                      ),
-                      items: btsStops.map((stop) => DropdownMenuItem(
-                        value: stop.stopId,
-                        child: Text(stop.name),
-                      )).toList(),
-                      onChanged: (value) {
-                        setState(() {
-                          selectedDestinationStopId = value;
-                        });
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: () {
-                      _findDirection();
+                    items: [...btsStops, ...silomStops]
+                        .map((stop) => DropdownMenuItem(
+                              value: stop.stopId,
+                              child: Text(stop.name),
+                            ))
+                        .toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        selectedStartStopId = value;
+                      });
                     },
-                    child: const Text('Go'),
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 8),
+                const Text('Destination:'),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: selectedDestinationStopId,
+                    decoration: const InputDecoration(
+                      labelText: 'Destination',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.flag),
+                    ),
+                    items: [...btsStops, ...silomStops]
+                        .map((stop) => DropdownMenuItem(
+                              value: stop.stopId,
+                              child: Text(stop.name),
+                            ))
+                        .toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        selectedDestinationStopId = value;
+                      });
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: () {
+                    _findDirection();
+                  },
+                  child: const Text('Go'),
+                ),
+              ],
             ),
               if (directionOptions.length > 1)
                 Padding(
@@ -240,7 +295,7 @@ class _MyHomePageState extends State<MyHomePage> {
               child: FlutterMap(
                 mapController: _mapController,
                 options: const MapOptions(
-                  initialCenter: LatLng(13.7563, 100.5018), // Bangkok
+                  initialCenter: LatLng(13.7463, 100.5347), // Siam
                   initialZoom: 12.0,
                 ),
                 children: [
@@ -249,22 +304,34 @@ class _MyHomePageState extends State<MyHomePage> {
                     userAgentPackageName: 'com.example.route',
                   ),
                   MarkerLayer(
-                    markers: btsStops.map((stop) => Marker(
-                      point: LatLng(stop.lat, stop.lon),
-                      width: 40,
-                      height: 40,
-                      child: Tooltip(
-                        message: stop.name,
-                        child: const Icon(Icons.location_on, color: Colors.green, size: 32),
-                      ),
-                    )).toList(),
+                    markers: [...btsStops, ...silomStops]
+                        .map((stop) => Marker(
+                              point: LatLng(stop.lat, stop.lon),
+                              width: 40,
+                              height: 40,
+                              child: Tooltip(
+                                message: stop.name,
+                                child: Icon(
+                                  Icons.location_on,
+                                  color: btsStops.any((s) => s.stopId == stop.stopId)
+                                      ? Colors.green
+                                      : Colors.orange,
+                                  size: 32,
+                                ),
+                              ),
+                            ))
+                        .toList(),
                   ),
                   if (directionStopsView.isNotEmpty)
                     PolylineLayer(
                       polylines: [
                         Polyline(
                           points: directionStopsView.map((stop) => LatLng(stop.lat, stop.lon)).toList(),
-                          color: Colors.blue,
+                          color: directionStopsView.every((s) => btsStops.any((b) => b.stopId == s.stopId))
+                              ? Colors.green
+                              : directionStopsView.every((s) => silomStops.any((b) => b.stopId == s.stopId))
+                                  ? Colors.orange
+                                  : Colors.purple,
                           strokeWidth: 6.0,
                         ),
                       ],
