@@ -75,11 +75,14 @@ class _MyHomePageState extends State<MyHomePage> {
       final idxTextColor = header.indexOf('route_text_color');
       final idxLinePrefixes = header.indexOf('line_prefixes');
       for (var i = 1; i < lines.length; i++) {
-        final row = lines[i].split(',');
+        final row = _parseCsvLine(lines[i]);
         if (row.length < 7) continue;
-        final linePrefixes = idxLinePrefixes >= 0 && row.length > idxLinePrefixes
-          ? row.sublist(idxLinePrefixes).map((s) => s.trim()).toList().cast<String>()
-          : <String>[];
+        // line_prefixes may be a single field with embedded commas, so join all remaining fields
+        List<String> linePrefixes = <String>[];
+        if (idxLinePrefixes >= 0 && row.length > idxLinePrefixes) {
+          final prefixField = row.sublist(idxLinePrefixes).join(',');
+          linePrefixes = prefixField.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+        }
         routes.add(gtfs.Route(
           routeId: row[idxRouteId],
           agencyId: row[idxAgencyId],
@@ -103,83 +106,131 @@ class _MyHomePageState extends State<MyHomePage> {
     List<List<gtfs.Stop>> directionOptions = [];
     int selectedDirectionIndex = 0;
 
-    void _findDirection() {
+    void _findDirection() async {
       if (selectedStartStopId == null || selectedDestinationStopId == null) return;
-      final allStopsFlat = lineStops.values.expand((l) => l).toList();
-      gtfs.Stop? startStop;
-      gtfs.Stop? endStop;
-      for (var s in allStopsFlat) {
-        if (s.stopId == selectedStartStopId) { startStop = s; break; }
+      // Load stop_times.txt
+      final stopTimesContent = await rootBundle.loadString('assets/gtfs_data/stop_times.txt');
+      final stopTimesLines = stopTimesContent.split('\n');
+      if (stopTimesLines.length <= 1) return;
+      // Parse stop_times
+      final stopTimes = <String, List<Map<String, dynamic>>>{};
+      for (var i = 1; i < stopTimesLines.length; i++) {
+        final row = stopTimesLines[i].split(',');
+        if (row.length < 5) continue;
+        final tripId = row[0];
+        final stopId = row[3];
+        final stopSequence = int.tryParse(row[4]) ?? i;
+        stopTimes.putIfAbsent(tripId, () => []).add({
+          'stopId': stopId,
+          'stopSequence': stopSequence,
+        });
       }
-      for (var s in allStopsFlat) {
-        if (s.stopId == selectedDestinationStopId) { endStop = s; break; }
+      // Ensure each trip's stops are sorted by stop_sequence
+      for (final entry in stopTimes.entries) {
+        entry.value.sort((a, b) => (a['stopSequence'] as int).compareTo(b['stopSequence'] as int));
       }
-      if (startStop == null || endStop == null) return;
 
-      // Build adjacency map: stopId -> list of directly connected stopIds (including transfers)
-      Map<String, List<String>> adjacency = {};
-      // Connect consecutive stops within each line
-      for (var stops in lineStops.values) {
-        for (int i = 0; i < stops.length; i++) {
-          final curr = stops[i].stopId;
-          adjacency.putIfAbsent(curr, () => []);
-          if (i > 0) adjacency[curr]!.add(stops[i - 1].stopId);
-          if (i < stops.length - 1) adjacency[curr]!.add(stops[i + 1].stopId);
+      // Load trips.txt to map trip_id -> route_id
+      final tripsContent = await rootBundle.loadString('assets/gtfs_data/trips.txt');
+      final tripsLines = tripsContent.split('\n');
+      final Map<String, String> tripToRoute = {}; // trip_id -> route_id
+      if (tripsLines.length > 1) {
+        final header = tripsLines[0].split(',');
+        final idxRouteId = header.indexOf('route_id');
+        final idxTripId = header.indexOf('trip_id');
+        for (int i = 1; i < tripsLines.length; i++) {
+          final row = _parseCsvLine(tripsLines[i]);
+          if (row.length <= idxTripId || row.length <= idxRouteId || idxTripId < 0 || idxRouteId < 0) continue;
+          final routeId = row[idxRouteId];
+          final tripId = row[idxTripId];
+          if (routeId.isEmpty || tripId.isEmpty) continue;
+          tripToRoute[tripId] = routeId;
         }
       }
-      // Add transfer connections: connect stops with the same coordinates (lat/lon) across all lines
-      Map<String, List<gtfs.Stop>> stopsByCoord = {};
-      for (var stop in allStopsFlat) {
-        final key = '${stop.lat.toStringAsFixed(5)},${stop.lon.toStringAsFixed(5)}';
-        stopsByCoord.putIfAbsent(key, () => []).add(stop);
+
+      // Helper: extract alpha prefix (e.g., N/E/S/W/BL/CEN)
+      String extractPrefix(String stopId) {
+        if (stopId == 'CEN') return 'CEN';
+        final buffer = StringBuffer();
+        for (final ch in stopId.split('')) {
+          if (RegExp(r'[A-Za-z]').hasMatch(ch)) {
+            buffer.write(ch);
+          } else {
+            break;
+          }
+        }
+        return buffer.toString();
       }
-      for (var entry in stopsByCoord.entries) {
-        final stopsAtCoord = entry.value;
-        for (var a in stopsAtCoord) {
-          for (var b in stopsAtCoord) {
-            if (a.stopId != b.stopId) {
-              adjacency[a.stopId] ??= [];
-              if (!adjacency[a.stopId]!.contains(b.stopId)) adjacency[a.stopId]!.add(b.stopId);
-            }
+
+      final startPrefix = extractPrefix(selectedStartStopId!);
+      final destPrefix = extractPrefix(selectedDestinationStopId!);
+
+      // Build routeId -> prefixes map from routes loaded earlier
+      final Map<String, List<String>> routeIdToPrefixes = {
+        for (final r in allRoutes) r.routeId: r.linePrefixes
+      };
+
+      // Determine candidate routeIds to consider based on prefixes
+      Set<String> candidateRouteIds = {};
+      final bool prefersSukhumvit = (startPrefix == 'N' || startPrefix == 'E') || (destPrefix == 'N' || destPrefix == 'E');
+      final bool prefersSilom = (startPrefix == 'W' || startPrefix == 'S') || (destPrefix == 'W' || destPrefix == 'S');
+      if (prefersSukhumvit && !prefersSilom) {
+        for (final e in routeIdToPrefixes.entries) {
+          final p = e.value;
+          if (p.contains('N') || p.contains('E')) candidateRouteIds.add(e.key);
+        }
+      } else if (prefersSilom && !prefersSukhumvit) {
+        for (final e in routeIdToPrefixes.entries) {
+          final p = e.value;
+          if (p.contains('W') || p.contains('S')) candidateRouteIds.add(e.key);
+        }
+      } else {
+        // Ambiguous (e.g., CEN to CEN), allow any BTS routes present
+        for (final e in routeIdToPrefixes.entries) {
+          candidateRouteIds.add(e.key);
+        }
+      }
+
+      // Choose the best trip containing both stops and matching candidate routes
+      String? selectedTripId;
+      int bestSpan = -1;
+      for (var entry in stopTimes.entries) {
+        final tripId = entry.key;
+        final routeId = tripToRoute[tripId];
+        if (routeId == null || !candidateRouteIds.contains(routeId)) continue;
+        final tripStops = entry.value;
+        final startIdx = tripStops.indexWhere((s) => s['stopId'] == selectedStartStopId);
+        final destIdx = tripStops.indexWhere((s) => s['stopId'] == selectedDestinationStopId);
+        if (startIdx != -1 && destIdx != -1) {
+          final span = (destIdx - startIdx).abs();
+          if (span > bestSpan) {
+            bestSpan = span;
+            selectedTripId = tripId;
           }
         }
       }
-      // BFS to find shortest path
-      Map<String, String?> prev = {};
-      Set<String> visited = {};
-      List<String> queue = [startStop.stopId];
-      visited.add(startStop.stopId);
-      while (queue.isNotEmpty) {
-        final current = queue.removeAt(0);
-        if (current == endStop.stopId) break;
-        for (final neighbor in adjacency[current] ?? []) {
-          if (!visited.contains(neighbor)) {
-            visited.add(neighbor);
-            prev[neighbor] = current;
-            queue.add(neighbor);
-          }
-        }
+      if (selectedTripId == null) {
+        setState(() {
+          directionOptions = [];
+          selectedDirectionIndex = 0;
+        });
+        return;
       }
-      // Reconstruct path
-      List<String> pathIds = [];
-      String? curr = endStop.stopId;
-      while (curr != null && curr != startStop.stopId) {
-        pathIds.insert(0, curr);
-        curr = prev[curr];
-      }
-      if (curr != null && curr == startStop.stopId) pathIds.insert(0, curr);
-      if (pathIds.isEmpty || pathIds.first != startStop.stopId || pathIds.last != endStop.stopId) return;
-      // Map stopIds to gtfs.Stop objects
-      List<gtfs.Stop> route = [];
-      for (var id in pathIds) {
-        gtfs.Stop? found;
-        for (var s in allStopsFlat) {
-          if (s.stopId == id) { found = s; break; }
-        }
-        if (found != null) route.add(found);
+  final tripStops = stopTimes[selectedTripId]!..sort((a, b) => (a['stopSequence'] as int).compareTo(b['stopSequence'] as int));
+      final startIdx = tripStops.indexWhere((s) => s['stopId'] == selectedStartStopId);
+      final destIdx = tripStops.indexWhere((s) => s['stopId'] == selectedDestinationStopId);
+      List<List<gtfs.Stop>> foundRoutes = [];
+      if (startIdx < destIdx) {
+        final segment = tripStops.sublist(startIdx, destIdx + 1);
+        final stopsList = segment.map((s) => allStops.firstWhere((stop) => stop.stopId == s['stopId'], orElse: () => gtfs.Stop(stopId: s['stopId'], name: s['stopId'], lat: 0, lon: 0))).toList();
+        foundRoutes.add(stopsList);
+      } else if (startIdx > destIdx) {
+        final segment = tripStops.sublist(destIdx, startIdx + 1).reversed.toList();
+        final stopsList = segment.map((s) => allStops.firstWhere((stop) => stop.stopId == s['stopId'], orElse: () => gtfs.Stop(stopId: s['stopId'], name: s['stopId'], lat: 0, lon: 0))).toList();
+        foundRoutes.add(stopsList);
       }
       setState(() {
-        directionOptions = [route, List<gtfs.Stop>.from(route.reversed)];
+        directionOptions = foundRoutes;
         selectedDirectionIndex = 0;
       });
     }
@@ -219,8 +270,16 @@ class _MyHomePageState extends State<MyHomePage> {
     return segments;
   }
 
-  List<gtfs.Stop> get directionStopsView =>
-    directionOptions.isNotEmpty ? directionOptions[selectedDirectionIndex] : [];
+  List<gtfs.Stop> get directionStopsView {
+    // Always show the full segment in correct order
+    if (directionOptions.isNotEmpty && directionOptions[selectedDirectionIndex].isNotEmpty) {
+      final stops = directionOptions[selectedDirectionIndex];
+      // Sort by stop_sequence if available in stop_times
+      // (Assumes _findDirection already provides correct order)
+      return stops;
+    }
+    return [];
+  }
   @override
   @override
   void initState() {
