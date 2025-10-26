@@ -5,6 +5,7 @@ import 'package:location/location.dart';
 // Removed unused import 'dart:io'
 import 'package:flutter/services.dart' show rootBundle;
 // Removed unused imports
+import 'dart:convert';
 import 'gtfs_models.dart' as gtfs;
 import 'transport_lines_page.dart';
 
@@ -62,10 +63,10 @@ class _MyHomePageState extends State<MyHomePage> {
   Future<List<gtfs.Route>> _parseRoutesFromAsset(String assetPath) async {
     try {
       final content = await rootBundle.loadString(assetPath);
-      final lines = content.split('\n');
+      final lines = const LineSplitter().convert(content);
       if (lines.length <= 1) return [];
       final routes = <gtfs.Route>[];
-      final header = lines[0].split(',');
+      final header = _parseCsvLine(lines[0]).map((s) => s.trim()).toList();
       final idxRouteId = header.indexOf('route_id');
       final idxAgencyId = header.indexOf('agency_id');
       final idxShortName = header.indexOf('route_short_name');
@@ -75,19 +76,21 @@ class _MyHomePageState extends State<MyHomePage> {
       final idxTextColor = header.indexOf('route_text_color');
       final idxLinePrefixes = header.indexOf('line_prefixes');
       for (var i = 1; i < lines.length; i++) {
-        final row = lines[i].split(',');
+        final line = lines[i].trimRight();
+        if (line.isEmpty) continue;
+        final row = _parseCsvLine(line);
         if (row.length < 7) continue;
         final linePrefixes = idxLinePrefixes >= 0 && row.length > idxLinePrefixes
-          ? row.sublist(idxLinePrefixes).map((s) => s.trim()).toList().cast<String>()
+          ? row.sublist(idxLinePrefixes).map((s) => s.trim()).where((s) => s.isNotEmpty).toList().cast<String>()
           : <String>[];
         routes.add(gtfs.Route(
-          routeId: row[idxRouteId],
-          agencyId: row[idxAgencyId],
-          shortName: row[idxShortName],
-          longName: row[idxLongName],
-          type: row[idxType],
-          color: idxColor >= 0 ? row[idxColor] : null,
-          textColor: idxTextColor >= 0 ? row[idxTextColor] : null,
+          routeId: row[idxRouteId].trim(),
+          agencyId: row[idxAgencyId].trim(),
+          shortName: row[idxShortName].trim(),
+          longName: row[idxLongName].trim(),
+          type: row[idxType].trim(),
+          color: idxColor >= 0 ? _cleanHex(row[idxColor]) : null,
+          textColor: idxTextColor >= 0 ? _cleanHex(row[idxTextColor]) : null,
           linePrefixes: linePrefixes,
         ));
       }
@@ -263,18 +266,20 @@ class _MyHomePageState extends State<MyHomePage> {
   Future<List<gtfs.Stop>> _parseStopsFromAsset(String assetPath) async {
     try {
       final content = await rootBundle.loadString(assetPath);
-      final lines = content.split('\n');
+      final lines = const LineSplitter().convert(content);
       if (lines.length <= 1) return [];
       final stops = <gtfs.Stop>[];
       for (var i = 1; i < lines.length; i++) {
-        final row = _parseCsvLine(lines[i]);
+        final line = lines[i].trimRight();
+        if (line.isEmpty) continue;
+        final row = _parseCsvLine(line);
         if (row.length < 4) continue;
         try {
           stops.add(gtfs.Stop(
-            stopId: row[0],
-            name: row[1],
-            lat: double.parse(row[2]),
-            lon: double.parse(row[3]),
+            stopId: row[0].trim(),
+            name: row[1].trim(),
+            lat: double.parse(row[2].trim()),
+            lon: double.parse(row[3].trim()),
             code: row.length > 4 ? row[4] : null,
             desc: row.length > 5 ? row[5] : null,
             zoneId: row.length > 6 ? row[6] : null,
@@ -288,8 +293,35 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   List<String> _parseCsvLine(String line) {
-    // Simple CSV parser (no quoted fields)
-    return line.split(',');
+    // CSV parser supporting quoted fields and commas within quotes
+    final result = <String>[];
+    final buffer = StringBuffer();
+    bool inQuotes = false;
+    for (int i = 0; i < line.length; i++) {
+      final char = line[i];
+      if (char == '"') {
+        if (inQuotes && i + 1 < line.length && line[i + 1] == '"') {
+          buffer.write('"');
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char == ',' && !inQuotes) {
+        result.add(buffer.toString().trim());
+        buffer.clear();
+      } else {
+        buffer.write(char);
+      }
+    }
+    result.add(buffer.toString().trim());
+    return result;
+  }
+
+  String? _cleanHex(String? hex) {
+    if (hex == null) return null;
+    var s = hex.trim().replaceAll('\r', '').replaceAll('#', '');
+    if (s.isEmpty) return null;
+    return s.toUpperCase();
   }
 
   Future<void> _goToMyLocation() async {
