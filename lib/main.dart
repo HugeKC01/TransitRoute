@@ -52,9 +52,11 @@ class _MyHomePageState extends State<MyHomePage> {
 
   // Helper to get line name by stopId
   String? _getLineName(String stopId) {
+    final id = stopId.trim().toUpperCase();
     for (var entry in linePrefixes.entries) {
       for (var prefix in entry.value) {
-        if (stopId.startsWith(prefix)) return entry.key;
+        final p = prefix.trim().toUpperCase();
+        if (p.isNotEmpty && id.startsWith(p)) return entry.key;
       }
     }
     return null;
@@ -62,10 +64,10 @@ class _MyHomePageState extends State<MyHomePage> {
   Future<List<gtfs.Route>> _parseRoutesFromAsset(String assetPath) async {
     try {
       final content = await rootBundle.loadString(assetPath);
-      final lines = content.split('\n');
+      final lines = content.split(RegExp(r'\r?\n'));
       if (lines.length <= 1) return [];
       final routes = <gtfs.Route>[];
-      final header = lines[0].split(',');
+      final header = _parseCsvLine(lines[0]);
       final idxRouteId = header.indexOf('route_id');
       final idxAgencyId = header.indexOf('agency_id');
       final idxShortName = header.indexOf('route_short_name');
@@ -75,20 +77,33 @@ class _MyHomePageState extends State<MyHomePage> {
       final idxTextColor = header.indexOf('route_text_color');
       final idxLinePrefixes = header.indexOf('line_prefixes');
       for (var i = 1; i < lines.length; i++) {
-        final row = lines[i].split(',');
-        if (row.length < 7) continue;
-        final linePrefixes = idxLinePrefixes >= 0 && row.length > idxLinePrefixes
-          ? row.sublist(idxLinePrefixes).map((s) => s.trim()).toList().cast<String>()
-          : <String>[];
+        if (lines[i].trim().isEmpty) continue;
+        final row = _parseCsvLine(lines[i]);
+        // ensure we have at least route_id and route_long_name
+        if (row.length <= 1) continue;
+        // parse prefixes field more robustly (support separators like | or ;)
+        List<String> parsedPrefixes = [];
+        if (idxLinePrefixes >= 0 && row.length > idxLinePrefixes) {
+          final raw = row[idxLinePrefixes];
+          // split by common separators, then trim and uppercase
+          parsedPrefixes = raw
+              .split(RegExp(r'[|;,/]'))
+              .map((s) => s.trim())
+              .where((s) => s.isNotEmpty)
+              .map((s) => s.toUpperCase())
+              .toList();
+        }
+        // safe access helper
+        String safeAt(int idx) => (idx >= 0 && idx < row.length) ? row[idx].trim() : '';
         routes.add(gtfs.Route(
-          routeId: row[idxRouteId],
-          agencyId: row[idxAgencyId],
-          shortName: row[idxShortName],
-          longName: row[idxLongName],
-          type: row[idxType],
-          color: idxColor >= 0 ? row[idxColor] : null,
-          textColor: idxTextColor >= 0 ? row[idxTextColor] : null,
-          linePrefixes: linePrefixes,
+          routeId: safeAt(idxRouteId),
+          agencyId: safeAt(idxAgencyId),
+          shortName: safeAt(idxShortName),
+          longName: safeAt(idxLongName),
+          type: safeAt(idxType),
+          color: idxColor >= 0 ? safeAt(idxColor) : null,
+          textColor: idxTextColor >= 0 ? safeAt(idxTextColor) : null,
+          linePrefixes: parsedPrefixes,
         ));
       }
       return routes;
@@ -263,10 +278,11 @@ class _MyHomePageState extends State<MyHomePage> {
   Future<List<gtfs.Stop>> _parseStopsFromAsset(String assetPath) async {
     try {
       final content = await rootBundle.loadString(assetPath);
-      final lines = content.split('\n');
+      final lines = content.split(RegExp(r'\r?\n'));
       if (lines.length <= 1) return [];
       final stops = <gtfs.Stop>[];
       for (var i = 1; i < lines.length; i++) {
+        if (lines[i].trim().isEmpty) continue;
         final row = _parseCsvLine(lines[i]);
         if (row.length < 4) continue;
         try {
@@ -288,8 +304,26 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   List<String> _parseCsvLine(String line) {
-    // Simple CSV parser (no quoted fields)
-    return line.split(',');
+    // Simple CSV parser that handles quoted fields and commas inside quotes.
+    final List<String> parts = [];
+    final buffer = StringBuffer();
+    bool inQuotes = false;
+    for (int i = 0; i < line.length; i++) {
+      final ch = line[i];
+      if (ch == '"') {
+        inQuotes = !inQuotes;
+        continue;
+      }
+      if (ch == ',' && !inQuotes) {
+        parts.add(buffer.toString());
+        buffer.clear();
+      } else {
+        buffer.write(ch);
+      }
+    }
+    parts.add(buffer.toString());
+    // Trim whitespace and remove any stray CR/LF
+    return parts.map((s) => s.trim().replaceAll('\r', '').replaceAll('\n', '')).toList();
   }
 
   Future<void> _goToMyLocation() async {
