@@ -229,8 +229,12 @@ class _MyHomePageState extends State<MyHomePage> {
         }
       }
       if (selectedTripId == null) {
-        // Attempt a one-transfer route via Siam (CEN)
-        const cenId = 'CEN';
+        // Attempt a one-transfer route via known interchanges (e.g., Siam (CEN) and Krung Thon Buri (S7/G1))
+        // Each hub group lists equivalent stop_ids representing the same place across lines
+        final List<List<String>> transferHubs = [
+          ['CEN'],
+          ['S7', 'G1'],
+        ];
         // Helper to find a segment on a specific set of routeIds between A and B (inclusive)
         List<Map<String, dynamic>>? findSegmentBetween(String a, String b, Set<String> allowedRouteIds) {
           List<Map<String, dynamic>>? bestSegment;
@@ -269,60 +273,30 @@ class _MyHomePageState extends State<MyHomePage> {
           if (destRouteIds.isEmpty) destRouteIds = allRouteIds;
         }
 
-        // Handle cases where start or dest is CEN directly
-        if (selectedStartStopId == cenId && destRouteIds.isNotEmpty) {
-          final seg = findSegmentBetween(cenId, selectedDestinationStopId!, destRouteIds);
-          if (seg != null) {
-            final combined = seg
-                .map((s) => allStops.firstWhere(
-                      (st) => st.stopId == s['stopId'],
-                      orElse: () => gtfs.Stop(stopId: s['stopId'], name: s['stopId'], lat: 0, lon: 0),
-                    ))
-                .toList();
-            setState(() {
-              directionOptions = [combined];
-              selectedDirectionIndex = 0;
-            });
-            return;
-          }
-        }
-        if (selectedDestinationStopId == cenId && startRouteIds.isNotEmpty) {
-          final seg = findSegmentBetween(selectedStartStopId!, cenId, startRouteIds);
-          if (seg != null) {
-            final combined = seg
-                .map((s) => allStops.firstWhere(
-                      (st) => st.stopId == s['stopId'],
-                      orElse: () => gtfs.Stop(stopId: s['stopId'], name: s['stopId'], lat: 0, lon: 0),
-                    ))
-                .toList();
-            setState(() {
-              directionOptions = [combined];
-              selectedDirectionIndex = 0;
-            });
-            return;
-          }
-        }
-
-        // General case: start -> CEN on start line, then CEN -> dest on dest line
-        if (startRouteIds.isNotEmpty && destRouteIds.isNotEmpty) {
-          final seg1 = findSegmentBetween(selectedStartStopId!, cenId, startRouteIds);
-          final seg2 = findSegmentBetween(cenId, selectedDestinationStopId!, destRouteIds);
-          if (seg1 != null && seg2 != null) {
-            // Combine, drop duplicate CEN at start of second segment
-            final merged = <Map<String, dynamic>>[...seg1];
-            final seg2Trimmed = seg2.isNotEmpty && seg2.first['stopId'] == cenId ? seg2.sublist(1) : seg2;
-            merged.addAll(seg2Trimmed);
-            final combinedStops = merged
-                .map((s) => allStops.firstWhere(
-                      (st) => st.stopId == s['stopId'],
-                      orElse: () => gtfs.Stop(stopId: s['stopId'], name: s['stopId'], lat: 0, lon: 0),
-                    ))
-                .toList();
-            setState(() {
-              directionOptions = [combinedStops];
-              selectedDirectionIndex = 0;
-            });
-            return;
+        // Try transfer via any hub group (e.g., CEN or S7/G1)
+        for (final hubGroup in transferHubs) {
+          for (final hubA in hubGroup) {
+            for (final hubB in hubGroup) {
+              final seg1 = findSegmentBetween(selectedStartStopId!, hubA, startRouteIds);
+              if (seg1 == null) continue;
+              final seg2 = findSegmentBetween(hubB, selectedDestinationStopId!, destRouteIds);
+              if (seg2 == null) continue;
+              // Combine, drop duplicate hub at boundary if identical
+              final merged = <Map<String, dynamic>>[...seg1];
+              final dropDup = seg2.isNotEmpty && merged.isNotEmpty && seg2.first['stopId'] == merged.last['stopId'];
+              merged.addAll(dropDup ? seg2.sublist(1) : seg2);
+              final combinedStops = merged
+                  .map((s) => allStops.firstWhere(
+                        (st) => st.stopId == s['stopId'],
+                        orElse: () => gtfs.Stop(stopId: s['stopId'], name: s['stopId'], lat: 0, lon: 0),
+                      ))
+                  .toList();
+              setState(() {
+                directionOptions = [combinedStops];
+                selectedDirectionIndex = 0;
+              });
+              return;
+            }
           }
         }
 
