@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:location/location.dart';
-// Removed unused import 'dart:io'
 import 'package:flutter/services.dart' show rootBundle;
-// Removed unused imports
 import 'dart:convert';
 import 'gtfs_models.dart' as gtfs;
 import 'transport_lines_page.dart';
@@ -110,20 +108,25 @@ class _MyHomePageState extends State<MyHomePage> {
       if (selectedStartStopId == null || selectedDestinationStopId == null) return;
       // Load stop_times.txt
       final stopTimesContent = await rootBundle.loadString('assets/gtfs_data/stop_times.txt');
-      final stopTimesLines = stopTimesContent.split('\n');
+      final stopTimesLines = const LineSplitter().convert(stopTimesContent);
       if (stopTimesLines.length <= 1) return;
-      // Parse stop_times
+      // Parse stop_times (robust CSV with header indices)
       final stopTimes = <String, List<Map<String, dynamic>>>{};
+      final header = _parseCsvLine(stopTimesLines.first).map((s) => s.trim()).toList();
+      final idxTripId = header.indexOf('trip_id');
+      final idxStopId = header.indexOf('stop_id');
+      final idxStopSeq = header.indexOf('stop_sequence');
       for (var i = 1; i < stopTimesLines.length; i++) {
-        final row = stopTimesLines[i].split(',');
-        if (row.length < 5) continue;
-        final tripId = row[0];
-        final stopId = row[3];
-        final stopSequence = int.tryParse(row[4]) ?? i;
-        stopTimes.putIfAbsent(tripId, () => []).add({
-          'stopId': stopId,
-          'stopSequence': stopSequence,
-        });
+        final line = stopTimesLines[i].trimRight();
+        if (line.isEmpty) continue;
+        final row = _parseCsvLine(line);
+        if (row.isEmpty || idxTripId < 0 || idxStopId < 0 || idxStopSeq < 0) continue;
+        if (row.length <= idxTripId || row.length <= idxStopId || row.length <= idxStopSeq) continue;
+        final tripId = row[idxTripId].trim();
+        final stopId = row[idxStopId].trim();
+        final stopSequence = int.tryParse(row[idxStopSeq].trim()) ?? i;
+        if (tripId.isEmpty || stopId.isEmpty) continue;
+        stopTimes.putIfAbsent(tripId, () => []).add({'stopId': stopId, 'stopSequence': stopSequence});
       }
       // Ensure each trip's stops are sorted by stop_sequence
       for (final entry in stopTimes.entries) {
@@ -209,7 +212,121 @@ class _MyHomePageState extends State<MyHomePage> {
           }
         }
       }
+      // Fallback: if nothing matched the candidate routes, search all trips
       if (selectedTripId == null) {
+        bestSpan = -1;
+        for (var entry in stopTimes.entries) {
+          final tripStops = entry.value;
+          final startIdx = tripStops.indexWhere((s) => s['stopId'] == selectedStartStopId);
+          final destIdx = tripStops.indexWhere((s) => s['stopId'] == selectedDestinationStopId);
+          if (startIdx != -1 && destIdx != -1) {
+            final span = (destIdx - startIdx).abs();
+            if (span > bestSpan) {
+              bestSpan = span;
+              selectedTripId = entry.key;
+            }
+          }
+        }
+      }
+      if (selectedTripId == null) {
+        // Attempt a one-transfer route via Siam (CEN)
+        const cenId = 'CEN';
+        // Helper to find a segment on a specific set of routeIds between A and B (inclusive)
+        List<Map<String, dynamic>>? findSegmentBetween(String a, String b, Set<String> allowedRouteIds) {
+          List<Map<String, dynamic>>? bestSegment;
+          int bestSpan = 1 << 30;
+          for (final entry in stopTimes.entries) {
+            final routeId = tripToRoute[entry.key];
+            if (routeId == null || !allowedRouteIds.contains(routeId)) continue;
+            final ts = entry.value;
+            final ia = ts.indexWhere((s) => s['stopId'] == a);
+            final ib = ts.indexWhere((s) => s['stopId'] == b);
+            if (ia == -1 || ib == -1) continue;
+            final lo = ia < ib ? ia : ib;
+            final hi = ia < ib ? ib : ia;
+            final span = hi - lo;
+            if (span < bestSpan) {
+              bestSpan = span;
+              final seg = ts.sublist(lo, hi + 1);
+              bestSegment = ia <= ib ? seg : seg.reversed.toList();
+            }
+          }
+          return bestSegment;
+        }
+
+        // Determine start/dest route sets by prefix
+        Set<String> startRouteIds = {};
+        Set<String> destRouteIds = {};
+        for (final e in routeIdToPrefixes.entries) {
+          final prefixes = e.value;
+          if (prefixes.contains(startPrefix)) startRouteIds.add(e.key);
+          if (prefixes.contains(destPrefix)) destRouteIds.add(e.key);
+        }
+        // If either set is empty (e.g., prefix not listed), allow all known routeIds as a fallback
+        if (startRouteIds.isEmpty || destRouteIds.isEmpty) {
+          final allRouteIds = routeIdToPrefixes.keys.toSet();
+          if (startRouteIds.isEmpty) startRouteIds = allRouteIds;
+          if (destRouteIds.isEmpty) destRouteIds = allRouteIds;
+        }
+
+        // Handle cases where start or dest is CEN directly
+        if (selectedStartStopId == cenId && destRouteIds.isNotEmpty) {
+          final seg = findSegmentBetween(cenId, selectedDestinationStopId!, destRouteIds);
+          if (seg != null) {
+            final combined = seg
+                .map((s) => allStops.firstWhere(
+                      (st) => st.stopId == s['stopId'],
+                      orElse: () => gtfs.Stop(stopId: s['stopId'], name: s['stopId'], lat: 0, lon: 0),
+                    ))
+                .toList();
+            setState(() {
+              directionOptions = [combined];
+              selectedDirectionIndex = 0;
+            });
+            return;
+          }
+        }
+        if (selectedDestinationStopId == cenId && startRouteIds.isNotEmpty) {
+          final seg = findSegmentBetween(selectedStartStopId!, cenId, startRouteIds);
+          if (seg != null) {
+            final combined = seg
+                .map((s) => allStops.firstWhere(
+                      (st) => st.stopId == s['stopId'],
+                      orElse: () => gtfs.Stop(stopId: s['stopId'], name: s['stopId'], lat: 0, lon: 0),
+                    ))
+                .toList();
+            setState(() {
+              directionOptions = [combined];
+              selectedDirectionIndex = 0;
+            });
+            return;
+          }
+        }
+
+        // General case: start -> CEN on start line, then CEN -> dest on dest line
+        if (startRouteIds.isNotEmpty && destRouteIds.isNotEmpty) {
+          final seg1 = findSegmentBetween(selectedStartStopId!, cenId, startRouteIds);
+          final seg2 = findSegmentBetween(cenId, selectedDestinationStopId!, destRouteIds);
+          if (seg1 != null && seg2 != null) {
+            // Combine, drop duplicate CEN at start of second segment
+            final merged = <Map<String, dynamic>>[...seg1];
+            final seg2Trimmed = seg2.isNotEmpty && seg2.first['stopId'] == cenId ? seg2.sublist(1) : seg2;
+            merged.addAll(seg2Trimmed);
+            final combinedStops = merged
+                .map((s) => allStops.firstWhere(
+                      (st) => st.stopId == s['stopId'],
+                      orElse: () => gtfs.Stop(stopId: s['stopId'], name: s['stopId'], lat: 0, lon: 0),
+                    ))
+                .toList();
+            setState(() {
+              directionOptions = [combinedStops];
+              selectedDirectionIndex = 0;
+            });
+            return;
+          }
+        }
+
+        // If transfer also failed, clear and exit
         setState(() {
           directionOptions = [];
           selectedDirectionIndex = 0;
@@ -256,11 +373,42 @@ class _MyHomePageState extends State<MyHomePage> {
     List<List<gtfs.Stop>> segments = [];
     List<gtfs.Stop> current = [route.first];
     String lastLine = _getLineName(route.first.stopId) ?? '';
+    // If first is CEN and lastLine is ambiguous/empty, try to infer from next non-CEN
+    if ((route.first.stopId == 'CEN') && lastLine.isEmpty) {
+      for (int j = 1; j < route.length; j++) {
+        if (route[j].stopId != 'CEN') {
+          final inferred = _getLineName(route[j].stopId) ?? '';
+          if (inferred.isNotEmpty) {
+            lastLine = inferred;
+          }
+          break;
+        }
+      }
+    }
+    String effectiveLineFor(int index) {
+      final id = route[index].stopId;
+      var ln = _getLineName(id) ?? '';
+      if (id == 'CEN') {
+        // Make Siam adopt the neighboring segment's line to avoid splitting into single-point segments.
+        if (lastLine.isNotEmpty) return lastLine;
+        // If no previous line, try to infer from the next non-CEN stop.
+        for (int j = index + 1; j < route.length; j++) {
+          if (route[j].stopId != 'CEN') {
+            final inferred = _getLineName(route[j].stopId) ?? '';
+            if (inferred.isNotEmpty) return inferred;
+            break;
+          }
+        }
+      }
+      return ln;
+    }
     for (int i = 1; i < route.length; i++) {
-      String line = _getLineName(route[i].stopId) ?? '';
+      String line = effectiveLineFor(i);
       if (line != lastLine) {
+        // Close previous segment
         segments.add(current);
-        current = [route[i]];
+        // Start new segment including the boundary stop to ensure at least 2 points
+        current = [route[i - 1], route[i]];
         lastLine = line;
       } else {
         current.add(route[i]);
@@ -545,11 +693,12 @@ class _MyHomePageState extends State<MyHomePage> {
                     PolylineLayer(
                       polylines: [
                         for (var segment in _splitRouteByLine(directionStopsView))
-                          Polyline(
-                            points: segment.map((stop) => LatLng(stop.lat, stop.lon)).toList(),
-                            color: _getPolylineColor(segment),
-                            strokeWidth: 6.0,
-                          ),
+                          if (segment.length >= 2)
+                            Polyline(
+                              points: segment.map((stop) => LatLng(stop.lat, stop.lon)).toList(),
+                              color: _getPolylineColor(segment),
+                              strokeWidth: 6.0,
+                            ),
                       ],
                     ),
                 ],
