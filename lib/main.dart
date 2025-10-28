@@ -48,6 +48,16 @@ class _MyHomePageState extends State<MyHomePage> {
   Map<String, Color> lineColors = {};
   Map<String, String> lineColorHex = {};
   List<gtfs.Route> allRoutes = [];
+  // Fare mappings (loaded from assets)
+  Map<String, String> fareTypeMap = {}; // fareId -> 'm'|'s'
+  Map<String, int> fareDataMap = {}; // e.g. 'm3' -> 28
+
+  // Last-calculated fare breakdown
+  int fareMCount = 0;
+  int fareSCount = 0;
+  int fareMPrice = 0;
+  int fareSPrice = 0;
+  int calculatedFare = 0;
 
   // Helper to get line name by stopId
   String? _getLineName(String stopId) {
@@ -291,9 +301,15 @@ class _MyHomePageState extends State<MyHomePage> {
                         orElse: () => gtfs.Stop(stopId: s['stopId'], name: s['stopId'], lat: 0, lon: 0),
                       ))
                   .toList();
+              final fare = _calculateFare(combinedStops);
               setState(() {
                 directionOptions = [combinedStops];
                 selectedDirectionIndex = 0;
+                fareMCount = fare['mCount']!;
+                fareSCount = fare['sCount']!;
+                fareMPrice = fare['mPrice']!;
+                fareSPrice = fare['sPrice']!;
+                calculatedFare = fare['total']!;
               });
               return;
             }
@@ -320,10 +336,24 @@ class _MyHomePageState extends State<MyHomePage> {
         final stopsList = segment.map((s) => allStops.firstWhere((stop) => stop.stopId == s['stopId'], orElse: () => gtfs.Stop(stopId: s['stopId'], name: s['stopId'], lat: 0, lon: 0))).toList();
         foundRoutes.add(stopsList);
       }
-      setState(() {
-        directionOptions = foundRoutes;
-        selectedDirectionIndex = 0;
-      });
+      // Calculate fare for the first found route and update state
+      if (foundRoutes.isNotEmpty) {
+        final fare = _calculateFare(foundRoutes.first);
+        setState(() {
+          directionOptions = foundRoutes;
+          selectedDirectionIndex = 0;
+          fareMCount = fare['mCount']!;
+          fareSCount = fare['sCount']!;
+          fareMPrice = fare['mPrice']!;
+          fareSPrice = fare['sPrice']!;
+          calculatedFare = fare['total']!;
+        });
+      } else {
+        setState(() {
+          directionOptions = foundRoutes;
+          selectedDirectionIndex = 0;
+        });
+      }
     }
   Color _getLineColor(String stopId) {
     final lineName = _getLineName(stopId);
@@ -412,6 +442,8 @@ class _MyHomePageState extends State<MyHomePage> {
   Future<void> _loadRoutesAndStops() async {
     final routes = await _parseRoutesFromAsset('assets/gtfs_data/routes.txt');
     final stops = await _parseStopsFromAsset('assets/gtfs_data/stops.txt');
+    // Load fare mappings used for fare calculation
+    await _loadFareMappings();
     // Build linePrefixes and lineColors from routes
     Map<String, List<String>> prefixMap = {};
     Map<String, Color> colorMap = {};
@@ -468,6 +500,125 @@ class _MyHomePageState extends State<MyHomePage> {
     } catch (_) {
       return [];
     }
+  }
+
+  Future<void> _loadFareMappings() async {
+    fareTypeMap.clear();
+    fareDataMap.clear();
+    try {
+      // Faretype mapping: fareId -> status ('m'|'s')
+      final content = await rootBundle.loadString('assets/gtfs_data/Faretype.txt');
+      final lines = const LineSplitter().convert(content);
+      if (lines.length > 1) {
+        final header = _parseCsvLine(lines[0]).map((s) => s.toLowerCase()).toList();
+        int idxFareId = header.indexOf('fareid');
+        if (idxFareId < 0) idxFareId = 0;
+        int idxStatus = header.indexOf('agencystatus');
+        if (idxStatus < 0) idxStatus = header.indexOf('agsscystatus');
+        if (idxStatus < 0) idxStatus = 1;
+        for (var i = 1; i < lines.length; i++) {
+          final line = lines[i].trimRight();
+          if (line.isEmpty) continue;
+          final row = _parseCsvLine(line);
+          if (row.length <= idxFareId) continue;
+          final id = row[idxFareId].trim();
+          final status = (row.length > idxStatus) ? row[idxStatus].trim().toLowerCase() : '';
+          if (id.isNotEmpty && (status == 'm' || status == 's')) {
+            fareTypeMap[id] = status;
+          }
+        }
+      }
+    } catch (_) {}
+
+    try {
+      // Fare data: fareDataId -> price
+      final content = await rootBundle.loadString('assets/gtfs_data/FareData.txt');
+      final lines = const LineSplitter().convert(content);
+      if (lines.length > 1) {
+        final header = _parseCsvLine(lines[0]).map((s) => s.toLowerCase()).toList();
+        int idxId = header.indexOf('faredataid');
+        if (idxId < 0) idxId = header.indexOf('fareid');
+        if (idxId < 0) idxId = 0;
+        int idxPrice = header.indexOf('price');
+        if (idxPrice < 0) idxPrice = 1;
+        for (var i = 1; i < lines.length; i++) {
+          final line = lines[i].trimRight();
+          if (line.isEmpty) continue;
+          final row = _parseCsvLine(line);
+          if (row.length <= idxId) continue;
+          final id = row[idxId].trim();
+          final price = (row.length > idxPrice) ? int.tryParse(row[idxPrice].trim()) ?? 0 : 0;
+          if (id.isNotEmpty) fareDataMap[id] = price;
+        }
+      }
+    } catch (_) {}
+  }
+
+  Map<String, int> _calculateFare(List<gtfs.Stop> routeStops) {
+    // Returns map: mCount, sCount, mPrice, sPrice, total
+    int mCount = 0;
+    int sCount = 0;
+    if (routeStops.length <= 1) {
+      return {'mCount': 0, 'sCount': 0, 'mPrice': 0, 'sPrice': 0, 'total': 0};
+    }
+    // SPECIAL PAIR RULES (evaluate before excluding last station):
+    // - N5 -> N7  : the occurrence at N5 counts as 2 m units
+    // - N7 -> N5  : the occurrence at N7 counts as 2 m units
+    // Also evaluate the 'first pair' special rules (4-6) before trimming the last station:
+    // - If first==N8 && second==N9 -> first treated as 's'
+    // - If first==S8 && second==S9 -> first treated as 's'
+    // - If first==E9 && second==E10 -> first treated as 's'
+    final Map<int, int> specialIndexExtra = {}; // original index -> extra m-count (2)
+    final Map<int, String> specialStatusOverride = {}; // original index -> overridden status ('s' or 'm')
+    for (int i = 0; i < routeStops.length - 1; i++) {
+      final a = routeStops[i].stopId.trim();
+      final b = routeStops[i + 1].stopId.trim();
+      if (a == 'N5' && b == 'N7') {
+        specialIndexExtra[i] = (specialIndexExtra[i] ?? 0) + 2;
+      } else if (a == 'N7' && b == 'N5') {
+        specialIndexExtra[i] = (specialIndexExtra[i] ?? 0) + 2;
+      }
+      // Apply special status overrides for any matching consecutive pair (not just first pair)
+      if (a == 'N8' && b == 'N9') specialStatusOverride[i] = 's';
+      if (a == 'S8' && b == 'S9') specialStatusOverride[i] = 's';
+      if (a == 'E9' && b == 'E10') specialStatusOverride[i] = 's';
+    }
+
+    // Now remove the last station (rule 1) and count through remaining stops.
+    final stopsToCount = routeStops.sublist(0, routeStops.length - 1);
+    for (int i = 0; i < stopsToCount.length; i++) {
+      final currId = stopsToCount[i].stopId.trim();
+      // If this original index has a special extra-count, apply it (counts as m) and skip normal counting for this occurrence
+      if (specialIndexExtra.containsKey(i)) {
+        mCount += specialIndexExtra[i]!;
+        continue;
+      }
+      // If there's a status override for this index (e.g., first-pair rules), use it
+      String? status;
+      if (specialStatusOverride.containsKey(i)) {
+        status = specialStatusOverride[i];
+      } else {
+        status = fareTypeMap[currId];
+      }
+      if (status == 'm') {
+        mCount++;
+      } else if (status == 's') {
+        sCount++;
+      } else {
+        // skip unknown
+      }
+    }
+    // Apply caps
+    if (mCount > 8) mCount = 8; // cap for m
+    if (sCount > 13) sCount = 13; // cap for s
+
+  final mKey = 'm$mCount';
+  final sKey = 's$sCount';
+    final mPrice = fareDataMap[mKey] ?? 0;
+    final sPrice = fareDataMap[sKey] ?? 0;
+    int total = mPrice + sPrice;
+    if (total > 65) total = 65;
+    return {'mCount': mCount, 'sCount': sCount, 'mPrice': mPrice, 'sPrice': sPrice, 'total': total};
   }
 
   List<String> _parseCsvLine(String line) {
@@ -568,6 +719,44 @@ class _MyHomePageState extends State<MyHomePage> {
                         selectedStartStopId = value;
                       });
                     },
+                  ),
+                ),
+              if (directionOptions.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Fare: ฿$calculatedFare', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 4),
+                              Text('m: $fareMCount → ฿$fareMPrice    s: $fareSCount → ฿$fareSPrice', style: const TextStyle(fontSize: 12)),
+                            ],
+                          ),
+                          ElevatedButton(
+                            onPressed: () {
+                              // Optionally re-calculate or show details
+                              final fare = (directionOptions.isNotEmpty) ? _calculateFare(directionOptions[selectedDirectionIndex]) : null;
+                              if (fare != null) {
+                                setState(() {
+                                  fareMCount = fare['mCount']!;
+                                  fareSCount = fare['sCount']!;
+                                  fareMPrice = fare['mPrice']!;
+                                  fareSPrice = fare['sPrice']!;
+                                  calculatedFare = fare['total']!;
+                                });
+                              }
+                            },
+                            child: const Text('Recalc'),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
