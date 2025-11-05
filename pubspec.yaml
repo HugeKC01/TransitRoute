@@ -72,6 +72,9 @@ flutter:
     - assets/gtfs_data/calendar.txt
     - assets/gtfs_data/trips.txt
     - assets/gtfs_data/stop_times.txt
+    - assets/gtfs_data/FareData.txt
+    - assets/gtfs_data/Faretype.txt
+
     
 
   # An image asset can refer to one or more resolution-specific "variants", see
