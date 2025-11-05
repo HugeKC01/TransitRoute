@@ -234,6 +234,12 @@ class _MyHomePageState extends State<MyHomePage> {
         final List<List<String>> transferHubs = [
           ['CEN'],
           ['S7', 'G1'],
+          ['BL01'],
+          ['BL13','N8'],
+          ['BL14','N9'],
+          ['BL22','E4'],
+          ['BL26','S2'],
+          ['BL34','S12']
         ];
         // Helper to find a segment on a specific set of routeIds between A and B (inclusive)
         List<Map<String, dynamic>>? findSegmentBetween(String a, String b, Set<String> allowedRouteIds) {
