@@ -95,6 +95,9 @@ class StopTime {
   });
 }
 
+
+
+
 class Calendar {
   final String serviceId;
   final bool monday;
@@ -121,4 +124,27 @@ class Calendar {
   });
 }
 
+class Faretype{
+  final String fareId;
+  final String agencystatus;
+
+  Faretype({
+    required this.fareId,
+    required this.agencystatus,
+   
+  });
+}
+
+ class FareData{
+  final String fareDataId;
+  final String price;
+
+
+  FareData({
+    required this.fareDataId,
+    required this.price,
+  });
+ }
+
+ 
 // You can extend these models for more GTFS fields as needed.

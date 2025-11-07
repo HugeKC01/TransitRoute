@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'dart:convert';
 import 'gtfs_models.dart' as gtfs;
 
 class TransportLinesPage extends StatefulWidget {
@@ -21,28 +22,28 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
   Future<void> _loadRoutes() async {
     try {
       final content = await rootBundle.loadString('assets/gtfs_data/routes.txt');
-      debugPrint('Loaded routes.txt content:\n$content');
-      final lines = content.split('\n');
-      debugPrint('Parsed lines count: ${lines.length}');
+      final lines = const LineSplitter().convert(content);
       if (lines.length <= 1) return;
       final loadedRoutes = <gtfs.Route>[];
       for (var i = 1; i < lines.length; i++) {
-        final row = lines[i].split(',');
-        debugPrint('Row $i: $row');
-        if (row.length < 8) continue;
-        final linePrefixes = row.sublist(7).map((s) => s.trim()).toList();
+        final line = lines[i].trimRight();
+        if (line.isEmpty) continue;
+        final row = _parseCsvLine(line);
+        if (row.length < 7) continue;
+        final linePrefixes = row.length > 7
+            ? row.sublist(7).map((s) => s.trim()).where((s) => s.isNotEmpty).toList()
+            : <String>[];
         loadedRoutes.add(gtfs.Route(
-          routeId: row[0],
-          agencyId: row[1],
-          shortName: row[2],
-          longName: row[3],
-          type: row[4],
-          color: row.length > 5 ? row[5] : null,
-          textColor: row.length > 6 ? row[6] : null,
+          routeId: row[0].trim(),
+          agencyId: row[1].trim(),
+          shortName: row[2].trim(),
+          longName: row[3].trim(),
+          type: row[4].trim(),
+          color: row.length > 5 ? _cleanHex(row[5]) : null,
+          textColor: row.length > 6 ? _cleanHex(row[6]) : null,
           linePrefixes: linePrefixes,
         ));
       }
-      debugPrint('Loaded routes count: ${loadedRoutes.length}');
       setState(() {
         routes = loadedRoutes;
       });
@@ -52,6 +53,39 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
         routes = [];
       });
     }
+  }
+
+  // Basic CSV line parser supporting quoted fields and commas within quotes
+  List<String> _parseCsvLine(String line) {
+    final result = <String>[];
+    final buffer = StringBuffer();
+    bool inQuotes = false;
+    for (int i = 0; i < line.length; i++) {
+      final char = line[i];
+      if (char == '"') {
+        if (inQuotes && i + 1 < line.length && line[i + 1] == '"') {
+          // Escaped quote
+          buffer.write('"');
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char == ',' && !inQuotes) {
+        result.add(buffer.toString().trim());
+        buffer.clear();
+      } else {
+        buffer.write(char);
+      }
+    }
+    result.add(buffer.toString().trim());
+    return result;
+  }
+
+  String? _cleanHex(String? hex) {
+    if (hex == null) return null;
+    var s = hex.trim().replaceAll('\r', '').replaceAll('#', '');
+    if (s.isEmpty) return null;
+    return s.toUpperCase();
   }
 
   @override
@@ -66,9 +100,7 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
           final route = routes[index];
           return ListTile(
             leading: CircleAvatar(
-              backgroundColor: route.color != null && route.color!.isNotEmpty
-                  ? Color(int.parse('0xFF${route.color}'))
-                  : Colors.blue,
+              backgroundColor: _colorFromHexOr(route.color, Colors.blue),
               child: Text(route.shortName, style: const TextStyle(color: Colors.white)),
             ),
             title: Text(route.longName),
@@ -77,5 +109,15 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
         },
       ),
     );
+  }
+
+  Color _colorFromHexOr(String? hex, Color fallback) {
+    final cleaned = _cleanHex(hex);
+    if (cleaned == null) return fallback;
+    try {
+      return Color(int.parse('0xFF$cleaned'));
+    } catch (_) {
+      return fallback;
+    }
   }
 }
