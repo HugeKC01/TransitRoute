@@ -146,5 +146,18 @@ class Faretype{
   });
  }
 
+ class TimeData{
+  final String fareDataId;
+  final String price;
+  final double duration;
+
+
+  TimeData({
+    required this.fareDataId,
+    required this.price,
+    required this.duration,
+  });
+ }
+
  
 // You can extend these models for more GTFS fields as needed.

@@ -52,6 +52,11 @@ class _MyHomePageState extends State<MyHomePage> {
   Map<String, String> fareTypeMap = {}; // fareId -> 'm'|'s'
   Map<String, int> fareDataMap = {}; // e.g. 'm3' -> 28
 
+  // Time mappings (loaded from assets)
+  // Structure: startId -> (endId -> durationMinutes)
+  final Map<String, Map<String, int>> _timeMap = {};
+  int travelTimeMinutes = 0; // total travel time for current selected route
+
   // Last-calculated fare breakdown
   int fareMCount = 0;
   int fareSCount = 0;
@@ -308,6 +313,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       ))
                   .toList();
               final fare = _calculateFare(combinedStops);
+              final timeMinutes = _calculateTravelTime(combinedStops);
               setState(() {
                 directionOptions = [combinedStops];
                 selectedDirectionIndex = 0;
@@ -316,6 +322,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 fareMPrice = fare['mPrice']!;
                 fareSPrice = fare['sPrice']!;
                 calculatedFare = fare['total']!;
+                travelTimeMinutes = timeMinutes;
               });
               return;
             }
@@ -344,7 +351,9 @@ class _MyHomePageState extends State<MyHomePage> {
       }
       // Calculate fare for the first found route and update state
       if (foundRoutes.isNotEmpty) {
-        final fare = _calculateFare(foundRoutes.first);
+        final route = foundRoutes.first;
+        final fare = _calculateFare(route);
+        final timeMinutes = _calculateTravelTime(route);
         setState(() {
           directionOptions = foundRoutes;
           selectedDirectionIndex = 0;
@@ -353,6 +362,7 @@ class _MyHomePageState extends State<MyHomePage> {
           fareMPrice = fare['mPrice']!;
           fareSPrice = fare['sPrice']!;
           calculatedFare = fare['total']!;
+          travelTimeMinutes = timeMinutes;
         });
       } else {
         setState(() {
@@ -450,6 +460,8 @@ class _MyHomePageState extends State<MyHomePage> {
     final stops = await _parseStopsFromAsset('assets/gtfs_data/stops.txt');
     // Load fare mappings used for fare calculation
     await _loadFareMappings();
+    // Load time mappings used for travel time calculation
+    await _loadTimeData();
     // Build linePrefixes and lineColors from routes
     Map<String, List<String>> prefixMap = {};
     Map<String, Color> colorMap = {};
@@ -506,6 +518,61 @@ class _MyHomePageState extends State<MyHomePage> {
     } catch (_) {
       return [];
     }
+  }
+
+  Future<void> _loadTimeData() async {
+    _timeMap.clear();
+    try {
+      final content = await rootBundle.loadString('assets/gtfs_data/TimeData.txt');
+      final lines = const LineSplitter().convert(content);
+      if (lines.length <= 1) return;
+      final header = _parseCsvLine(lines[0]).map((s) => s.trim().toLowerCase()).toList();
+      final idxStart = header.indexOf('startid');
+      final idxEnd = header.indexOf('endid');
+      final idxDur = header.indexOf('duration');
+      for (int i = 1; i < lines.length; i++) {
+        final line = lines[i].trimRight();
+        if (line.isEmpty) continue;
+        final row = _parseCsvLine(line);
+        if (idxStart < 0 || idxEnd < 0 || idxDur < 0) continue;
+        if (row.length <= idxStart || row.length <= idxEnd || row.length <= idxDur) continue;
+        final start = row[idxStart].trim();
+        final end = row[idxEnd].trim();
+        final durStr = row[idxDur].trim();
+        // Policy: interpret '0000' or blank as 0; otherwise parse minutes
+        int dur = int.tryParse(durStr) ?? 0;
+        if (start.isEmpty || end.isEmpty) continue;
+        _timeMap.putIfAbsent(start, () => {})[end] = dur;
+      }
+    } catch (_) {
+      // ignore load errors silently
+    }
+  }
+
+  int _calculateTravelTime(List<gtfs.Stop> routeStops) {
+    if (routeStops.length <= 1) return 0;
+    int total = 0;
+    for (int i = 0; i < routeStops.length - 1; i++) {
+      final a = routeStops[i].stopId.trim();
+      final b = routeStops[i + 1].stopId.trim();
+      final endMap = _timeMap[a];
+      if (endMap == null) {
+        // Missing-pair policy B: treat as 0 and log for visibility
+        // ignore: avoid_print
+        print('[Time] Missing start "$a" -> "$b"; using 0 minutes');
+        continue;
+      }
+      final dur = endMap[b];
+      if (dur == null) {
+        // Missing-pair policy B
+        // ignore: avoid_print
+        print('[Time] Missing edge $a->$b; using 0 minutes');
+        continue;
+      }
+      // 0 is valid (e.g., transfers not yet valued)
+      total += dur;
+    }
+    return total;
   }
 
   Future<void> _loadFareMappings() async {
@@ -742,12 +809,16 @@ class _MyHomePageState extends State<MyHomePage> {
                               Text('Fare: ฿$calculatedFare', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                               const SizedBox(height: 4),
                               Text('m: $fareMCount → ฿$fareMPrice    s: $fareSCount → ฿$fareSPrice', style: const TextStyle(fontSize: 12)),
+                              const SizedBox(height: 6),
+                              Text('เวลาเดินทาง: $travelTimeMinutes นาที', style: const TextStyle(fontSize: 14)),
                             ],
                           ),
                           ElevatedButton(
                             onPressed: () {
                               // Optionally re-calculate or show details
-                              final fare = (directionOptions.isNotEmpty) ? _calculateFare(directionOptions[selectedDirectionIndex]) : null;
+                              final route = (directionOptions.isNotEmpty) ? directionOptions[selectedDirectionIndex] : null;
+                              final fare = (route != null) ? _calculateFare(route) : null;
+                              final time = (route != null) ? _calculateTravelTime(route) : null;
                               if (fare != null) {
                                 setState(() {
                                   fareMCount = fare['mCount']!;
@@ -755,6 +826,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                   fareMPrice = fare['mPrice']!;
                                   fareSPrice = fare['sPrice']!;
                                   calculatedFare = fare['total']!;
+                                  if (time != null) travelTimeMinutes = time;
                                 });
                               }
                             },
@@ -813,8 +885,17 @@ class _MyHomePageState extends State<MyHomePage> {
                         )),
                         onChanged: (value) {
                           if (value != null) {
+                            final route = directionOptions[value];
+                            final fare = _calculateFare(route);
+                            final timeMinutes = _calculateTravelTime(route);
                             setState(() {
                               selectedDirectionIndex = value;
+                              fareMCount = fare['mCount']!;
+                              fareSCount = fare['sCount']!;
+                              fareMPrice = fare['mPrice']!;
+                              fareSPrice = fare['sPrice']!;
+                              calculatedFare = fare['total']!;
+                              travelTimeMinutes = timeMinutes;
                             });
                           }
                         },
