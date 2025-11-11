@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'dart:convert';
-import 'gtfs_models.dart' as gtfs;
+import 'package:route/services/gtfs_models.dart' as gtfs;
 
 class TransportLinesPage extends StatefulWidget {
   const TransportLinesPage({super.key});
