@@ -4,7 +4,10 @@ import 'package:latlong2/latlong.dart';
 import 'package:location/location.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'dart:convert';
-import 'gtfs_models.dart' as gtfs;
+import 'dart:math' as math;
+import 'package:route/services/direction_service.dart';
+import 'package:route/services/gtfs_models.dart' as gtfs;
+
 import 'transport_lines_page.dart';
 
 void main() {
@@ -24,7 +27,7 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
-  home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const MyHomePage(title: 'Flutter Demo Home Page'),
     );
   }
 }
@@ -41,23 +44,18 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   final MapController _mapController = MapController();
   List<gtfs.Stop> allStops = [];
-  Map<String, List<gtfs.Stop>> lineStops = {};
-  String selectedLine = 'Auto';
+  Map<String, gtfs.Stop> stopLookup = {};
+  late DirectionService _directionService;
 
   Map<String, List<String>> linePrefixes = {};
   Map<String, Color> lineColors = {};
-  Map<String, String> lineColorHex = {};
   List<gtfs.Route> allRoutes = [];
   // Fare mappings (loaded from assets)
   Map<String, String> fareTypeMap = {}; // fareId -> 'm'|'s'
   Map<String, int> fareDataMap = {}; // e.g. 'm3' -> 28
 
-  // Last-calculated fare breakdown
-  int fareMCount = 0;
-  int fareSCount = 0;
-  int fareMPrice = 0;
-  int fareSPrice = 0;
-  int calculatedFare = 0;
+  // Routing preference: 'Shortest', 'Fastest', 'Cheapest'
+  String routingMode = 'Shortest';
 
   // Helper to get line name by stopId
   String? _getLineName(String stopId) {
@@ -68,6 +66,7 @@ class _MyHomePageState extends State<MyHomePage> {
     }
     return null;
   }
+
   Future<List<gtfs.Route>> _parseRoutesFromAsset(String assetPath) async {
     try {
       final content = await rootBundle.loadString(assetPath);
@@ -88,19 +87,27 @@ class _MyHomePageState extends State<MyHomePage> {
         if (line.isEmpty) continue;
         final row = _parseCsvLine(line);
         if (row.length < 7) continue;
-        final linePrefixes = idxLinePrefixes >= 0 && row.length > idxLinePrefixes
-          ? row.sublist(idxLinePrefixes).map((s) => s.trim()).where((s) => s.isNotEmpty).toList().cast<String>()
-          : <String>[];
-        routes.add(gtfs.Route(
-          routeId: row[idxRouteId].trim(),
-          agencyId: row[idxAgencyId].trim(),
-          shortName: row[idxShortName].trim(),
-          longName: row[idxLongName].trim(),
-          type: row[idxType].trim(),
-          color: idxColor >= 0 ? _cleanHex(row[idxColor]) : null,
-          textColor: idxTextColor >= 0 ? _cleanHex(row[idxTextColor]) : null,
-          linePrefixes: linePrefixes,
-        ));
+        final linePrefixes =
+            idxLinePrefixes >= 0 && row.length > idxLinePrefixes
+            ? row
+                  .sublist(idxLinePrefixes)
+                  .map((s) => s.trim())
+                  .where((s) => s.isNotEmpty)
+                  .toList()
+                  .cast<String>()
+            : <String>[];
+        routes.add(
+          gtfs.Route(
+            routeId: row[idxRouteId].trim(),
+            agencyId: row[idxAgencyId].trim(),
+            shortName: row[idxShortName].trim(),
+            longName: row[idxLongName].trim(),
+            type: row[idxType].trim(),
+            color: idxColor >= 0 ? _cleanHex(row[idxColor]) : null,
+            textColor: idxTextColor >= 0 ? _cleanHex(row[idxTextColor]) : null,
+            linePrefixes: linePrefixes,
+          ),
+        );
       }
       return routes;
     } catch (_) {
@@ -108,259 +115,38 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-    String? selectedStartStopId;
-    String? selectedDestinationStopId;
-    List<gtfs.Stop> directionStops = [];
-    List<List<gtfs.Stop>> directionOptions = [];
-    int selectedDirectionIndex = 0;
+  String? selectedStartStopId;
+  String? selectedDestinationStopId;
+  List<DirectionOption> directionOptions = [];
+  int selectedDirectionIndex = 0;
 
-    void _findDirection() async {
-      if (selectedStartStopId == null || selectedDestinationStopId == null) return;
-      // Load stop_times.txt
-      final stopTimesContent = await rootBundle.loadString('assets/gtfs_data/stop_times.txt');
-      final stopTimesLines = const LineSplitter().convert(stopTimesContent);
-      if (stopTimesLines.length <= 1) return;
-      // Parse stop_times (robust CSV with header indices)
-      final stopTimes = <String, List<Map<String, dynamic>>>{};
-      final header = _parseCsvLine(stopTimesLines.first).map((s) => s.trim()).toList();
-      final idxTripId = header.indexOf('trip_id');
-      final idxStopId = header.indexOf('stop_id');
-      final idxStopSeq = header.indexOf('stop_sequence');
-      for (var i = 1; i < stopTimesLines.length; i++) {
-        final line = stopTimesLines[i].trimRight();
-        if (line.isEmpty) continue;
-        final row = _parseCsvLine(line);
-        if (row.isEmpty || idxTripId < 0 || idxStopId < 0 || idxStopSeq < 0) continue;
-        if (row.length <= idxTripId || row.length <= idxStopId || row.length <= idxStopSeq) continue;
-        final tripId = row[idxTripId].trim();
-        final stopId = row[idxStopId].trim();
-        final stopSequence = int.tryParse(row[idxStopSeq].trim()) ?? i;
-        if (tripId.isEmpty || stopId.isEmpty) continue;
-        stopTimes.putIfAbsent(tripId, () => []).add({'stopId': stopId, 'stopSequence': stopSequence});
-      }
-      // Ensure each trip's stops are sorted by stop_sequence
-      for (final entry in stopTimes.entries) {
-        entry.value.sort((a, b) => (a['stopSequence'] as int).compareTo(b['stopSequence'] as int));
-      }
-
-      // Load trips.txt to map trip_id -> route_id
-      final tripsContent = await rootBundle.loadString('assets/gtfs_data/trips.txt');
-      final tripsLines = tripsContent.split('\n');
-      final Map<String, String> tripToRoute = {}; // trip_id -> route_id
-      if (tripsLines.length > 1) {
-        final header = tripsLines[0].split(',');
-        final idxRouteId = header.indexOf('route_id');
-        final idxTripId = header.indexOf('trip_id');
-        for (int i = 1; i < tripsLines.length; i++) {
-          final row = _parseCsvLine(tripsLines[i]);
-          if (row.length <= idxTripId || row.length <= idxRouteId || idxTripId < 0 || idxRouteId < 0) continue;
-          final routeId = row[idxRouteId];
-          final tripId = row[idxTripId];
-          if (routeId.isEmpty || tripId.isEmpty) continue;
-          tripToRoute[tripId] = routeId;
-        }
-      }
-
-      // Helper: extract alpha prefix (e.g., N/E/S/W/BL/CEN)
-      String extractPrefix(String stopId) {
-        if (stopId == 'CEN') return 'CEN';
-        final buffer = StringBuffer();
-        for (final ch in stopId.split('')) {
-          if (RegExp(r'[A-Za-z]').hasMatch(ch)) {
-            buffer.write(ch);
-          } else {
-            break;
-          }
-        }
-        return buffer.toString();
-      }
-
-      final startPrefix = extractPrefix(selectedStartStopId!);
-      final destPrefix = extractPrefix(selectedDestinationStopId!);
-
-      // Build routeId -> prefixes map from routes loaded earlier
-      final Map<String, List<String>> routeIdToPrefixes = {
-        for (final r in allRoutes) r.routeId: r.linePrefixes
-      };
-
-      // Determine candidate routeIds to consider based on prefixes
-      Set<String> candidateRouteIds = {};
-      final bool prefersSukhumvit = (startPrefix == 'N' || startPrefix == 'E') || (destPrefix == 'N' || destPrefix == 'E');
-      final bool prefersSilom = (startPrefix == 'W' || startPrefix == 'S') || (destPrefix == 'W' || destPrefix == 'S');
-      if (prefersSukhumvit && !prefersSilom) {
-        for (final e in routeIdToPrefixes.entries) {
-          final p = e.value;
-          if (p.contains('N') || p.contains('E')) candidateRouteIds.add(e.key);
-        }
-      } else if (prefersSilom && !prefersSukhumvit) {
-        for (final e in routeIdToPrefixes.entries) {
-          final p = e.value;
-          if (p.contains('W') || p.contains('S')) candidateRouteIds.add(e.key);
-        }
-      } else {
-        // Ambiguous (e.g., CEN to CEN), allow any BTS routes present
-        for (final e in routeIdToPrefixes.entries) {
-          candidateRouteIds.add(e.key);
-        }
-      }
-
-      // Choose the best trip containing both stops and matching candidate routes
-      String? selectedTripId;
-      int bestSpan = -1;
-      for (var entry in stopTimes.entries) {
-        final tripId = entry.key;
-        final routeId = tripToRoute[tripId];
-        if (routeId == null || !candidateRouteIds.contains(routeId)) continue;
-        final tripStops = entry.value;
-        final startIdx = tripStops.indexWhere((s) => s['stopId'] == selectedStartStopId);
-        final destIdx = tripStops.indexWhere((s) => s['stopId'] == selectedDestinationStopId);
-        if (startIdx != -1 && destIdx != -1) {
-          final span = (destIdx - startIdx).abs();
-          if (span > bestSpan) {
-            bestSpan = span;
-            selectedTripId = tripId;
-          }
-        }
-      }
-      // Fallback: if nothing matched the candidate routes, search all trips
-      if (selectedTripId == null) {
-        bestSpan = -1;
-        for (var entry in stopTimes.entries) {
-          final tripStops = entry.value;
-          final startIdx = tripStops.indexWhere((s) => s['stopId'] == selectedStartStopId);
-          final destIdx = tripStops.indexWhere((s) => s['stopId'] == selectedDestinationStopId);
-          if (startIdx != -1 && destIdx != -1) {
-            final span = (destIdx - startIdx).abs();
-            if (span > bestSpan) {
-              bestSpan = span;
-              selectedTripId = entry.key;
-            }
-          }
-        }
-      }
-      if (selectedTripId == null) {
-        // Attempt a one-transfer route via known interchanges (e.g., Siam (CEN) and Krung Thon Buri (S7/G1))
-        // Each hub group lists equivalent stop_ids representing the same place across lines
-        final List<List<String>> transferHubs = [
-          ['CEN'],
-          ['S7', 'G1'],
-          ['BL01'],
-          ['BL13','N8'],
-          ['BL14','N9'],
-          ['BL22','E4'],
-          ['BL26','S2'],
-          ['BL34','S12']
-        ];
-        // Helper to find a segment on a specific set of routeIds between A and B (inclusive)
-        List<Map<String, dynamic>>? findSegmentBetween(String a, String b, Set<String> allowedRouteIds) {
-          List<Map<String, dynamic>>? bestSegment;
-          int bestSpan = 1 << 30;
-          for (final entry in stopTimes.entries) {
-            final routeId = tripToRoute[entry.key];
-            if (routeId == null || !allowedRouteIds.contains(routeId)) continue;
-            final ts = entry.value;
-            final ia = ts.indexWhere((s) => s['stopId'] == a);
-            final ib = ts.indexWhere((s) => s['stopId'] == b);
-            if (ia == -1 || ib == -1) continue;
-            final lo = ia < ib ? ia : ib;
-            final hi = ia < ib ? ib : ia;
-            final span = hi - lo;
-            if (span < bestSpan) {
-              bestSpan = span;
-              final seg = ts.sublist(lo, hi + 1);
-              bestSegment = ia <= ib ? seg : seg.reversed.toList();
-            }
-          }
-          return bestSegment;
-        }
-
-        // Determine start/dest route sets by prefix
-        Set<String> startRouteIds = {};
-        Set<String> destRouteIds = {};
-        for (final e in routeIdToPrefixes.entries) {
-          final prefixes = e.value;
-          if (prefixes.contains(startPrefix)) startRouteIds.add(e.key);
-          if (prefixes.contains(destPrefix)) destRouteIds.add(e.key);
-        }
-        // If either set is empty (e.g., prefix not listed), allow all known routeIds as a fallback
-        if (startRouteIds.isEmpty || destRouteIds.isEmpty) {
-          final allRouteIds = routeIdToPrefixes.keys.toSet();
-          if (startRouteIds.isEmpty) startRouteIds = allRouteIds;
-          if (destRouteIds.isEmpty) destRouteIds = allRouteIds;
-        }
-
-        // Try transfer via any hub group (e.g., CEN or S7/G1)
-        for (final hubGroup in transferHubs) {
-          for (final hubA in hubGroup) {
-            for (final hubB in hubGroup) {
-              final seg1 = findSegmentBetween(selectedStartStopId!, hubA, startRouteIds);
-              if (seg1 == null) continue;
-              final seg2 = findSegmentBetween(hubB, selectedDestinationStopId!, destRouteIds);
-              if (seg2 == null) continue;
-              // Combine, drop duplicate hub at boundary if identical
-              final merged = <Map<String, dynamic>>[...seg1];
-              final dropDup = seg2.isNotEmpty && merged.isNotEmpty && seg2.first['stopId'] == merged.last['stopId'];
-              merged.addAll(dropDup ? seg2.sublist(1) : seg2);
-              final combinedStops = merged
-                  .map((s) => allStops.firstWhere(
-                        (st) => st.stopId == s['stopId'],
-                        orElse: () => gtfs.Stop(stopId: s['stopId'], name: s['stopId'], lat: 0, lon: 0),
-                      ))
-                  .toList();
-              final fare = _calculateFare(combinedStops);
-              setState(() {
-                directionOptions = [combinedStops];
-                selectedDirectionIndex = 0;
-                fareMCount = fare['mCount']!;
-                fareSCount = fare['sCount']!;
-                fareMPrice = fare['mPrice']!;
-                fareSPrice = fare['sPrice']!;
-                calculatedFare = fare['total']!;
-              });
-              return;
-            }
-          }
-        }
-
-        // If transfer also failed, clear and exit
-        setState(() {
-          directionOptions = [];
-          selectedDirectionIndex = 0;
-        });
-        return;
-      }
-  final tripStops = stopTimes[selectedTripId]!..sort((a, b) => (a['stopSequence'] as int).compareTo(b['stopSequence'] as int));
-      final startIdx = tripStops.indexWhere((s) => s['stopId'] == selectedStartStopId);
-      final destIdx = tripStops.indexWhere((s) => s['stopId'] == selectedDestinationStopId);
-      List<List<gtfs.Stop>> foundRoutes = [];
-      if (startIdx < destIdx) {
-        final segment = tripStops.sublist(startIdx, destIdx + 1);
-        final stopsList = segment.map((s) => allStops.firstWhere((stop) => stop.stopId == s['stopId'], orElse: () => gtfs.Stop(stopId: s['stopId'], name: s['stopId'], lat: 0, lon: 0))).toList();
-        foundRoutes.add(stopsList);
-      } else if (startIdx > destIdx) {
-        final segment = tripStops.sublist(destIdx, startIdx + 1).reversed.toList();
-        final stopsList = segment.map((s) => allStops.firstWhere((stop) => stop.stopId == s['stopId'], orElse: () => gtfs.Stop(stopId: s['stopId'], name: s['stopId'], lat: 0, lon: 0))).toList();
-        foundRoutes.add(stopsList);
-      }
-      // Calculate fare for the first found route and update state
-      if (foundRoutes.isNotEmpty) {
-        final fare = _calculateFare(foundRoutes.first);
-        setState(() {
-          directionOptions = foundRoutes;
-          selectedDirectionIndex = 0;
-          fareMCount = fare['mCount']!;
-          fareSCount = fare['sCount']!;
-          fareMPrice = fare['mPrice']!;
-          fareSPrice = fare['sPrice']!;
-          calculatedFare = fare['total']!;
-        });
-      } else {
-        setState(() {
-          directionOptions = foundRoutes;
-          selectedDirectionIndex = 0;
-        });
-      }
+  Future<void> _findDirection() async {
+    if (allStops.isEmpty) {
+      return;
     }
+    final startId = selectedStartStopId;
+    final destId = selectedDestinationStopId;
+    if (startId == null || destId == null) {
+      return;
+    }
+    final result = await _directionService.findDirections(
+      routingMode: routingMode,
+      startStopId: startId,
+      destStopId: destId,
+    );
+    setState(() {
+      directionOptions = List<DirectionOption>.from(result.options);
+      if (directionOptions.isEmpty) {
+        selectedDirectionIndex = 0;
+      } else {
+        selectedDirectionIndex = result.selectionIndex.clamp(
+          0,
+          directionOptions.length - 1,
+        );
+      }
+    });
+  }
+
   Color _getLineColor(String stopId) {
     final lineName = _getLineName(stopId);
     if (lineName != null && lineColors.containsKey(lineName)) {
@@ -369,13 +155,531 @@ class _MyHomePageState extends State<MyHomePage> {
     return Colors.purple;
   }
 
-  Color _getPolylineColor(List<gtfs.Stop> stops) {
-    if (stops.isEmpty) return Colors.purple;
-    final lineName = _getLineName(stops.first.stopId);
-    if (lineName != null && lineColors.containsKey(lineName)) {
+  Color _getPolylineColor(String lineName) {
+    if (lineColors.containsKey(lineName)) {
       return lineColors[lineName]!;
     }
     return Colors.purple;
+  }
+
+  Polyline _connectionPolyline(LatLng from, LatLng to) {
+    return Polyline(points: [from, to], color: Colors.black, strokeWidth: 8.0);
+  }
+
+  Polyline _linePolyline(LatLng from, LatLng to, Color color) {
+    return Polyline(points: [from, to], color: color, strokeWidth: 6.0);
+  }
+
+  List<Polyline> _buildRoutePolylines(List<gtfs.Stop> route) {
+    final polylines = <Polyline>[];
+    if (route.length < 2) return polylines;
+    String? previousLine = _getLineName(route[0].stopId);
+    for (int i = 1; i < route.length; i++) {
+      final currentLine = _getLineName(route[i].stopId);
+      final from = LatLng(route[i - 1].lat, route[i - 1].lon);
+      final to = LatLng(route[i].lat, route[i].lon);
+      if (currentLine != previousLine) {
+        if (route[i - 1].lat != route[i].lat ||
+            route[i - 1].lon != route[i].lon) {
+          polylines.add(_connectionPolyline(from, to));
+        }
+      } else {
+        polylines.add(
+          _linePolyline(
+            from,
+            to,
+            _getPolylineColor(currentLine ?? previousLine ?? ''),
+          ),
+        );
+      }
+      previousLine = currentLine;
+    }
+    return polylines;
+  }
+
+  String _formatDistance(double meters) {
+    if (meters < 1000) {
+      return '${meters.toStringAsFixed(0)} m';
+    }
+    return '${(meters / 1000).toStringAsFixed(2)} km';
+  }
+
+  List<gtfs.Stop> get _sortedStops {
+    final unique = <String, gtfs.Stop>{
+      for (final stop in allStops) stop.stopId: stop,
+    };
+    final sorted = unique.values.toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+    return sorted;
+  }
+
+  Future<void> _swapStops() async {
+    if (selectedStartStopId == null && selectedDestinationStopId == null) {
+      return;
+    }
+    setState(() {
+      final temp = selectedStartStopId;
+      selectedStartStopId = selectedDestinationStopId;
+      selectedDestinationStopId = temp;
+    });
+    if (selectedStartStopId != null && selectedDestinationStopId != null) {
+      await _findDirection();
+    }
+  }
+
+  Future<void> _updateRoutingMode(String newMode) async {
+    if (routingMode == newMode) return;
+    setState(() {
+      routingMode = newMode;
+    });
+    if (selectedStartStopId != null &&
+        selectedDestinationStopId != null &&
+        directionOptions.isNotEmpty) {
+      await _findDirection();
+    }
+  }
+
+  void _selectRouteOption(int index) {
+    if (index < 0 || index >= directionOptions.length) return;
+    const order = ['Shortest', 'Fastest', 'Cheapest'];
+    final selectedOption = directionOptions[index];
+    String? nextMode;
+    for (final candidate in order) {
+      if (selectedOption.tags.contains(candidate)) {
+        nextMode = candidate;
+        break;
+      }
+    }
+    final reordered = <DirectionOption>[selectedOption];
+    for (int i = 0; i < directionOptions.length; i++) {
+      if (i == index) continue;
+      reordered.add(directionOptions[i]);
+    }
+    setState(() {
+      directionOptions = reordered;
+      selectedDirectionIndex = 0;
+      if (nextMode != null) {
+        routingMode = nextMode;
+      }
+    });
+  }
+
+  Widget _buildRouteOptionsSection(BuildContext context) {
+    if (directionOptions.isEmpty) return const SizedBox.shrink();
+    final optionWidgets = <Widget>[
+      Text(
+        'Route options',
+        style: Theme.of(context).textTheme.titleMedium,
+      ),
+      const SizedBox(height: 12),
+    ];
+    optionWidgets.addAll(
+      List.generate(
+        directionOptions.length,
+        (index) => _buildRouteOptionCard(context, index),
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: optionWidgets,
+      ),
+    );
+  }
+
+  Widget _buildRouteOptionCard(BuildContext context, int index) {
+    if (index < 0 || index >= directionOptions.length) {
+      return const SizedBox.shrink();
+    }
+    final option = directionOptions[index];
+    final stops = option.stops;
+    if (stops.isEmpty) return const SizedBox.shrink();
+    final label = option.label.isNotEmpty
+        ? option.label
+        : 'Option ${index + 1}';
+    final tags = option.tags;
+    const order = [
+      'Shortest',
+      'Fastest',
+      'Cheapest',
+      'Direct',
+      'Balanced',
+      'Low transfers',
+      'Fewest stops',
+      'Transfer',
+    ];
+    final sortedTags = tags.toList()
+      ..sort((a, b) {
+        final ai = order.indexOf(a);
+        final bi = order.indexOf(b);
+        if (ai == -1 && bi == -1) return a.compareTo(b);
+        if (ai == -1) return 1;
+        if (bi == -1) return -1;
+        return ai.compareTo(bi);
+      });
+    final distanceText = _formatDistance(option.distanceMeters);
+    final minutes = option.minutes;
+    final fare = option.fareBreakdown;
+    final isSelected = index == selectedDirectionIndex;
+    final lineSegments = _splitRouteByLine(stops);
+
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _selectRouteOption(index),
+        child: Card(
+          elevation: isSelected ? 4 : 1,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(
+              color: isSelected
+                  ? theme.colorScheme.primary
+                  : Colors.transparent,
+              width: 2,
+            ),
+          ),
+          color: isSelected
+              ? theme.colorScheme.primaryContainer.withValues(alpha: 0.75)
+              : theme.colorScheme.surface,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (sortedTags.isNotEmpty) ...[
+                  Wrap(
+                    spacing: 8,
+                    children: sortedTags
+                        .map(
+                          (tag) => Chip(
+                            label: Text(tag),
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        )
+                        .toList(),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                Text(
+                  label,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '$distanceText • ~${minutes.toString()} min • ${stops.length} stops',
+                  style: theme.textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Fare ฿${fare['total'] ?? 0}',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      'm:${fare['mCount'] ?? 0} (฿${fare['mPrice'] ?? 0})  s:${fare['sCount'] ?? 0} (฿${fare['sPrice'] ?? 0})',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: lineSegments.map((segment) {
+                    final lineName = segment.isNotEmpty
+                        ? (_getLineName(segment.first.stopId) ?? 'Unknown line')
+                        : 'Unknown line';
+                    final color = lineColors[lineName] ?? Colors.purple;
+                    return Chip(
+                      avatar: CircleAvatar(backgroundColor: color),
+                      label: Text(lineName),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMap(BuildContext context) {
+    final startId = selectedStartStopId;
+    final destId = selectedDestinationStopId;
+    final routeStops = directionStopsView;
+    return FlutterMap(
+      mapController: _mapController,
+      options: const MapOptions(
+        initialCenter: LatLng(13.7463, 100.5347),
+        initialZoom: 12.0,
+      ),
+      children: [
+        TileLayer(
+          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          userAgentPackageName: 'com.example.route',
+        ),
+        if (allStops.isNotEmpty)
+          MarkerLayer(
+            markers: allStops
+                .map(
+                  (stop) => Marker(
+                    point: LatLng(stop.lat, stop.lon),
+                    width: (stop.stopId == startId || stop.stopId == destId)
+                        ? 22
+                        : 16,
+                    height: (stop.stopId == startId || stop.stopId == destId)
+                        ? 22
+                        : 16,
+                    child: Tooltip(
+                      message: stop.name,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: (stop.stopId == startId)
+                              ? Colors.greenAccent.withValues(alpha: 0.85)
+                              : (stop.stopId == destId)
+                              ? Colors.redAccent.withValues(alpha: 0.85)
+                              : Colors.white,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: _getLineColor(stop.stopId),
+                            width:
+                                (stop.stopId == startId ||
+                                    stop.stopId == destId)
+                                ? 4
+                                : 3,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+        if (routeStops.isNotEmpty)
+          PolylineLayer(polylines: _buildRoutePolylines(routeStops)),
+        const RichAttributionWidget(
+          attributions: [TextSourceAttribution('© OpenStreetMap contributors')],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWideLayout(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final panelWidth = math.min(440.0, width * 0.35);
+    final theme = Theme.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          width: panelWidth,
+          color: theme.colorScheme.surface,
+          child: ListView(
+            padding: const EdgeInsets.only(bottom: 24),
+            children: [
+              _buildControlPanel(context),
+              _buildRouteOptionsSection(context),
+            ],
+          ),
+        ),
+        const VerticalDivider(width: 1),
+        Expanded(child: _buildMap(context)),
+      ],
+    );
+  }
+
+  Widget _buildPhoneLayout(BuildContext context) {
+    final hasRoutes = directionOptions.isNotEmpty;
+    final initialSize = hasRoutes ? 0.4 : 0.25;
+    final theme = Theme.of(context);
+    return Stack(
+      children: [
+        Positioned.fill(child: _buildMap(context)),
+        DraggableScrollableSheet(
+          initialChildSize: initialSize,
+          minChildSize: 0.2,
+          maxChildSize: 0.9,
+          builder: (context, controller) {
+            final bottomPadding = MediaQuery.of(context).padding.bottom;
+            return Material(
+              elevation: 12,
+              color: theme.colorScheme.surface,
+              clipBehavior: Clip.antiAlias,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(24),
+              ),
+              child: ListView(
+                controller: controller,
+                padding: EdgeInsets.only(bottom: bottomPadding + 24),
+                children: [
+                  const SizedBox(height: 12),
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.outlineVariant,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildControlPanel(context),
+                  _buildRouteOptionsSection(context),
+                ],
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildControlPanel(BuildContext context) {
+    final stops = _sortedStops;
+    final dropdownItems = stops
+        .map(
+          (stop) => DropdownMenuItem<String>(
+            value: stop.stopId,
+            child: Text(stop.name),
+          ),
+        )
+        .toList();
+    final startValue = stops.any((stop) => stop.stopId == selectedStartStopId)
+        ? selectedStartStopId
+        : null;
+    final destValue =
+        stops.any((stop) => stop.stopId == selectedDestinationStopId)
+        ? selectedDestinationStopId
+        : null;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Card(
+        elevation: 2,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment(
+                          value: 'Shortest',
+                          label: Text('Shortest'),
+                          icon: Icon(Icons.format_list_numbered),
+                        ),
+                        ButtonSegment(
+                          value: 'Fastest',
+                          label: Text('Fastest'),
+                          icon: Icon(Icons.speed),
+                        ),
+                        ButtonSegment(
+                          value: 'Cheapest',
+                          label: Text('Cheapest'),
+                          icon: Icon(Icons.attach_money),
+                        ),
+                      ],
+                      selected: <String>{routingMode},
+                      onSelectionChanged: (selection) {
+                        if (selection.isNotEmpty) {
+                          _updateRoutingMode(selection.first);
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  FilledButton.icon(
+                    onPressed:
+                        (selectedStartStopId != null &&
+                            selectedDestinationStopId != null)
+                        ? () {
+                            _findDirection();
+                          }
+                        : null,
+                    icon: const Icon(Icons.route),
+                    label: const Text('Plan route'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      initialValue: startValue,
+                      decoration: const InputDecoration(
+                        labelText: 'Start station',
+                        prefixIcon: Icon(Icons.trip_origin),
+                        border: OutlineInputBorder(),
+                      ),
+                      items: dropdownItems,
+                      onChanged: (value) {
+                        setState(() {
+                          selectedStartStopId = value;
+                        });
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  IconButton(
+                    tooltip: 'Swap start and destination',
+                    icon: const Icon(Icons.swap_horiz),
+                    onPressed:
+                        (selectedStartStopId != null ||
+                            selectedDestinationStopId != null)
+                        ? () {
+                            _swapStops();
+                          }
+                        : null,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      initialValue: destValue,
+                      decoration: const InputDecoration(
+                        labelText: 'Destination',
+                        prefixIcon: Icon(Icons.flag),
+                        border: OutlineInputBorder(),
+                      ),
+                      items: dropdownItems,
+                      onChanged: (value) {
+                        setState(() {
+                          selectedDestinationStopId = value;
+                        });
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<gtfs.Stop> get directionStopsView {
+    if (directionOptions.isNotEmpty &&
+        selectedDirectionIndex < directionOptions.length &&
+        directionOptions[selectedDirectionIndex].stops.isNotEmpty) {
+      return directionOptions[selectedDirectionIndex].stops;
+    }
+    return const <gtfs.Stop>[];
   }
 
   List<List<gtfs.Stop>> _splitRouteByLine(List<gtfs.Stop> route) {
@@ -412,6 +716,7 @@ class _MyHomePageState extends State<MyHomePage> {
       }
       return ln;
     }
+
     for (int i = 1; i < route.length; i++) {
       String line = effectiveLineFor(i);
       if (line != lastLine) {
@@ -428,20 +733,10 @@ class _MyHomePageState extends State<MyHomePage> {
     return segments;
   }
 
-  List<gtfs.Stop> get directionStopsView {
-    // Always show the full segment in correct order
-    if (directionOptions.isNotEmpty && directionOptions[selectedDirectionIndex].isNotEmpty) {
-      final stops = directionOptions[selectedDirectionIndex];
-      // Sort by stop_sequence if available in stop_times
-      // (Assumes _findDirection already provides correct order)
-      return stops;
-    }
-    return [];
-  }
-  @override
   @override
   void initState() {
     super.initState();
+    _directionService = DirectionService(lineNameResolver: _getLineName);
     _loadRoutesAndStops();
   }
 
@@ -453,27 +748,26 @@ class _MyHomePageState extends State<MyHomePage> {
     // Build linePrefixes and lineColors from routes
     Map<String, List<String>> prefixMap = {};
     Map<String, Color> colorMap = {};
-    Map<String, String> colorHexMap = {};
     for (var route in routes) {
       prefixMap[route.longName] = route.linePrefixes;
       if (route.color != null && route.color!.isNotEmpty) {
-        colorHexMap[route.longName] = route.color!;
         colorMap[route.longName] = Color(int.parse('0xFF${route.color!}'));
       }
     }
+    final stopMap = {for (final stop in stops) stop.stopId: stop};
+    _directionService.updateData(
+      allStops: stops,
+      stopLookup: stopMap,
+      routes: routes,
+      fareTypeMap: fareTypeMap,
+      fareDataMap: fareDataMap,
+    );
     setState(() {
       allRoutes = routes;
       allStops = stops;
       linePrefixes = prefixMap;
       lineColors = colorMap;
-      lineColorHex = colorHexMap;
-      lineStops = {};
-      for (var stop in stops) {
-        final lineName = _getLineName(stop.stopId);
-        if (lineName != null) {
-          lineStops.putIfAbsent(lineName, () => []).add(stop);
-        }
-      }
+      stopLookup = stopMap;
     });
   }
 
@@ -491,15 +785,17 @@ class _MyHomePageState extends State<MyHomePage> {
         final row = _parseCsvLine(line);
         if (row.length < 4) continue;
         try {
-          stops.add(gtfs.Stop(
-            stopId: row[0].trim(),
-            name: row[1].trim(),
-            lat: double.parse(row[2].trim()),
-            lon: double.parse(row[3].trim()),
-            code: row.length > 4 ? row[4] : null,
-            desc: row.length > 5 ? row[5] : null,
-            zoneId: row.length > 6 ? row[6] : null,
-          ));
+          stops.add(
+            gtfs.Stop(
+              stopId: row[0].trim(),
+              name: row[1].trim(),
+              lat: double.parse(row[2].trim()),
+              lon: double.parse(row[3].trim()),
+              code: row.length > 4 ? row[4] : null,
+              desc: row.length > 5 ? row[5] : null,
+              zoneId: row.length > 6 ? row[6] : null,
+            ),
+          );
         } catch (_) {}
       }
       return stops;
@@ -513,10 +809,14 @@ class _MyHomePageState extends State<MyHomePage> {
     fareDataMap.clear();
     try {
       // Faretype mapping: fareId -> status ('m'|'s')
-      final content = await rootBundle.loadString('assets/gtfs_data/Faretype.txt');
+      final content = await rootBundle.loadString(
+        'assets/gtfs_data/Faretype.txt',
+      );
       final lines = const LineSplitter().convert(content);
       if (lines.length > 1) {
-        final header = _parseCsvLine(lines[0]).map((s) => s.toLowerCase()).toList();
+        final header = _parseCsvLine(
+          lines[0],
+        ).map((s) => s.toLowerCase()).toList();
         int idxFareId = header.indexOf('fareid');
         if (idxFareId < 0) idxFareId = 0;
         int idxStatus = header.indexOf('agencystatus');
@@ -528,7 +828,9 @@ class _MyHomePageState extends State<MyHomePage> {
           final row = _parseCsvLine(line);
           if (row.length <= idxFareId) continue;
           final id = row[idxFareId].trim();
-          final status = (row.length > idxStatus) ? row[idxStatus].trim().toLowerCase() : '';
+          final status = (row.length > idxStatus)
+              ? row[idxStatus].trim().toLowerCase()
+              : '';
           if (id.isNotEmpty && (status == 'm' || status == 's')) {
             fareTypeMap[id] = status;
           }
@@ -538,10 +840,14 @@ class _MyHomePageState extends State<MyHomePage> {
 
     try {
       // Fare data: fareDataId -> price
-      final content = await rootBundle.loadString('assets/gtfs_data/FareData.txt');
+      final content = await rootBundle.loadString(
+        'assets/gtfs_data/FareData.txt',
+      );
       final lines = const LineSplitter().convert(content);
       if (lines.length > 1) {
-        final header = _parseCsvLine(lines[0]).map((s) => s.toLowerCase()).toList();
+        final header = _parseCsvLine(
+          lines[0],
+        ).map((s) => s.toLowerCase()).toList();
         int idxId = header.indexOf('faredataid');
         if (idxId < 0) idxId = header.indexOf('fareid');
         if (idxId < 0) idxId = 0;
@@ -553,78 +859,13 @@ class _MyHomePageState extends State<MyHomePage> {
           final row = _parseCsvLine(line);
           if (row.length <= idxId) continue;
           final id = row[idxId].trim();
-          final price = (row.length > idxPrice) ? int.tryParse(row[idxPrice].trim()) ?? 0 : 0;
+          final price = (row.length > idxPrice)
+              ? int.tryParse(row[idxPrice].trim()) ?? 0
+              : 0;
           if (id.isNotEmpty) fareDataMap[id] = price;
         }
       }
     } catch (_) {}
-  }
-
-  Map<String, int> _calculateFare(List<gtfs.Stop> routeStops) {
-    // Returns map: mCount, sCount, mPrice, sPrice, total
-    int mCount = 0;
-    int sCount = 0;
-    if (routeStops.length <= 1) {
-      return {'mCount': 0, 'sCount': 0, 'mPrice': 0, 'sPrice': 0, 'total': 0};
-    }
-    // SPECIAL PAIR RULES (evaluate before excluding last station):
-    // - N5 -> N7  : the occurrence at N5 counts as 2 m units
-    // - N7 -> N5  : the occurrence at N7 counts as 2 m units
-    // Also evaluate the 'first pair' special rules (4-6) before trimming the last station:
-    // - If first==N8 && second==N9 -> first treated as 's'
-    // - If first==S8 && second==S9 -> first treated as 's'
-    // - If first==E9 && second==E10 -> first treated as 's'
-    final Map<int, int> specialIndexExtra = {}; // original index -> extra m-count (2)
-    final Map<int, String> specialStatusOverride = {}; // original index -> overridden status ('s' or 'm')
-    for (int i = 0; i < routeStops.length - 1; i++) {
-      final a = routeStops[i].stopId.trim();
-      final b = routeStops[i + 1].stopId.trim();
-      if (a == 'N5' && b == 'N7') {
-        specialIndexExtra[i] = (specialIndexExtra[i] ?? 0) + 2;
-      } else if (a == 'N7' && b == 'N5') {
-        specialIndexExtra[i] = (specialIndexExtra[i] ?? 0) + 2;
-      }
-      // Apply special status overrides for any matching consecutive pair (not just first pair)
-      if (a == 'N8' && b == 'N9') specialStatusOverride[i] = 's';
-      if (a == 'S8' && b == 'S9') specialStatusOverride[i] = 's';
-      if (a == 'E9' && b == 'E10') specialStatusOverride[i] = 's';
-    }
-
-    // Now remove the last station (rule 1) and count through remaining stops.
-    final stopsToCount = routeStops.sublist(0, routeStops.length - 1);
-    for (int i = 0; i < stopsToCount.length; i++) {
-      final currId = stopsToCount[i].stopId.trim();
-      // If this original index has a special extra-count, apply it (counts as m) and skip normal counting for this occurrence
-      if (specialIndexExtra.containsKey(i)) {
-        mCount += specialIndexExtra[i]!;
-        continue;
-      }
-      // If there's a status override for this index (e.g., first-pair rules), use it
-      String? status;
-      if (specialStatusOverride.containsKey(i)) {
-        status = specialStatusOverride[i];
-      } else {
-        status = fareTypeMap[currId];
-      }
-      if (status == 'm') {
-        mCount++;
-      } else if (status == 's') {
-        sCount++;
-      } else {
-        // skip unknown
-      }
-    }
-    // Apply caps
-    if (mCount > 8) mCount = 8; // cap for m
-    if (sCount > 13) sCount = 13; // cap for s
-
-  final mKey = 'm$mCount';
-  final sKey = 's$sCount';
-    final mPrice = fareDataMap[mKey] ?? 0;
-    final sPrice = fareDataMap[sKey] ?? 0;
-    int total = mPrice + sPrice;
-    if (total > 65) total = 65;
-    return {'mCount': mCount, 'sCount': sCount, 'mPrice': mPrice, 'sPrice': sPrice, 'total': total};
   }
 
   List<String> _parseCsvLine(String line) {
@@ -682,6 +923,8 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final isWideLayout = width >= 900;
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
@@ -693,188 +936,18 @@ class _MyHomePageState extends State<MyHomePage> {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const TransportLinesPage()),
+                MaterialPageRoute(
+                  builder: (context) => const TransportLinesPage(),
+                ),
               );
             },
           ),
         ],
       ),
       body: SafeArea(
-        child: Column(
-          children: [
-            Row(
-              children: [
-                const Text('Start:'),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    initialValue: selectedStartStopId,
-                    decoration: const InputDecoration(
-                      labelText: 'Start',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.search),
-                    ),
-                    items: lineStops.values.expand((l) => l)
-                        .map((stop) => DropdownMenuItem(
-                              value: stop.stopId,
-                              child: Text(stop.name),
-                            ))
-                        .toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        selectedStartStopId = value;
-                      });
-                    },
-                  ),
-                ),
-              if (directionOptions.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(12.0),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Fare: ฿$calculatedFare', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 4),
-                              Text('m: $fareMCount → ฿$fareMPrice    s: $fareSCount → ฿$fareSPrice', style: const TextStyle(fontSize: 12)),
-                            ],
-                          ),
-                          ElevatedButton(
-                            onPressed: () {
-                              // Optionally re-calculate or show details
-                              final fare = (directionOptions.isNotEmpty) ? _calculateFare(directionOptions[selectedDirectionIndex]) : null;
-                              if (fare != null) {
-                                setState(() {
-                                  fareMCount = fare['mCount']!;
-                                  fareSCount = fare['sCount']!;
-                                  fareMPrice = fare['mPrice']!;
-                                  fareSPrice = fare['sPrice']!;
-                                  calculatedFare = fare['total']!;
-                                });
-                              }
-                            },
-                            child: const Text('Recalc'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                const Text('Destination:'),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    initialValue: selectedDestinationStopId,
-                    decoration: const InputDecoration(
-                      labelText: 'Destination',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.flag),
-                    ),
-                    items: lineStops.values.expand((l) => l)
-                        .map((stop) => DropdownMenuItem(
-                              value: stop.stopId,
-                              child: Text(stop.name),
-                            ))
-                        .toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        selectedDestinationStopId = value;
-                      });
-                    },
-                  ),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: () {
-                    _findDirection();
-                  },
-                  child: const Text('Go'),
-                ),
-              ],
-            ),
-              if (directionOptions.length > 1)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: Row(
-                    children: [
-                      const Text('Select Direction:'),
-                      const SizedBox(width: 8),
-                      DropdownButton<int>(
-                        value: selectedDirectionIndex,
-                        items: List.generate(directionOptions.length, (i) => DropdownMenuItem(
-                          value: i,
-                          child: Text('Option ${i + 1}'),
-                        )),
-                        onChanged: (value) {
-                          if (value != null) {
-                            setState(() {
-                              selectedDirectionIndex = value;
-                            });
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-            Expanded(
-              child: FlutterMap(
-                mapController: _mapController,
-                options: const MapOptions(
-                  initialCenter: LatLng(13.7463, 100.5347), // Siam
-                  initialZoom: 12.0,
-                ),
-                children: [
-                  TileLayer(
-                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.example.route',
-                  ),
-                  MarkerLayer(
-                    markers: lineStops.values.expand((l) => l)
-                        .map((stop) => Marker(
-                              point: LatLng(stop.lat, stop.lon),
-                              width: 15,
-                              height: 15,
-                              child: Tooltip(
-                                message: stop.name,
-                                child: Container(
-                                  width: 16,
-                                  height: 16,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: _getLineColor(stop.stopId),
-                                      width: 4,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ))
-                        .toList(),
-                  ),
-                  if (directionStopsView.isNotEmpty)
-                    PolylineLayer(
-                      polylines: [
-                        for (var segment in _splitRouteByLine(directionStopsView))
-                          if (segment.length >= 2)
-                            Polyline(
-                              points: segment.map((stop) => LatLng(stop.lat, stop.lon)).toList(),
-                              color: _getPolylineColor(segment),
-                              strokeWidth: 6.0,
-                            ),
-                      ],
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
+        child: isWideLayout
+            ? _buildWideLayout(context)
+            : _buildPhoneLayout(context),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _goToMyLocation,
@@ -882,5 +955,6 @@ class _MyHomePageState extends State<MyHomePage> {
       ),
     );
   }
+
   //
 }
