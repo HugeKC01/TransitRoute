@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:latlong2/latlong.dart';
+import 'package:route/services/gtfs_models.dart' as gtfs;
 
 class ShapeSegment {
   final String shapeId;
@@ -23,11 +24,23 @@ class GtfsShapesService {
     required String shapesAsset,
     required Map<String, Color> routeColors,
     String? tripsAsset,
+    Map<String, gtfs.Trip>? tripMap,
   }) async {
     final shapes = await _parseShapes(shapesAsset);
-    Map<String, String> shapeToRoute = const <String, String>{};
-    Map<String, Color> shapeToColor = const <String, Color>{};
-    if (tripsAsset != null) {
+    Map<String, String> shapeToRoute = {};
+    Map<String, Color> shapeToColor = {};
+    if (tripMap != null) {
+      for (final t in tripMap.values) {
+        final sid = t.shapeId;
+        if (sid == null || sid.isEmpty) continue;
+        // map shape -> route
+        shapeToRoute.putIfAbsent(sid, () => t.routeId);
+        // map shape -> color (Trip.shapeColor is Color?)
+        if (t.shapeColor != null) {
+          shapeToColor.putIfAbsent(sid, () => t.shapeColor!);
+        }
+      }
+    } else if (tripsAsset != null) {
       final meta = await _parseShapeTripMeta(tripsAsset);
       shapeToRoute = meta.shapeToRoute;
       shapeToColor = meta.shapeToColor;

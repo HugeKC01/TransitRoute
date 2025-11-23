@@ -777,13 +777,14 @@ class _MyHomePageState extends State<MyHomePage> {
       fareTypeMap: fareTypeMap,
       fareDataMap: fareDataMap,
     );
-    // Load GTFS shapes (preferred)
+    // Load GTFS shapes (preferred) — use tripMap loaded from DirectionService to avoid re-parsing
     List<ShapeSegment> shapes = const <ShapeSegment>[];
     try {
+      final tripMap = await _directionService.loadTrips();
       shapes = await GtfsShapesService().loadSegments(
         shapesAsset: 'assets/gtfs_data/shapes.txt',
-        tripsAsset: 'assets/gtfs_data/trips.txt',
         routeColors: {for (final r in routes) r.routeId: (r.color != null && r.color!.isNotEmpty) ? Color(int.parse('0xFF${r.color!}')) : Colors.purple},
+        tripMap: tripMap,
       );
     } catch (_) {}
     setState(() {
