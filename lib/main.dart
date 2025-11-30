@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'package:route/services/direction_service.dart';
 import 'package:route/services/gtfs_models.dart' as gtfs;
+import 'package:route/services/gtfs_shapes.dart';
 
 import 'transport_lines_page.dart';
 
@@ -50,6 +51,8 @@ class _MyHomePageState extends State<MyHomePage> {
   Map<String, List<String>> linePrefixes = {};
   Map<String, Color> lineColors = {};
   List<gtfs.Route> allRoutes = [];
+  bool _didFitRails = false;
+  List<ShapeSegment> shapeSegments = [];
   // Fare mappings (loaded from assets)
   Map<String, String> fareTypeMap = {}; // fareId -> 'm'|'s'
   Map<String, int> fareDataMap = {}; // e.g. 'm3' -> 28
@@ -430,6 +433,18 @@ class _MyHomePageState extends State<MyHomePage> {
           urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
           userAgentPackageName: 'com.example.route',
         ),
+        if (shapeSegments.isNotEmpty)
+          PolylineLayer(
+            polylines: shapeSegments
+                .map(
+                  (s) => Polyline(
+                    points: s.points,
+                    color: s.color,
+                    strokeWidth: 6.0,
+                  ),
+                )
+                .toList(),
+          ),
         if (allStops.isNotEmpty)
           MarkerLayer(
             markers: allStops
@@ -762,13 +777,41 @@ class _MyHomePageState extends State<MyHomePage> {
       fareTypeMap: fareTypeMap,
       fareDataMap: fareDataMap,
     );
+    // Load GTFS shapes (preferred) — use tripMap loaded from DirectionService to avoid re-parsing
+    List<ShapeSegment> shapes = const <ShapeSegment>[];
+    try {
+      final tripMap = await _directionService.loadTrips();
+      shapes = await GtfsShapesService().loadSegments(
+        shapesAsset: 'assets/gtfs_data/shapes.txt',
+        routeColors: {for (final r in routes) r.routeId: (r.color != null && r.color!.isNotEmpty) ? Color(int.parse('0xFF${r.color!}')) : Colors.purple},
+        tripMap: tripMap,
+      );
+    } catch (_) {}
     setState(() {
       allRoutes = routes;
       allStops = stops;
       linePrefixes = prefixMap;
       lineColors = colorMap;
       stopLookup = stopMap;
+      shapeSegments = shapes;
     });
+    // Fit camera once on initial load based on shapes
+    if (!_didFitRails) {
+      final allPts = <LatLng>[];
+      for (final seg in shapeSegments) {
+        allPts.addAll(seg.points);
+      }
+      if (allPts.isNotEmpty) {
+        final bounds = LatLngBounds.fromPoints(allPts);
+        _mapController.fitCamera(
+          CameraFit.bounds(
+            bounds: bounds,
+            padding: const EdgeInsets.all(24),
+          ),
+        );
+        _didFitRails = true;
+      }
+    }
   }
 
   // _loadStops is now replaced by _loadRoutesAndStops

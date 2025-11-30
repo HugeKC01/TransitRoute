@@ -7,6 +7,7 @@ import 'package:route/services/csv_utils.dart';
 import 'package:route/services/fare_calculator.dart';
 import 'package:route/services/geo_utils.dart' as geo;
 import 'package:route/services/gtfs_models.dart' as gtfs;
+import 'package:flutter/material.dart';
 
 typedef LineNameResolver = String? Function(String stopId);
 
@@ -112,7 +113,7 @@ class DirectionService {
     if (stopTimes.isEmpty) {
       return DirectionResult.empty();
     }
-    final tripToRoute = await _loadTripToRoute();
+    final tripMap = await loadTrips();
     final routeIdToPrefixes = {
       for (final route in _routes) route.routeId: route.linePrefixes,
     };
@@ -135,7 +136,7 @@ class DirectionService {
 
     final selectedTrip = _findDirectTrip(
       stopTimes: stopTimes,
-      tripToRoute: tripToRoute,
+      tripMap: tripMap,
       routeIdToPrefixes: routeIdToPrefixes,
       startStopId: startStopId,
       destStopId: destStopId,
@@ -146,7 +147,7 @@ class DirectionService {
 
     final transferRoutes = _generateTransferRoutes(
       stopTimes: stopTimes,
-      tripToRoute: tripToRoute,
+      tripMap: tripMap,
       routeIdToPrefixes: routeIdToPrefixes,
       startStopId: startStopId,
       destStopId: destStopId,
@@ -342,7 +343,7 @@ class DirectionService {
     }
   }
 
-  Future<Map<String, String>> _loadTripToRoute() async {
+  Future<Map<String, gtfs.Trip>> loadTrips() async {
     try {
       final tripsContent = await rootBundle.loadString(
         'assets/gtfs_data/trips.txt',
@@ -352,10 +353,17 @@ class DirectionService {
       final header = parseCsvLine(lines.first).map((s) => s.trim()).toList();
       final idxRouteId = header.indexOf('route_id');
       final idxTripId = header.indexOf('trip_id');
+      final idxServiceId = header.indexOf('service_id');
+      final idxHeadsign = header.indexOf('trip_headsign');
+      final idxDirection = header.indexOf('direction_id');
+      final idxShapeId = header.indexOf('shape_id');
+      final idxShapeColor = header.indexOf('shape_color') >= 0
+          ? header.indexOf('shape_color')
+          : header.indexOf('shape-color');
       if (idxRouteId < 0 || idxTripId < 0) {
         return {};
       }
-      final result = <String, String>{};
+      final result = <String, gtfs.Trip>{};
       for (int i = 1; i < lines.length; i++) {
         final row = parseCsvLine(lines[i]);
         if (row.length <= idxTripId || row.length <= idxRouteId) {
@@ -364,7 +372,37 @@ class DirectionService {
         final tripId = row[idxTripId].trim();
         final routeId = row[idxRouteId].trim();
         if (tripId.isEmpty || routeId.isEmpty) continue;
-        result[tripId] = routeId;
+        final serviceId = (idxServiceId >= 0 && row.length > idxServiceId)
+            ? row[idxServiceId].trim()
+            : '';
+        final headsign = (idxHeadsign >= 0 && row.length > idxHeadsign)
+            ? row[idxHeadsign].trim()
+            : '';
+        final directionId = (idxDirection >= 0 && row.length > idxDirection)
+            ? row[idxDirection].trim()
+            : null;
+        final shapeId = (idxShapeId >= 0 && row.length > idxShapeId)
+            ? row[idxShapeId].trim()
+            : null;
+        final shapeColorStr = (idxShapeColor >= 0 && row.length > idxShapeColor)
+            ? row[idxShapeColor].trim()
+            : null;
+        Color? shapeColor;
+        if (shapeColorStr != null && shapeColorStr.isNotEmpty) {
+          shapeColor = _parseHexColor(shapeColorStr);
+        }
+        final trip = gtfs.Trip(
+          tripId: tripId,
+          routeId: routeId,
+          serviceId: serviceId,
+          headsign: headsign,
+          directionId: (directionId != null && directionId.isEmpty)
+              ? null
+              : directionId,
+          shapeId: (shapeId != null && shapeId.isEmpty) ? null : shapeId,
+          shapeColor: shapeColor,
+        );
+        result[tripId] = trip;
       }
       return result;
     } catch (_) {
@@ -372,9 +410,25 @@ class DirectionService {
     }
   }
 
+  Color? _parseHexColor(String? hex) {
+    if (hex == null) return null;
+    var s = hex.trim();
+    if (s.isEmpty) return null;
+    if (s.startsWith('#')) s = s.substring(1);
+    try {
+      if (s.length == 6) {
+        return Color(int.parse('0xFF$s'));
+      }
+      if (s.length == 8) {
+        return Color(int.parse('0x$s'));
+      }
+    } catch (_) {}
+    return null;
+  }
+
   List<gtfs.Stop>? _findDirectTrip({
     required Map<String, List<Map<String, dynamic>>> stopTimes,
-    required Map<String, String> tripToRoute,
+    required Map<String, gtfs.Trip> tripMap,
     required Map<String, List<String>> routeIdToPrefixes,
     required String startStopId,
     required String destStopId,
@@ -425,7 +479,7 @@ class DirectionService {
     int bestSpan = -1;
     for (final entry in stopTimes.entries) {
       final tripId = entry.key;
-      final routeId = tripToRoute[tripId];
+      final routeId = tripMap[tripId]?.routeId;
       if (routeId == null || !candidateRouteIds.contains(routeId)) continue;
       final tripStops = entry.value;
       final startIdx = tripStops.indexWhere((s) => s['stopId'] == startStopId);
@@ -572,9 +626,9 @@ class DirectionService {
     return taggedRoutes;
   }
 
-  List<_TaggedRoute> _generateTransferRoutes({
+    List<_TaggedRoute> _generateTransferRoutes({
     required Map<String, List<Map<String, dynamic>>> stopTimes,
-    required Map<String, String> tripToRoute,
+    required Map<String, gtfs.Trip> tripMap,
     required Map<String, List<String>> routeIdToPrefixes,
     required String startStopId,
     required String destStopId,
@@ -590,7 +644,7 @@ class DirectionService {
       List<Map<String, dynamic>>? bestSegment;
       int bestSpan = 1 << 30;
       for (final entry in stopTimes.entries) {
-        final routeId = tripToRoute[entry.key];
+        final routeId = tripMap[entry.key]?.routeId;
         if (routeId == null || !allowedRouteIds.contains(routeId)) continue;
         final tripStops = entry.value;
         final ia = tripStops.indexWhere((s) => s['stopId'] == a);

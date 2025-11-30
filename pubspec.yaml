@@ -74,6 +74,7 @@ flutter:
     - assets/gtfs_data/stop_times.txt
     - assets/gtfs_data/FareData.txt
     - assets/gtfs_data/Faretype.txt
+    - assets/gtfs_data/shapes.txt
 
     
 

@@ -1,6 +1,7 @@
 // GTFS Models for Bangkok Public Transport
 // Covers BTS, MRT, Train, Bus, Ferry
 
+import 'package:flutter/material.dart';
 class Agency {
   final String agencyId;
   final String name;
@@ -69,6 +70,8 @@ class Trip {
   final String serviceId;
   final String headsign;
   final String? directionId;
+  final String? shapeId;
+  final Color? shapeColor;
 
   Trip({
     required this.tripId,
@@ -76,6 +79,8 @@ class Trip {
     required this.serviceId,
     required this.headsign,
     this.directionId,
+    this.shapeId,
+    this.shapeColor,
   });
 }
 
