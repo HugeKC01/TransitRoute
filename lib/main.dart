@@ -46,7 +46,10 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   final MapController _mapController = MapController();
-  late final SearchController _stopSearchController;
+  late final SearchController _startSearchController;
+  late final SearchController _destSearchController;
+  late final SearchController _collapsedSearchController;
+  int _selectedNavIndex = 0;
   List<gtfs.Stop> allStops = [];
   Map<String, gtfs.Stop> stopLookup = {};
   late DirectionService _directionService;
@@ -60,6 +63,7 @@ class _MyHomePageState extends State<MyHomePage> {
   Map<String, int> fareDataMap = {};
 
   String routingMode = 'Shortest';
+  bool _headerCollapsed = false;
 
   String? _getLineName(String stopId) {
     for (final entry in linePrefixes.entries) {
@@ -83,23 +87,6 @@ class _MyHomePageState extends State<MyHomePage> {
     return '${stop.name} • $thai';
   }
 
-  Widget _stopNameLabel(gtfs.Stop stop, TextTheme textTheme) {
-    if (!_hasThaiName(stop)) {
-      return Text(stop.name);
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(stop.name),
-        Text(
-          stop.thaiName!,
-          style: textTheme.bodySmall,
-        ),
-      ],
-    );
-  }
-
   int _stopPrefixScore(gtfs.Stop stop, String query) {
     final english = stop.name.toLowerCase();
     final thai = (stop.thaiName ?? '').toLowerCase();
@@ -112,10 +99,7 @@ class _MyHomePageState extends State<MyHomePage> {
     _mapController.move(camera.center, newZoom);
   }
 
-  Widget _zoomButton({
-    required IconData icon,
-    required VoidCallback onTap,
-  }) {
+  Widget _zoomButton({required IconData icon, required VoidCallback onTap}) {
     return Material(
       elevation: 3,
       shape: const CircleBorder(),
@@ -203,11 +187,13 @@ class _MyHomePageState extends State<MyHomePage> {
       directionOptions = List<DirectionOption>.from(result.options);
       if (directionOptions.isEmpty) {
         selectedDirectionIndex = 0;
+        _headerCollapsed = false;
       } else {
         selectedDirectionIndex = result.selectionIndex.clamp(
           0,
           directionOptions.length - 1,
         );
+        _headerCollapsed = true;
       }
     });
   }
@@ -257,9 +243,12 @@ class _MyHomePageState extends State<MyHomePage> {
     setState(() {
       if (asStart) {
         selectedStartStopId = stop.stopId;
+        _startSearchController.text = stop.name;
       } else {
         selectedDestinationStopId = stop.stopId;
+        _destSearchController.text = stop.name;
       }
+      _headerCollapsed = false;
     });
   }
 
@@ -293,10 +282,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          stop.name,
-                          style: theme.textTheme.titleLarge,
-                        ),
+                        Text(stop.name, style: theme.textTheme.titleLarge),
                         if (_hasThaiName(stop))
                           Text(
                             stop.thaiName!,
@@ -344,16 +330,6 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
-
-  List<gtfs.Stop> get _sortedStops {
-    final unique = <String, gtfs.Stop>{
-      for (final stop in allStops) stop.stopId: stop,
-    };
-    final sorted = unique.values.toList()
-      ..sort((a, b) => a.name.compareTo(b.name));
-    return sorted;
-  }
-
   Future<void> _swapStops() async {
     if (selectedStartStopId == null && selectedDestinationStopId == null) {
       return;
@@ -362,22 +338,36 @@ class _MyHomePageState extends State<MyHomePage> {
       final temp = selectedStartStopId;
       selectedStartStopId = selectedDestinationStopId;
       selectedDestinationStopId = temp;
+      final tempText = _startSearchController.text;
+      _startSearchController.text = _destSearchController.text;
+      _destSearchController.text = tempText;
+      if (selectedStartStopId != null || selectedDestinationStopId != null) {
+        _headerCollapsed = false;
+      }
     });
     if (selectedStartStopId != null && selectedDestinationStopId != null) {
       await _findDirection();
     }
   }
 
-  Future<void> _updateRoutingMode(String newMode) async {
-    if (routingMode == newMode) return;
-    setState(() {
-      routingMode = newMode;
-    });
-    if (selectedStartStopId != null &&
-        selectedDestinationStopId != null &&
-        directionOptions.isNotEmpty) {
-      await _findDirection();
+  void _clearSelections({bool preserveHeaderState = false}) {
+    if (selectedStartStopId == null &&
+        selectedDestinationStopId == null &&
+        directionOptions.isEmpty) {
+      return;
     }
+    setState(() {
+      selectedStartStopId = null;
+      selectedDestinationStopId = null;
+      directionOptions = [];
+      selectedDirectionIndex = 0;
+      _startSearchController.clear();
+      _destSearchController.clear();
+      _collapsedSearchController.clear();
+      if (!preserveHeaderState) {
+        _headerCollapsed = false;
+      }
+    });
   }
 
   void _selectRouteOption(int index) {
@@ -461,14 +451,13 @@ class _MyHomePageState extends State<MyHomePage> {
                     .map(
                       (stop) => Marker(
                         point: LatLng(stop.lat, stop.lon),
-                        width:
-                            (stop.stopId == startId || stop.stopId == destId)
-                                ? 22
-                                : 16,
+                        width: (stop.stopId == startId || stop.stopId == destId)
+                            ? 22
+                            : 16,
                         height:
                             (stop.stopId == startId || stop.stopId == destId)
-                                ? 22
-                                : 16,
+                            ? 22
+                            : 16,
                         child: GestureDetector(
                           onTap: () => _showStopDetails(context, stop),
                           child: Tooltip(
@@ -476,16 +465,15 @@ class _MyHomePageState extends State<MyHomePage> {
                             child: Container(
                               decoration: BoxDecoration(
                                 color: (stop.stopId == startId)
-                                    ? Colors.greenAccent
-                                        .withValues(alpha: 0.85)
+                                    ? Colors.greenAccent.withValues(alpha: 0.85)
                                     : (stop.stopId == destId)
-                                        ? Colors.redAccent
-                                            .withValues(alpha: 0.85)
-                                        : Colors.white,
+                                    ? Colors.redAccent.withValues(alpha: 0.85)
+                                    : Colors.white,
                                 shape: BoxShape.circle,
                                 border: Border.all(
                                   color: _getLineColor(stop.stopId),
-                                  width: (stop.stopId == startId ||
+                                  width:
+                                      (stop.stopId == startId ||
                                           stop.stopId == destId)
                                       ? 4
                                       : 3,
@@ -513,10 +501,7 @@ class _MyHomePageState extends State<MyHomePage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _zoomButton(
-                icon: Icons.add,
-                onTap: () => _adjustMapZoom(0.75),
-              ),
+              _zoomButton(icon: Icons.add, onTap: () => _adjustMapZoom(0.75)),
               const SizedBox(height: 12),
               _zoomButton(
                 icon: Icons.remove,
@@ -531,23 +516,24 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Widget _buildWideLayout(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
+    final hasRoutes = directionOptions.isNotEmpty;
     final panelWidth = math.min(440.0, width * 0.35);
     final theme = Theme.of(context);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Container(
-          width: panelWidth,
-          color: theme.colorScheme.surface,
-          child: ListView(
-            padding: const EdgeInsets.only(bottom: 24),
-            children: [
-              _buildControlPanel(context),
-              _buildRouteOptionsSection(context),
-            ],
+        if (hasRoutes)
+          Container(
+            width: panelWidth,
+            color: theme.colorScheme.surface,
+            child: ListView(
+              padding: const EdgeInsets.only(bottom: 24),
+              children: [
+                _buildRouteOptionsSection(context),
+              ],
+            ),
           ),
-        ),
-        const VerticalDivider(width: 1),
+        if (hasRoutes) const VerticalDivider(width: 1),
         Expanded(child: _buildMap(context)),
       ],
     );
@@ -560,293 +546,469 @@ class _MyHomePageState extends State<MyHomePage> {
     return Stack(
       children: [
         Positioned.fill(child: _buildMap(context)),
-        DraggableScrollableSheet(
-          initialChildSize: initialSize,
-          minChildSize: 0.2,
-          maxChildSize: 0.9,
-          builder: (context, controller) {
-            final bottomPadding = MediaQuery.of(context).padding.bottom;
-            return Material(
-              elevation: 12,
-              color: theme.colorScheme.surface,
-              clipBehavior: Clip.antiAlias,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(24),
-              ),
-              child: ListView(
-                controller: controller,
-                padding: EdgeInsets.only(bottom: bottomPadding + 24),
-                children: [
-                  const SizedBox(height: 12),
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.outlineVariant,
-                        borderRadius: BorderRadius.circular(2),
+        if (hasRoutes)
+          DraggableScrollableSheet(
+            initialChildSize: initialSize,
+            minChildSize: 0.2,
+            maxChildSize: 0.9,
+            builder: (context, controller) {
+              final bottomPadding = MediaQuery.of(context).padding.bottom;
+              return Material(
+                elevation: 12,
+                color: theme.colorScheme.surface,
+                clipBehavior: Clip.antiAlias,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(24),
+                ),
+                child: ListView(
+                  controller: controller,
+                  padding: EdgeInsets.only(bottom: bottomPadding + 24),
+                  children: [
+                    const SizedBox(height: 12),
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.outlineVariant,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildControlPanel(context),
-                  _buildRouteOptionsSection(context),
-                ],
-              ),
-            );
-          },
-        ),
+                    const SizedBox(height: 12),
+                    _buildRouteOptionsSection(context),
+                  ],
+                ),
+              );
+            },
+          ),
       ],
     );
   }
 
-  Widget _buildControlPanel(BuildContext context) {
-    final stops = _sortedStops;
-    final textTheme = Theme.of(context).textTheme;
-    final dropdownItems = stops
-        .map(
-          (stop) => DropdownMenuItem<String>(
-            value: stop.stopId,
-            child: _stopNameLabel(stop, textTheme),
-          ),
-        )
-        .toList();
-    final startValue = stops.any((stop) => stop.stopId == selectedStartStopId)
-        ? selectedStartStopId
+  Widget _buildHomeHeader(BuildContext context, bool isWideLayout) {
+    final start = selectedStartStopId != null
+        ? stopLookup[selectedStartStopId!]
         : null;
-    final destValue =
-        stops.any((stop) => stop.stopId == selectedDestinationStopId)
-        ? selectedDestinationStopId
+    final dest = selectedDestinationStopId != null
+        ? stopLookup[selectedDestinationStopId!]
         : null;
+    final isCollapsed = _headerCollapsed;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: Card(
-        elevation: 2,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final isCompact = constraints.maxWidth < 420;
-
-              Widget buildRoutingModeSelector() {
-                final button = FilledButton.icon(
-                  onPressed: (selectedStartStopId != null &&
-                          selectedDestinationStopId != null)
-                      ? () => _findDirection()
-                      : null,
-                  icon: const Icon(Icons.route),
-                  label: const Text('Plan route'),
-                );
-
-                final segmented = SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(
-                      value: 'Shortest',
-                      label: Text('Shortest'),
-                      icon: Icon(Icons.format_list_numbered),
-                    ),
-                    ButtonSegment(
-                      value: 'Fastest',
-                      label: Text('Fastest'),
-                      icon: Icon(Icons.speed),
-                    ),
-                    ButtonSegment(
-                      value: 'Cheapest',
-                      label: Text('Cheapest'),
-                      icon: Icon(Icons.attach_money),
-                    ),
-                  ],
-                  selected: <String>{routingMode},
-                  onSelectionChanged: (selection) {
-                    if (selection.isNotEmpty) {
-                      _updateRoutingMode(selection.first);
-                    }
-                  },
-                );
-
-                if (isCompact) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      segmented,
-                      const SizedBox(height: 12),
-                      button,
-                    ],
-                  );
-                }
-
-                return Row(
-                  children: [
-                    Expanded(child: segmented),
-                    const SizedBox(width: 12),
-                    button,
-                  ],
-                );
-              }
-
-              Widget buildDropdown(
-                String label,
-                IconData icon,
-                String? value,
-                ValueChanged<String?> onChanged,
-              ) {
-                return DropdownButtonFormField<String>(
-                  isExpanded: true,
-                  initialValue: value,
-                  decoration: InputDecoration(
-                    labelText: label,
-                    prefixIcon: Icon(icon),
-                    border: const OutlineInputBorder(),
-                  ),
-                  items: dropdownItems,
-                  onChanged: onChanged,
-                );
-              }
-
-              Widget buildStopSelectors() {
-                final swapButton = IconButton(
-                  tooltip: 'Swap start and destination',
-                  icon: const Icon(Icons.swap_horiz),
-                  onPressed: (selectedStartStopId != null ||
-                          selectedDestinationStopId != null)
-                      ? () => _swapStops()
-                      : null,
-                );
-
-                final startField = buildDropdown(
-                  'Start station',
-                  Icons.trip_origin,
-                  startValue,
-                  (value) {
-                    setState(() {
-                      selectedStartStopId = value;
-                    });
-                  },
-                );
-                final destField = buildDropdown(
-                  'Destination',
-                  Icons.flag,
-                  destValue,
-                  (value) {
-                    setState(() {
-                      selectedDestinationStopId = value;
-                    });
-                  },
-                );
-
-                if (isCompact) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      startField,
-                      const SizedBox(height: 12),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: swapButton,
-                      ),
-                      const SizedBox(height: 12),
-                      destField,
-                    ],
-                  );
-                }
-
-                return Row(
-                  children: [
-                    Expanded(child: startField),
-                    const SizedBox(width: 12),
-                    swapButton,
-                    const SizedBox(width: 12),
-                    Expanded(child: destField),
-                  ],
-                );
-              }
-
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  buildRoutingModeSelector(),
-                  const SizedBox(height: 16),
-                  buildStopSelectors(),
-                ],
-              );
-            },
+      padding: EdgeInsets.fromLTRB(12, 4, 12, isWideLayout ? 4 : 0),
+      child: AnimatedCrossFade(
+        crossFadeState:
+            isCollapsed ? CrossFadeState.showFirst : CrossFadeState.showSecond,
+        duration: const Duration(milliseconds: 300),
+        firstChild: Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: _buildCollapsedHeaderContent(context, start, dest),
+        ),
+        secondChild: Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildSelectionSummaryCard(context, start, dest),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildSearchBar(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-      child: SearchAnchor(
-        searchController: _stopSearchController,
-        builder: (context, controller) {
-          return SearchBar(
-            controller: controller,
-            hintText: 'Search stations',
-            leading: const Icon(Icons.search),
-            elevation: const WidgetStatePropertyAll<double>(2),
-            onTap: controller.openView,
-            onChanged: (value) {
-              if (!controller.isOpen) {
-                controller.openView();
-              }
-              setState(() {});
-            },
-            trailing: [
-              if (controller.text.isNotEmpty)
-                IconButton(
-                  tooltip: 'Clear',
-                  onPressed: () {
-                    controller.text = '';
-                    setState(() {});
-                  },
-                  icon: const Icon(Icons.close),
+  Widget _buildCollapsedHeaderContent(
+    BuildContext context,
+    gtfs.Stop? start,
+    gtfs.Stop? dest,
+  ) {
+    if (start != null && dest != null) {
+      return _buildCollapsedSelectionSummary(context, start, dest);
+    }
+    return _buildCollapsedSearchBar(context);
+  }
+
+  Widget _collapseHeaderButton() {
+    return IconButton(
+      tooltip: 'Hide planner',
+      icon: const Icon(Icons.unfold_less),
+      onPressed: () {
+        setState(() {
+          _headerCollapsed = true;
+        });
+      },
+    );
+  }
+
+  Widget _expandHeaderButton() {
+    return IconButton(
+      tooltip: 'Show planner',
+      icon: const Icon(Icons.unfold_more),
+      onPressed: () {
+        setState(() {
+          _headerCollapsed = false;
+        });
+      },
+    );
+  }
+
+  Widget _buildCollapsedSearchBar(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        Expanded(
+          child: SearchAnchor(
+            searchController: _collapsedSearchController,
+            viewHintText: 'Search station',
+            builder: (context, controller) {
+              return SearchBar(
+                controller: controller,
+                leading: const Icon(Icons.search),
+                hintText: 'Search station',
+                padding: const WidgetStatePropertyAll(
+                  EdgeInsets.symmetric(horizontal: 12),
                 ),
-            ],
-          );
-        },
-        suggestionsBuilder: (context, controller) {
-          final results = _filterStops(controller.text);
-          if (results.isEmpty) {
-            return [
-              const ListTile(
-                leading: Icon(Icons.search_off),
-                title: Text('No stations found'),
-              ),
-            ];
-          }
-          return results.map(
-            (stop) => ListTile(
-              leading: CircleAvatar(
-                radius: 12,
-                backgroundColor: _getLineColor(stop.stopId),
-              ),
-              title: Text(stop.name),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (_hasThaiName(stop))
-                    Text(
-                      stop.thaiName!,
-                      style: Theme.of(context).textTheme.bodySmall,
+                elevation: const WidgetStatePropertyAll<double>(1),
+                backgroundColor: WidgetStatePropertyAll(
+                  theme.colorScheme.surfaceContainerLow,
+                ),
+                onTap: controller.openView,
+                onChanged: (value) {
+                  if (!controller.isOpen) {
+                    controller.openView();
+                  }
+                  setState(() {});
+                },
+                trailing: [
+                  if (controller.text.isNotEmpty)
+                    IconButton(
+                      tooltip: 'Clear search',
+                      icon: const Icon(Icons.close),
+                      onPressed: () {
+                        setState(controller.clear);
+                      },
                     ),
-                  Text(
-                    'ID: ${stop.stopId}',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
                 ],
-              ),
-              onTap: () {
-                controller.closeView(stop.name);
-                _handleSearchSelection(stop);
-              },
+              );
+            },
+            suggestionsBuilder: (context, controller) {
+              final results = _filterStops(controller.text);
+              final theme = Theme.of(context);
+              if (results.isEmpty) {
+                return [
+                  const ListTile(
+                    leading: Icon(Icons.search_off),
+                    title: Text('No stations found'),
+                  ),
+                ];
+              }
+              return results.map(
+                (stop) => ListTile(
+                  leading: CircleAvatar(
+                    radius: 12,
+                    backgroundColor: _getLineColor(stop.stopId),
+                  ),
+                  title: Text(stop.name),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_hasThaiName(stop))
+                        Text(stop.thaiName!, style: theme.textTheme.bodySmall),
+                      Text(
+                        'ID: ${stop.stopId}',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                  onTap: () {
+                    controller.closeView(stop.name);
+                    _handleCollapsedStopSelection(stop);
+                  },
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(width: 8),
+        _expandHeaderButton(),
+      ],
+    );
+  }
+
+  Widget _buildCollapsedSelectionSummary(
+    BuildContext context,
+    gtfs.Stop start,
+    gtfs.Stop dest,
+  ) {
+    final theme = Theme.of(context);
+    final labelStyle = theme.textTheme.labelSmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.3,
+    );
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: theme.colorScheme.outlineVariant),
             ),
-          );
-        },
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Origin', style: labelStyle),
+                      Text(
+                        _stopDisplayLabel(start),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text('Destination', style: labelStyle),
+                      Text(
+                        _stopDisplayLabel(dest),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Clear selections',
+                  icon: const Icon(Icons.close),
+                  onPressed: () =>
+                      _clearSelections(preserveHeaderState: true),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        _expandHeaderButton(),
+      ],
+    );
+  }
+
+  Future<void> _handleCollapsedStopSelection(gtfs.Stop stop) async {
+    final assignStart = selectedStartStopId == null;
+    await _selectStopFromSearch(
+      stop,
+      asStart: assignStart,
+      preserveHeaderState: true,
+    );
+    setState(() {
+      _collapsedSearchController.clear();
+    });
+  }
+
+  Widget _buildSelectionSummaryCard(
+    BuildContext context,
+    gtfs.Stop? start,
+    gtfs.Stop? dest,
+  ) {
+    final theme = Theme.of(context);
+    final hasBoth = start != null && dest != null;
+    final cardColor = theme.colorScheme.surfaceContainerHigh;
+    return Card(
+      color: cardColor,
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: _buildStopSearchField(
+                    context,
+                    label: 'Origin',
+                    icon: Icons.trip_origin,
+                    asStart: true,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _collapseHeaderButton(),
+              ],
+            ),
+            const SizedBox(height: 8),
+            _buildStopSearchField(
+              context,
+              label: 'Destination',
+              icon: Icons.flag,
+              asStart: false,
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: hasBoth ? () => _findDirection() : null,
+                    icon: const Icon(Icons.route),
+                    label: Text(hasBoth ? 'Plan route' : 'Pick both stops'),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                FilledButton.tonalIcon(
+                  onPressed:
+                      (selectedStartStopId != null ||
+                          selectedDestinationStopId != null)
+                      ? () => _swapStops()
+                      : null,
+                  icon: const Icon(Icons.swap_vert),
+                  label: const Text('Swap'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            TextButton.icon(
+              onPressed:
+                  (selectedStartStopId != null ||
+                      selectedDestinationStopId != null)
+                  ? _clearSelections
+                  : null,
+              icon: const Icon(Icons.clear),
+              label: const Text('Clear selections'),
+              style: TextButton.styleFrom(
+                alignment: Alignment.centerLeft,
+                padding: EdgeInsets.zero,
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildStopSearchField(
+    BuildContext context, {
+    required String label,
+    required IconData icon,
+    required bool asStart,
+  }) {
+    final theme = Theme.of(context);
+    final controller = asStart ? _startSearchController : _destSearchController;
+    final selectedId = asStart
+        ? selectedStartStopId
+        : selectedDestinationStopId;
+    final selectedStop = selectedId != null ? stopLookup[selectedId] : null;
+    final textColor = theme.colorScheme.onSurface;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: textColor.withValues(alpha: 0.9),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        SearchAnchor(
+          searchController: controller,
+          viewHintText: 'Search $label station',
+          builder: (context, ctrl) {
+            return SearchBar(
+              controller: ctrl,
+              leading: Icon(icon),
+              hintText: 'Search $label station',
+              padding: const WidgetStatePropertyAll(
+                EdgeInsets.symmetric(horizontal: 12),
+              ),
+              elevation: const WidgetStatePropertyAll<double>(1),
+              backgroundColor: WidgetStatePropertyAll(
+                theme.colorScheme.surfaceContainerLow,
+              ),
+              onTap: ctrl.openView,
+              onChanged: (value) {
+                if (!ctrl.isOpen) {
+                  ctrl.openView();
+                }
+                setState(() {});
+              },
+              trailing: [
+                if (ctrl.text.isNotEmpty)
+                  IconButton(
+                    tooltip: 'Clear $label field',
+                    icon: const Icon(Icons.close),
+                    onPressed: () {
+                      setState(() {
+                        ctrl.clear();
+                        if (asStart) {
+                          selectedStartStopId = null;
+                        } else {
+                          selectedDestinationStopId = null;
+                        }
+                        directionOptions = [];
+                        selectedDirectionIndex = 0;
+                        _headerCollapsed = false;
+                      });
+                    },
+                  ),
+              ],
+            );
+          },
+          suggestionsBuilder: (context, ctrl) {
+            final results = _filterStops(ctrl.text);
+            if (results.isEmpty) {
+              return [
+                const ListTile(
+                  leading: Icon(Icons.search_off),
+                  title: Text('No stations found'),
+                ),
+              ];
+            }
+            return results.map(
+              (stop) => ListTile(
+                leading: CircleAvatar(
+                  radius: 12,
+                  backgroundColor: _getLineColor(stop.stopId),
+                ),
+                title: Text(stop.name),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_hasThaiName(stop))
+                      Text(stop.thaiName!, style: theme.textTheme.bodySmall),
+                    Text(
+                      'ID: ${stop.stopId}',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+                onTap: () {
+                  ctrl.closeView(stop.name);
+                  _selectStopFromSearch(stop, asStart: asStart);
+                },
+              ),
+            );
+          },
+        ),
+        if (selectedStop != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              'ID: ${selectedStop.stopId}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: textColor.withValues(alpha: 0.7),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -872,48 +1034,24 @@ class _MyHomePageState extends State<MyHomePage> {
     return matches.take(8).toList();
   }
 
-  Future<void> _handleSearchSelection(gtfs.Stop stop) async {
-    if (!mounted) return;
-    String? target;
-    if (selectedStartStopId == null) {
-      target = 'start';
-    } else if (selectedDestinationStopId == null) {
-      target = 'destination';
-    } else {
-      target = await showModalBottomSheet<String>(
-        context: context,
-        builder: (context) => SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.trip_origin),
-                title: const Text('Set as start station'),
-                onTap: () => Navigator.pop(context, 'start'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.flag),
-                title: const Text('Set as destination'),
-                onTap: () => Navigator.pop(context, 'destination'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.close),
-                title: const Text('Cancel'),
-                onTap: () => Navigator.pop(context, null),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-    if (target == null) return;
+  Future<void> _selectStopFromSearch(
+    gtfs.Stop stop, {
+    required bool asStart,
+    bool preserveHeaderState = false,
+  }) async {
     setState(() {
-      if (target == 'start') {
+      if (asStart) {
         selectedStartStopId = stop.stopId;
-      } else if (target == 'destination') {
+        _startSearchController.text = stop.name;
+      } else {
         selectedDestinationStopId = stop.stopId;
+        _destSearchController.text = stop.name;
+      }
+      if (!preserveHeaderState) {
+        _headerCollapsed = false;
       }
     });
+
     final zoom = math.max(_mapController.camera.zoom, 14).toDouble();
     _mapController.move(LatLng(stop.lat, stop.lon), zoom);
     if (selectedStartStopId != null && selectedDestinationStopId != null) {
@@ -933,14 +1071,18 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void initState() {
     super.initState();
-    _stopSearchController = SearchController();
+    _startSearchController = SearchController();
+    _destSearchController = SearchController();
+    _collapsedSearchController = SearchController();
     _directionService = DirectionService(lineNameResolver: _getLineName);
     _loadRoutesAndStops();
   }
 
   @override
   void dispose() {
-    _stopSearchController.dispose();
+    _startSearchController.dispose();
+    _destSearchController.dispose();
+    _collapsedSearchController.dispose();
     super.dispose();
   }
 
@@ -976,7 +1118,12 @@ class _MyHomePageState extends State<MyHomePage> {
       final tripMap = await _directionService.loadTrips();
       shapes = await GtfsShapesService().loadSegments(
         shapesAsset: 'assets/gtfs_data/shapes.txt',
-        routeColors: {for (final r in routes) r.routeId: (r.color != null && r.color!.isNotEmpty) ? Color(int.parse('0xFF${r.color!}')) : Colors.purple},
+        routeColors: {
+          for (final r in routes)
+            r.routeId: (r.color != null && r.color!.isNotEmpty)
+                ? Color(int.parse('0xFF${r.color!}'))
+                : Colors.purple,
+        },
         tripMap: tripMap,
       );
     } catch (_) {}
@@ -997,10 +1144,7 @@ class _MyHomePageState extends State<MyHomePage> {
       if (allPts.isNotEmpty) {
         final bounds = LatLngBounds.fromPoints(allPts);
         _mapController.fitCamera(
-          CameraFit.bounds(
-            bounds: bounds,
-            padding: const EdgeInsets.all(24),
-          ),
+          CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(24)),
         );
         _didFitRails = true;
       }
@@ -1044,13 +1188,13 @@ class _MyHomePageState extends State<MyHomePage> {
         final lon = double.tryParse(row[idxLon].trim());
         if (lat == null || lon == null) continue;
         final thaiFromFile = idxThai >= 0 && row.length > idxThai
-          ? row[idxThai].trim()
-          : '';
+            ? row[idxThai].trim()
+            : '';
         final thaiOverrideRaw = thaiNames?[stopId];
         final thaiOverride = thaiOverrideRaw?.trim();
         final thai = (thaiOverride != null && thaiOverride.isNotEmpty)
-          ? thaiOverride
-          : (thaiFromFile.isNotEmpty ? thaiFromFile : null);
+            ? thaiOverride
+            : (thaiFromFile.isNotEmpty ? thaiFromFile : null);
         stops.add(
           gtfs.Stop(
             stopId: stopId,
@@ -1083,7 +1227,9 @@ class _MyHomePageState extends State<MyHomePage> {
       );
       final lines = const LineSplitter().convert(content);
       if (lines.length <= 1) return const {};
-      final header = _parseCsvLine(lines.first).map((s) => s.toLowerCase()).toList();
+      final header = _parseCsvLine(
+        lines.first,
+      ).map((s) => s.toLowerCase()).toList();
       int idxId = header.indexOf('stop_id');
       if (idxId < 0) idxId = 0;
       int idxName = header.indexOf('stop_name_th');
@@ -1222,45 +1368,119 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  void _openTransportLines() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const TransportLinesPage()));
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final showNav = directionOptions.isEmpty;
+    if (!showNav && _selectedNavIndex != 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() => _selectedNavIndex = 0);
+        }
+      });
+    }
     final width = MediaQuery.of(context).size.width;
     final isWideLayout = width >= 900;
+    final bool showHome = _selectedNavIndex == 0 || !showNav;
+    final body = showHome
+        ? _buildHomeContent(context, isWideLayout)
+        : _buildMorePage(context);
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: Text(widget.title),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.list),
-            tooltip: 'Show Transport Lines',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const TransportLinesPage(),
-                ),
-              );
-            },
+      backgroundColor: theme.colorScheme.surface,
+      body: SafeArea(child: body),
+      floatingActionButton:
+          showHome ? _buildLocationFab(context) : null,
+      bottomNavigationBar: showNav ? _buildNavigationBar() : null,
+    );
+  }
+
+  Widget _buildHomeContent(BuildContext context, bool isWideLayout) {
+    return Column(
+      children: [
+        _buildHomeHeader(context, isWideLayout),
+        const SizedBox(height: 4),
+        Expanded(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 400),
+            child: isWideLayout
+                ? _buildWideLayout(context)
+                : _buildPhoneLayout(context),
           ),
-        ],
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildSearchBar(context),
-            Expanded(
-              child: isWideLayout
-                  ? _buildWideLayout(context)
-                  : _buildPhoneLayout(context),
-            ),
-          ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
+      ],
+    );
+  }
+
+  Widget _buildNavigationBar() {
+    return NavigationBar(
+      selectedIndex: _selectedNavIndex,
+      onDestinationSelected: (index) {
+        setState(() => _selectedNavIndex = index);
+      },
+      destinations: const [
+        NavigationDestination(
+          icon: Icon(Icons.home_outlined),
+          selectedIcon: Icon(Icons.home_rounded),
+          label: 'Home',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.more_horiz),
+          selectedIcon: Icon(Icons.more),
+          label: 'More',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMorePage(BuildContext context) {
+    final theme = Theme.of(context);
+    return ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      children: [
+        Text(
+          'More options',
+          style: theme.textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Card(
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.list_alt_rounded),
+                title: const Text('Transit lines'),
+                subtitle: const Text('Browse every available line'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: _openTransportLines,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLocationFab(BuildContext context) {
+    final isCompact = MediaQuery.of(context).size.width < 520;
+    if (isCompact) {
+      return FloatingActionButton(
         onPressed: _goToMyLocation,
+        tooltip: 'Center map on my location',
         child: const Icon(Icons.my_location),
-      ),
+      );
+    }
+    return FloatingActionButton.extended(
+      onPressed: _goToMyLocation,
+      icon: const Icon(Icons.my_location),
+      label: const Text('My location'),
     );
   }
 

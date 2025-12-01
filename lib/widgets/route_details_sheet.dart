@@ -141,10 +141,18 @@ class RouteDetailsSheet extends StatelessWidget {
                 }
                 final first = segment.first;
                 final last = segment.last;
-                final lineName =
-                    lineNameResolver(first.stopId) ?? 'Unknown line';
-                final color =
-                    lineColors[lineName] ?? lineColorResolver(first.stopId);
+                final lineName = resolveSegmentLineName(
+                  segment,
+                  lineNameResolver,
+                );
+                final representativeStop = segmentStopMatchingLine(
+                      segment,
+                      lineNameResolver,
+                      lineName,
+                    ) ??
+                    first;
+                final color = lineColors[lineName] ??
+                    lineColorResolver(representativeStop.stopId);
                 return ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: CircleAvatar(backgroundColor: color),

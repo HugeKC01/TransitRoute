@@ -61,3 +61,45 @@ List<List<gtfs.Stop>> splitRouteByLine(
   }
   return segments;
 }
+
+String resolveSegmentLineName(
+  List<gtfs.Stop> segment,
+  LineNameResolver lineNameResolver,
+) {
+  if (segment.isEmpty) {
+    return 'Unknown line';
+  }
+  final firstLine = lineNameResolver(segment.first.stopId);
+  if (segment.length == 1) {
+    return firstLine ?? 'Unknown line';
+  }
+  String? fallback;
+  for (int i = 1; i < segment.length; i++) {
+    final candidate = lineNameResolver(segment[i].stopId);
+    if (candidate == null || candidate.isEmpty) {
+      continue;
+    }
+    fallback ??= candidate;
+    if (firstLine == null || candidate != firstLine) {
+      return candidate;
+    }
+  }
+  return firstLine ?? fallback ?? 'Unknown line';
+}
+
+gtfs.Stop? segmentStopMatchingLine(
+  List<gtfs.Stop> segment,
+  LineNameResolver lineNameResolver,
+  String lineName,
+) {
+  if (segment.isEmpty || lineName.isEmpty) {
+    return null;
+  }
+  for (final stop in segment) {
+    final candidate = lineNameResolver(stop.stopId);
+    if (candidate == lineName) {
+      return stop;
+    }
+  }
+  return null;
+}

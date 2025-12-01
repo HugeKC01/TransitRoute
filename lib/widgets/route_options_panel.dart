@@ -257,10 +257,12 @@ class _RouteOptionCard extends StatelessWidget {
                   spacing: 8,
                   runSpacing: 8,
                   children: lineSegments.map((segment) {
-                    final lineName = segment.isNotEmpty
-                        ? (lineNameResolver(segment.first.stopId) ?? 'Unknown line')
-                        : 'Unknown line';
-                    final color = lineColors[lineName] ?? theme.colorScheme.primary;
+                    final lineName = resolveSegmentLineName(
+                      segment,
+                      lineNameResolver,
+                    );
+                    final color =
+                        lineColors[lineName] ?? theme.colorScheme.primary;
                     return InputChip(
                       avatar: CircleAvatar(
                         backgroundColor: color,
