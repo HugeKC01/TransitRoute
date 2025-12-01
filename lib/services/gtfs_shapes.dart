@@ -129,9 +129,9 @@ class GtfsShapesService {
         .toList();
     final idxRouteId = header.indexOf('route_id');
     final idxShapeId = header.indexOf('shape_id');
-    final idxShapeColor = header.indexOf('shape_color') >= 0
-        ? header.indexOf('shape_color')
-        : header.indexOf('shape-color');
+    final idxShapeColor = header.indexWhere(
+      (value) => value == 'shape_color' || value == 'shape-color',
+    );
     if (idxRouteId < 0 || idxShapeId < 0) {
       return const _ShapeTripMeta(shapeToRoute: {}, shapeToColor: {});
     }
@@ -188,7 +188,7 @@ class GtfsShapesService {
     }
     // Deterministic fallback color from shapeId hash.
     final hash = shapeId.hashCode & 0xFFFFFF;
-    return Color(0xFF000000 | hash).withOpacity(1.0);
+    return Color(0xFF000000 | hash).withValues(alpha: 1.0);
   }
 
   Color? _parseHexColor(String? hex) {

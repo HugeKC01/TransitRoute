@@ -11,20 +11,22 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:route/main.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
+  testWidgets('Route planner shell renders key controls', (tester) async {
+    final view = tester.view;
+    view.physicalSize = const Size(1200, 2400);
+    view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      view.resetPhysicalSize();
+      view.resetDevicePixelRatio();
+    });
+
     await tester.pumpWidget(const MyApp());
+    await tester.pumpAndSettle();
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.text('Flutter Demo Home Page'), findsOneWidget);
+    expect(find.text('Plan route'), findsOneWidget);
+    expect(find.byIcon(Icons.route), findsOneWidget);
+    expect(find.byIcon(Icons.my_location), findsOneWidget);
+    expect(find.byType(SearchBar), findsOneWidget);
   });
 }
