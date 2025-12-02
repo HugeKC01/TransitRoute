@@ -1,5 +1,10 @@
 import 'package:route/services/gtfs_models.dart' as gtfs;
 
+const String kMrtSrtFarePrefix = 'mrtSrt|';
+const String kMrtSrtCountSuffix = '|count';
+const String kMrtSrtPriceSuffix = '|price';
+const String kMrtSrtTotalKey = 'mrtSrtTotal';
+
 class FareCalculator {
   Map<String, String> _fareTypeMap = const {};
   Map<String, int> _fareDataMap = const {};
@@ -16,7 +21,10 @@ class FareCalculator {
     }
   }
 
-  Map<String, int> calculateFare(List<gtfs.Stop> routeStops) {
+  Map<String, int> calculateFare(
+    List<gtfs.Stop> routeStops, {
+    required String? Function(String stopId) lineNameResolver,
+  }) {
     int mCount = 0;
     int sCount = 0;
     if (routeStops.length <= 1) {
@@ -25,6 +33,7 @@ class FareCalculator {
         'sCount': 0,
         'mPrice': 0,
         'sPrice': 0,
+        kMrtSrtTotalKey: 0,
         'total': 0,
       };
     }
@@ -68,12 +77,101 @@ class FareCalculator {
     final sPrice = _fareDataMap['s$sCount'] ?? 0;
     int total = mPrice + sPrice;
     if (total > 65) total = 65;
-    return {
+
+    final breakdown = {
       'mCount': mCount,
       'sCount': sCount,
       'mPrice': mPrice,
       'sPrice': sPrice,
-      'total': total,
     };
+
+    final mrtSrtTotals = _calculateMrtSrtFares(
+      routeStops,
+      lineNameResolver,
+    );
+    total += mrtSrtTotals.total;
+    breakdown.addAll(mrtSrtTotals.entries);
+    breakdown[kMrtSrtTotalKey] = mrtSrtTotals.total;
+    breakdown['total'] = total;
+    return breakdown;
   }
+
+  _MrtSrtFareResult _calculateMrtSrtFares(
+    List<gtfs.Stop> routeStops,
+    String? Function(String stopId) lineNameResolver,
+  ) {
+    if (routeStops.length <= 1) {
+      return const _MrtSrtFareResult(total: 0, entries: {});
+    }
+    final counts = <String, int>{};
+    for (int i = 0; i < routeStops.length - 1; i++) {
+      final current = routeStops[i];
+      final next = routeStops[i + 1];
+      final lineName = _resolveLineName(
+        current.stopId,
+        next.stopId,
+        lineNameResolver,
+      );
+      if (lineName == null) continue;
+      counts[lineName] = (counts[lineName] ?? 0) + 1;
+    }
+
+    if (counts.isEmpty) {
+      return const _MrtSrtFareResult(total: 0, entries: {});
+    }
+
+    final entries = <String, int>{};
+    int total = 0;
+    counts.forEach((lineName, count) {
+      if (!_isMrtOrSrtLine(lineName)) return;
+      final ladderSteps = count > 8 ? 8 : count;
+      final price = _fareDataMap['m$ladderSteps'] ?? 0;
+      if (price <= 0 && count <= 0) return;
+      entries[_lineKey(lineName, kMrtSrtCountSuffix)] = count;
+      entries[_lineKey(lineName, kMrtSrtPriceSuffix)] = price;
+      total += price;
+    });
+    return _MrtSrtFareResult(total: total, entries: entries);
+  }
+
+  String? _resolveLineName(
+    String currentStopId,
+    String nextStopId,
+    String? Function(String stopId) lineNameResolver,
+  ) {
+    final currentLine = lineNameResolver(currentStopId);
+    if (_isMrtOrSrtLine(currentLine)) return currentLine;
+    final nextLine = lineNameResolver(nextStopId);
+    if (_isMrtOrSrtLine(nextLine)) return nextLine;
+    if (currentLine != null && _looksLikeTransitLine(currentLine)) {
+      return currentLine;
+    }
+    if (nextLine != null && _looksLikeTransitLine(nextLine)) {
+      return nextLine;
+    }
+    return null;
+  }
+
+  String _lineKey(String lineName, String suffix) {
+    return '$kMrtSrtFarePrefix$lineName$suffix';
+  }
+
+  bool _isMrtOrSrtLine(String? lineName) {
+    if (lineName == null) return false;
+    final upper = lineName.toUpperCase();
+    return upper.contains('MRT') || upper.contains('SRT');
+  }
+
+  bool _looksLikeTransitLine(String? lineName) {
+    if (lineName == null || lineName.isEmpty) return false;
+    final upper = lineName.toUpperCase();
+    return upper.contains('LINE');
+  }
+}
+
+class _MrtSrtFareResult {
+  const _MrtSrtFareResult({required this.total, required this.entries});
+
+  final int total;
+  final Map<String, int> entries;
 }

@@ -54,6 +54,26 @@ class DirectionService {
   List<gtfs.Route> _routes = const [];
   final FareCalculator _fareCalculator = FareCalculator();
 
+  static const List<List<String>> _transferHubs = [
+    ['CEN'],
+    ['S7', 'G1'],
+    ['BL01'],
+    ['BL13', 'N8'],
+    ['BL14', 'N9'],
+    ['BL22', 'E4'],
+    ['BL26', 'S2'],
+    ['BL34', 'S12'],
+    ['PP16', 'BL10'],
+    ['PP15', 'RW02'],
+    ['PP11', 'PK01'],
+    ['BL15', 'YL01'],
+    ['E15', 'YL23'],
+    ['N17', 'PK16'],
+    ['RN06', 'PK14'],
+    ['PK10'],
+    ['BL11', 'RW01', 'RN01'],
+  ];
+
   final Map<String, Map<String, double>> _distanceGraph = {};
   final Map<String, Map<String, int>> _timeGraph = {};
   bool _graphBuilt = false;
@@ -120,7 +140,7 @@ class DirectionService {
 
     final Map<String, _TaggedRoute> optionMap = {};
     void addOption(List<gtfs.Stop> stops, Set<String> tags) {
-      if (stops.isEmpty) return;
+      if (stops.isEmpty || _containsLoop(stops)) return;
       final key = stops.map((s) => s.stopId).join('>');
       final entry = optionMap.putIfAbsent(
         key,
@@ -164,7 +184,10 @@ class DirectionService {
     for (final option in optionMap.values) {
   final distance = geo.routeDistanceMeters(option.stops);
       final minutes = _estimateRouteMinutes(option.stops);
-  final fare = _fareCalculator.calculateFare(option.stops);
+      final fare = _fareCalculator.calculateFare(
+        option.stops,
+        lineNameResolver: lineNameResolver,
+      );
       metrics.add(
         _RouteMetrics(
           route: option,
@@ -297,7 +320,37 @@ class DirectionService {
           _timeGraph.putIfAbsent(b, () => {})[a] = estMinutes;
         }
       }
+      _addTransferEdges();
     } catch (_) {}
+  }
+
+  void _addTransferEdges() {
+    const double transferDistanceMeters = 30.0;
+    const int transferMinutes = 3;
+
+    void storeEdge(String from, String to) {
+      final existingDistance = _distanceGraph[from]?[to];
+      if (existingDistance == null || transferDistanceMeters < existingDistance) {
+        _distanceGraph.putIfAbsent(from, () => {})[to] = transferDistanceMeters;
+      }
+      final existingMinutes = _timeGraph[from]?[to];
+      if (existingMinutes == null || transferMinutes < existingMinutes) {
+        _timeGraph.putIfAbsent(from, () => {})[to] = transferMinutes;
+      }
+    }
+
+    for (final hubGroup in _transferHubs) {
+      for (int i = 0; i < hubGroup.length; i++) {
+        final fromStop = hubGroup[i];
+        if (!_stopLookup.containsKey(fromStop)) continue;
+        for (int j = i + 1; j < hubGroup.length; j++) {
+          final toStop = hubGroup[j];
+          if (!_stopLookup.containsKey(toStop)) continue;
+          storeEdge(fromStop, toStop);
+          storeEdge(toStop, fromStop);
+        }
+      }
+    }
   }
 
   Future<Map<String, List<Map<String, dynamic>>>> _loadStopTimes() async {
@@ -357,9 +410,9 @@ class DirectionService {
       final idxHeadsign = header.indexOf('trip_headsign');
       final idxDirection = header.indexOf('direction_id');
       final idxShapeId = header.indexOf('shape_id');
-      final idxShapeColor = header.indexOf('shape_color') >= 0
-          ? header.indexOf('shape_color')
-          : header.indexOf('shape-color');
+      final idxShapeColor = header.indexWhere(
+        (value) => value == 'shape_color' || value == 'shape-color',
+      );
       if (idxRouteId < 0 || idxTripId < 0) {
         return {};
       }
@@ -611,7 +664,10 @@ class DirectionService {
     int cheapestFare = 1 << 30;
     final fares = <_TaggedRoute, int>{};
     for (final route in taggedRoutes) {
-  final fare = _fareCalculator.calculateFare(route.stops)['total'] ?? 0;
+      final fare = _fareCalculator.calculateFare(
+        route.stops,
+        lineNameResolver: lineNameResolver,
+      )['total'] ?? 0;
       fares[route] = fare;
       if (fare < cheapestFare) {
         cheapestFare = fare;
@@ -626,7 +682,7 @@ class DirectionService {
     return taggedRoutes;
   }
 
-    List<_TaggedRoute> _generateTransferRoutes({
+  List<_TaggedRoute> _generateTransferRoutes({
     required Map<String, List<Map<String, dynamic>>> stopTimes,
     required Map<String, gtfs.Trip> tripMap,
     required Map<String, List<String>> routeIdToPrefixes,
@@ -692,20 +748,9 @@ class DirectionService {
       if (destRouteIds.isEmpty) destRouteIds = allRouteIds;
     }
 
-    final List<List<String>> transferHubs = [
-      ['CEN'],
-      ['S7', 'G1'],
-      ['BL01'],
-      ['BL13', 'N8'],
-      ['BL14', 'N9'],
-      ['BL22', 'E4'],
-      ['BL26', 'S2'],
-      ['BL34', 'S12'],
-    ];
-
-    for (final hubGroup in transferHubs) {
+    for (final hubGroup in _transferHubs) {
       for (final hubA in hubGroup) {
-        final seg1 = findSegmentBetween(hubA, startStopId, startRouteIds);
+        final seg1 = findSegmentBetween(startStopId, hubA, startRouteIds);
         if (seg1 == null) continue;
         for (final hubB in hubGroup) {
           final seg2 = findSegmentBetween(hubB, destStopId, destRouteIds);
@@ -910,6 +955,16 @@ class DirectionService {
     ordered.addAll(remaining);
     if (ordered.length == 1) return ordered.first;
     return ordered.take(3).join(' • ');
+  }
+
+  bool _containsLoop(List<gtfs.Stop> stops) {
+    final seen = <String>{};
+    for (final stop in stops) {
+      if (!seen.add(stop.stopId)) {
+        return true;
+      }
+    }
+    return false;
   }
 
 }

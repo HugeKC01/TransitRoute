@@ -47,6 +47,7 @@ class Route {
 class Stop {
   final String stopId;
   final String name;
+  final String? thaiName;
   final double lat;
   final double lon;
   final String? code;
@@ -56,6 +57,7 @@ class Stop {
   Stop({
     required this.stopId,
     required this.name,
+    this.thaiName,
     required this.lat,
     required this.lon,
     this.code,
