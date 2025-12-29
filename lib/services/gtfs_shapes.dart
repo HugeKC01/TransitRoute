@@ -9,11 +9,13 @@ class ShapeSegment {
   final String shapeId;
   final String? routeId;
   final List<LatLng> points;
+  final List<String?> pointNames;
   final Color color;
 
   const ShapeSegment({
     required this.shapeId,
     required this.points,
+    this.pointNames = const <String?>[],
     required this.color,
     this.routeId,
   });
@@ -49,18 +51,21 @@ class GtfsShapesService {
     final segments = <ShapeSegment>[];
     for (final entry in shapes.entries) {
       final shapeId = entry.key;
-      final points = entry.value;
-      if (points.length < 2) continue;
-        final routeId = shapeToRoute[shapeId];
-        final color = shapeToColor[shapeId] ??
+      final seqPoints = entry.value;
+      if (seqPoints.length < 2) continue;
+      final points = seqPoints.map((sp) => sp.point).toList();
+      final pointNames = seqPoints.map((sp) => sp.name).toList();
+      final routeId = shapeToRoute[shapeId];
+      final color = shapeToColor[shapeId] ??
           ((routeId != null && routeColors.containsKey(routeId))
-            ? routeColors[routeId]!
-            : _pickFallbackColor(shapeId, routeColors));
+              ? routeColors[routeId]!
+              : _pickFallbackColor(shapeId, routeColors));
       segments.add(
         ShapeSegment(
           shapeId: shapeId,
           routeId: routeId,
           points: points,
+          pointNames: pointNames,
           color: color,
         ),
       );
@@ -68,15 +73,15 @@ class GtfsShapesService {
     return segments;
   }
 
-  Future<Map<String, List<LatLng>>> _parseShapes(String assetPath) async {
+  Future<Map<String, List<_SeqPoint>>> _parseShapes(String assetPath) async {
     final text = await rootBundle.loadString(assetPath);
-    if (text.trim().isEmpty) return <String, List<LatLng>>{};
+    if (text.trim().isEmpty) return <String, List<_SeqPoint>>{};
     final lines = const LineSplitter()
         .convert(text)
         .map((l) => l.trimRight())
         .where((l) => l.isNotEmpty)
         .toList();
-    if (lines.isEmpty) return {};
+    if (lines.isEmpty) return <String, List<_SeqPoint>>{};
 
     final header = _splitCsvLine(lines.first)
         .map((s) => s.trim().toLowerCase())
@@ -85,8 +90,8 @@ class GtfsShapesService {
     final idxLat = header.indexOf('shape_pt_lat');
     final idxLon = header.indexOf('shape_pt_lon');
     final idxSeq = header.indexOf('shape_pt_sequence');
-    if (idxShapeId < 0 || idxLat < 0 || idxLon < 0) return {};
-
+    final idxName = header.indexWhere((h) => h == 'shape_pt_name' || h == 'shape_name' || h == 'shape_pt_label');
+    if (idxShapeId < 0 || idxLat < 0 || idxLon < 0) return <String, List<_SeqPoint>>{};
     final byShape = <String, List<_SeqPoint>>{};
     for (int i = 1; i < lines.length; i++) {
       final row = _splitCsvLine(lines[i]);
@@ -100,16 +105,21 @@ class GtfsShapesService {
       } else {
         seq = i;
       }
+      String? name;
+      if (idxName >= 0 && row.length > idxName) {
+        final n = row[idxName].trim();
+        name = n.isEmpty ? null : n;
+      }
       if (id.isEmpty || lat == null || lon == null) continue;
       byShape.putIfAbsent(id, () => <_SeqPoint>[]).add(
-            _SeqPoint(seq: seq, point: LatLng(lat, lon)),
+            _SeqPoint(seq: seq, point: LatLng(lat, lon), name: name),
           );
     }
 
-    final result = <String, List<LatLng>>{};
+    final result = <String, List<_SeqPoint>>{};
     for (final e in byShape.entries) {
       final pts = e.value..sort((a, b) => a.seq.compareTo(b.seq));
-      result[e.key] = pts.map((sp) => sp.point).toList();
+      result[e.key] = pts.toList();
     }
     return result;
   }
@@ -211,7 +221,8 @@ class GtfsShapesService {
 class _SeqPoint {
   final int seq;
   final LatLng point;
-  const _SeqPoint({required this.seq, required this.point});
+  final String? name;
+  const _SeqPoint({required this.seq, required this.point, this.name});
 }
 
 class _ShapeTripMeta {
