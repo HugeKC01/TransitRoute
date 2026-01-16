@@ -333,6 +333,8 @@ class DirectionService {
   void _addTransferEdges() {
     const double transferDistanceMeters = 30.0;
     const int transferMinutes = 3;
+    const double proximityTransferMeters = 200.0;
+    const int proximityTransferMinutes = 5;
 
     void storeEdge(String from, String to) {
       final existingDistance = _distanceGraph[from]?[to];
@@ -354,6 +356,37 @@ class DirectionService {
           if (!_stopLookup.containsKey(toStop)) continue;
           storeEdge(fromStop, toStop);
           storeEdge(toStop, fromStop);
+        }
+      }
+    }
+
+    final busStops = _allStops
+        .where((stop) => stop.stopId.toUpperCase().startsWith('B'))
+        .toList();
+    final railStops = _allStops
+        .where((stop) => !stop.stopId.toUpperCase().startsWith('B'))
+        .toList();
+    for (final busStop in busStops) {
+      for (final railStop in railStops) {
+        final dist = geo.haversine(
+          busStop.lat,
+          busStop.lon,
+          railStop.lat,
+          railStop.lon,
+        );
+        if (dist <= proximityTransferMeters) {
+          final existingDistance = _distanceGraph[busStop.stopId]?[railStop.stopId];
+          if (existingDistance == null || dist < existingDistance) {
+            _distanceGraph.putIfAbsent(busStop.stopId, () => {})[railStop.stopId] = dist;
+            _distanceGraph.putIfAbsent(railStop.stopId, () => {})[busStop.stopId] = dist;
+          }
+          final existingMinutes = _timeGraph[busStop.stopId]?[railStop.stopId];
+          if (existingMinutes == null || proximityTransferMinutes < existingMinutes) {
+            _timeGraph.putIfAbsent(busStop.stopId, () => {})[railStop.stopId] =
+                proximityTransferMinutes;
+            _timeGraph.putIfAbsent(railStop.stopId, () => {})[busStop.stopId] =
+                proximityTransferMinutes;
+          }
         }
       }
     }
