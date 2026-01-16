@@ -73,8 +73,11 @@ class _MyHomePageState extends State<MyHomePage>
   List<gtfs.Route> allRoutes = [];
   bool _didFitRails = false;
   List<ShapeSegment> shapeSegments = [];
+  List<gtfs.Stop> busStops = [];
   Map<String, String> fareTypeMap = {};
   Map<String, int> fareDataMap = {};
+  double _currentZoom = 12.0;
+  static const double _busStopZoomThreshold = 15.0;
 
   String routingMode = 'Shortest';
   bool _headerCollapsed = false;
@@ -581,13 +584,21 @@ class _MyHomePageState extends State<MyHomePage>
     const fabHeight = 56.0;
     final fabGap = isCompact ? 24.0 : 32.0;
     final zoomBottomOffset = viewPadding.bottom + fabHeight + fabGap;
+    final showBusStops =
+        busStops.isNotEmpty && _currentZoom >= _busStopZoomThreshold;
     return Stack(
       children: [
         FlutterMap(
           mapController: _mapController,
-          options: const MapOptions(
-            initialCenter: LatLng(13.7463, 100.5347),
+          options: MapOptions(
+            initialCenter: const LatLng(13.7463, 100.5347),
             initialZoom: 12.0,
+            onMapEvent: (event) {
+              final newZoom = event.camera.zoom;
+              if ((newZoom - _currentZoom).abs() > 0.05) {
+                setState(() => _currentZoom = newZoom);
+              }
+            },
           ),
           children: [
             TileLayer(
@@ -602,6 +613,44 @@ class _MyHomePageState extends State<MyHomePage>
                         points: s.points,
                         color: s.color,
                         strokeWidth: 6.0,
+                      ),
+                    )
+                    .toList(),
+              ),
+            if (showBusStops)
+              MarkerLayer(
+                markers: busStops
+                    .map(
+                      (stop) => Marker(
+                        point: LatLng(stop.lat, stop.lon),
+                        width: 18,
+                        height: 22,
+                        child: GestureDetector(
+                          onTap: () => _showStopDetails(context, stop),
+                          child: Tooltip(
+                            message: stop.name,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.orange.shade600,
+                                border: Border.all(
+                                  color: Colors.black.withValues(alpha: 0.18),
+                                  width: 1,
+                                ),
+                                borderRadius: const BorderRadius.only(
+                                  topLeft: Radius.circular(6),
+                                  topRight: Radius.circular(6),
+                                ),
+                              ),
+                              child: const Center(
+                                child: Icon(
+                                  Icons.directions_bus,
+                                  color: Colors.white,
+                                  size: 12,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     )
                     .toList(),
@@ -1340,6 +1389,9 @@ class _MyHomePageState extends State<MyHomePage>
       'assets/gtfs_data/stops.txt',
       thaiNames: thaiNames,
     );
+    final busStopList = await _parseBusStopsFromAsset(
+      'assets/gtfs_data/bus_stop.txt',
+    );
     // Load fare mappings used for fare calculation
     await _loadFareMappings();
     // Build linePrefixes and lineColors from routes
@@ -1377,6 +1429,7 @@ class _MyHomePageState extends State<MyHomePage>
     setState(() {
       allRoutes = routes;
       allStops = stops;
+      busStops = busStopList;
       linePrefixes = prefixMap;
       lineColors = colorMap;
       stopLookup = stopMap;
@@ -1457,6 +1510,58 @@ class _MyHomePageState extends State<MyHomePage>
                 : null,
             zoneId: (idxZone >= 0 && row.length > idxZone)
                 ? row[idxZone].trim()
+                : null,
+          ),
+        );
+      }
+      return stops;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<List<gtfs.Stop>> _parseBusStopsFromAsset(String assetPath) async {
+    try {
+      final content = await rootBundle.loadString(assetPath);
+      final lines = const LineSplitter().convert(content);
+      if (lines.length <= 1) return [];
+      final header = _parseCsvLine(lines.first).map((s) => s.trim()).toList();
+      int idxStopId = header.indexOf('stop_id');
+      if (idxStopId < 0) idxStopId = 0;
+      int idxName = header.indexOf('stop_name');
+      if (idxName < 0) idxName = 1;
+      int idxLat = header.indexOf('stop_lat');
+      if (idxLat < 0) idxLat = 2;
+      int idxLon = header.indexOf('stop_lon');
+      if (idxLon < 0) idxLon = 3;
+      final idxCode = header.indexOf('stop_code');
+      final idxDesc = header.indexOf('stop_desc');
+      final stops = <gtfs.Stop>[];
+      for (var i = 1; i < lines.length; i++) {
+        final line = lines[i].trimRight();
+        if (line.isEmpty) continue;
+        final row = _parseCsvLine(line);
+        if (row.length <= idxStopId || row.length <= idxName) continue;
+        if (row.length <= idxLat || row.length <= idxLon) continue;
+        final baseId = row[idxStopId].trim().isEmpty
+            ? 'BUS'
+            : row[idxStopId].trim();
+        final stopId = '${baseId}_$i';
+        final name = row[idxName].trim();
+        final lat = double.tryParse(row[idxLat].trim());
+        final lon = double.tryParse(row[idxLon].trim());
+        if (name.isEmpty || lat == null || lon == null) continue;
+        stops.add(
+          gtfs.Stop(
+            stopId: stopId,
+            name: name,
+            lat: lat,
+            lon: lon,
+            code: (idxCode >= 0 && row.length > idxCode)
+                ? row[idxCode].trim()
+                : null,
+            desc: (idxDesc >= 0 && row.length > idxDesc)
+                ? row[idxDesc].trim()
                 : null,
           ),
         );
