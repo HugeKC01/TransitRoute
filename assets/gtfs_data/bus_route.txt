@@ -1,3 +1,3 @@
 route_id,agency_id,route_short_name,route_long_name,route_type,route_color,route_text_color,line_prefixes
 BUS01,1,B1,Pracha Uthit - Bangmod (Bus),3,D35400,FFFFFF,B1
-BUS75,1,B1,75 (4-13),3,D35400,FFFFFF,B1
+BUS75,1,75,Hualumphong - Phutthabucha Bus Depot,3,D35400,FFFFFF,B

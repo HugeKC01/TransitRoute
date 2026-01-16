@@ -1586,9 +1586,9 @@ class _MyHomePageState extends State<MyHomePage>
         if (row.length <= idxStopId || row.length <= idxName) continue;
         if (row.length <= idxLat || row.length <= idxLon) continue;
         final baseId = row[idxStopId].trim().isEmpty
-            ? 'BUS'
-            : row[idxStopId].trim();
-        final stopId = '${baseId}_$i';
+          ? 'BUS_$i'
+          : row[idxStopId].trim();
+        final stopId = baseId;
         final name = row[idxName].trim();
         final lat = double.tryParse(row[idxLat].trim());
         final lon = double.tryParse(row[idxLon].trim());
