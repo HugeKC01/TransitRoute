@@ -15,6 +15,7 @@ import 'station_details_page.dart';
 import 'transit_update_page.dart';
 import 'transit_updates_list_page.dart';
 import 'transport_lines_page.dart';
+import 'navigation_page.dart';
 import 'widgets/route_details_sheet.dart';
 import 'widgets/route_options_panel.dart';
 
@@ -564,6 +565,7 @@ class _MyHomePageState extends State<MyHomePage>
         lineColorResolver: _getLineColor,
         lineColors: lineColors,
       ),
+      onStartNavigation: _openNavigation,
       lineNameResolver: _getLineName,
       lineColors: lineColors,
     );
@@ -1622,6 +1624,19 @@ class _MyHomePageState extends State<MyHomePage>
   void _openTransitUpdatePage() {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (context) => const TransitUpdatePage()),
+    );
+  }
+
+  void _openNavigation(DirectionOption option) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => NavigationPage(
+          option: option,
+          lineNameResolver: _getLineName,
+          lineColorResolver: _getLineColor,
+          lineColors: lineColors,
+        ),
+      ),
     );
   }
 
