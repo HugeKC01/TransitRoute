@@ -10,6 +10,10 @@ import 'package:route/services/direction_service.dart';
 import 'package:route/services/gtfs_models.dart' as gtfs;
 import 'package:route/services/gtfs_shapes.dart';
 
+import 'more_page.dart';
+import 'station_details_page.dart';
+import 'transit_update_page.dart';
+import 'transit_updates_list_page.dart';
 import 'transport_lines_page.dart';
 import 'widgets/route_details_sheet.dart';
 import 'widgets/route_options_panel.dart';
@@ -44,12 +48,21 @@ class MyHomePage extends StatefulWidget {
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
+class _MyHomePageState extends State<MyHomePage>
+  with TickerProviderStateMixin {
   final MapController _mapController = MapController();
   late final SearchController _startSearchController;
   late final SearchController _destSearchController;
   late final SearchController _collapsedSearchController;
   int _selectedNavIndex = 0;
+  final Profile _profile = const Profile(
+    username: 'hugekc',
+    name: 'Kittichai Chaimongkol',
+    joinedDate: 'Jan 2024',
+    profileImageUrl: 'https://randomuser.me/api/portraits/men/32.jpg',
+  );
+  final List<TransitReport> _transitReports =
+      TransitUpdatesRepository.sampleReports;
   List<gtfs.Stop> allStops = [];
   Map<String, gtfs.Stop> stopLookup = {};
   late DirectionService _directionService;
@@ -99,22 +112,7 @@ class _MyHomePageState extends State<MyHomePage> {
     _mapController.move(camera.center, newZoom);
   }
 
-  Widget _zoomButton({required IconData icon, required VoidCallback onTap}) {
-    return Material(
-      elevation: 3,
-      shape: const CircleBorder(),
-      color: Colors.white,
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: onTap,
-        child: SizedBox(
-          width: 48,
-          height: 48,
-          child: Icon(icon, color: Colors.black87),
-        ),
-      ),
-    );
-  }
+  // _zoomButton removed (no longer used)
 
   Future<List<gtfs.Route>> _parseRoutesFromAsset(String assetPath) async {
     try {
@@ -255,75 +253,231 @@ class _MyHomePageState extends State<MyHomePage> {
   void _showStopDetails(BuildContext context, gtfs.Stop stop) {
     final lineName = _getLineName(stop.stopId);
     final lineColor = _getLineColor(stop.stopId);
+    final parentContext = context;
     showModalBottomSheet<void>(
       context: context,
-      useSafeArea: true,
+      showDragHandle: true,
+      isScrollControlled: false,
       builder: (sheetContext) {
         final theme = Theme.of(sheetContext);
-        final subtitleStyle = theme.textTheme.bodyMedium;
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 16,
-                    height: 16,
-                    decoration: BoxDecoration(
-                      color: lineColor,
-                      shape: BoxShape.circle,
-                    ),
+        final colorScheme = theme.colorScheme;
+        final bottomInset = MediaQuery.of(sheetContext).padding.bottom;
+        final hasThaiName =
+            stop.thaiName != null && stop.thaiName!.trim().isNotEmpty;
+        Widget infoChip(String label, String value) {
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: colorScheme.outlineVariant),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label.toUpperCase(),
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    letterSpacing: 0.4,
+                    fontWeight: FontWeight.w600,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(stop.name, style: theme.textTheme.titleLarge),
-                        if (_hasThaiName(stop))
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+        Widget quickAction({
+          required IconData icon,
+          required String title,
+          required String subtitle,
+          required VoidCallback onTap,
+        }) {
+          return Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerHigh,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(icon, color: colorScheme.primary),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(title, style: theme.textTheme.titleMedium),
                           Text(
-                            stop.thaiName!,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
+                            subtitle,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
                             ),
                           ),
-                      ],
+                        ],
+                      ),
                     ),
+                    const Icon(Icons.chevron_right),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+        return SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(24, 12, 24, bottomInset + 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: colorScheme.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(20),
                   ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text('Stop ID: ${stop.stopId}', style: subtitleStyle),
-              if (lineName != null)
-                Text('Line: $lineName', style: subtitleStyle),
-              Text(
-                'Lat: ${stop.lat.toStringAsFixed(5)}, Lon: ${stop.lon.toStringAsFixed(5)}',
-                style: subtitleStyle,
-              ),
-              if (stop.zoneId != null && stop.zoneId!.isNotEmpty)
-                Text('Zone: ${stop.zoneId}', style: subtitleStyle),
-              const SizedBox(height: 20),
-              FilledButton.icon(
-                onPressed: () {
-                  Navigator.of(sheetContext).pop();
-                  _assignStopSelection(stop, asStart: true);
-                },
-                icon: const Icon(Icons.trip_origin),
-                label: const Text('Use as starting point'),
-              ),
-              const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: () {
-                  Navigator.of(sheetContext).pop();
-                  _assignStopSelection(stop, asStart: false);
-                },
-                icon: const Icon(Icons.flag),
-                label: const Text('Use as destination'),
-              ),
-            ],
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: lineColor,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(
+                          Icons.train,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              stop.name,
+                              style: theme.textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            if (hasThaiName)
+                              Text(
+                                stop.thaiName!,
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            if (lineName != null && lineName.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: lineColor.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    lineName,
+                                    style: theme.textTheme.labelMedium?.copyWith(
+                                      color: lineColor,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
+                  children: [
+                    infoChip('Stop ID', stop.stopId),
+                    infoChip(
+                      'Coordinates',
+                      'Lat ${stop.lat.toStringAsFixed(4)}, Lon ${stop.lon.toStringAsFixed(4)}',
+                    ),
+                    if (stop.zoneId != null && stop.zoneId!.isNotEmpty)
+                      infoChip('Zone', stop.zoneId!),
+                    if (stop.code != null && stop.code!.isNotEmpty)
+                      infoChip('Code', stop.code!),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                quickAction(
+                  icon: Icons.trip_origin,
+                  title: 'Set as origin',
+                  subtitle: 'Plan a route starting here',
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _assignStopSelection(stop, asStart: true);
+                  },
+                ),
+                quickAction(
+                  icon: Icons.flag,
+                  title: 'Set as destination',
+                  subtitle: 'Use this stop as your endpoint',
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _assignStopSelection(stop, asStart: false);
+                  },
+                ),
+                const SizedBox(height: 8),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.info_outline),
+                  title: const Text('View full station details'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    Navigator.of(parentContext).push(
+                      MaterialPageRoute(
+                        builder: (pageContext) => StationDetailsPage(
+                          stop: stop,
+                          lineName: lineName,
+                          lineColor: lineColor,
+                          onSelectAsStart: () {
+                            Navigator.of(pageContext).pop();
+                            _assignStopSelection(stop, asStart: true);
+                          },
+                          onSelectAsDestination: () {
+                            Navigator.of(pageContext).pop();
+                            _assignStopSelection(stop, asStart: false);
+                          },
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -420,6 +574,11 @@ class _MyHomePageState extends State<MyHomePage> {
     final destId = selectedDestinationStopId;
     final routeStops = directionStopsView;
     final viewPadding = MediaQuery.of(context).padding;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isCompact = screenWidth < 520;
+    const fabHeight = 56.0;
+    final fabGap = isCompact ? 24.0 : 32.0;
+    final zoomBottomOffset = viewPadding.bottom + fabHeight + fabGap;
     return Stack(
       children: [
         FlutterMap(
@@ -465,10 +624,10 @@ class _MyHomePageState extends State<MyHomePage> {
                             child: Container(
                               decoration: BoxDecoration(
                                 color: (stop.stopId == startId)
-                                    ? Colors.greenAccent.withValues(alpha: 0.85)
-                                    : (stop.stopId == destId)
-                                    ? Colors.redAccent.withValues(alpha: 0.85)
-                                    : Colors.white,
+                                  ? Colors.greenAccent.withValues(alpha: 0.85)
+                                  : (stop.stopId == destId)
+                                  ? Colors.redAccent.withValues(alpha: 0.85)
+                                  : Colors.white,
                                 shape: BoxShape.circle,
                                 border: Border.all(
                                   color: _getLineColor(stop.stopId),
@@ -497,24 +656,56 @@ class _MyHomePageState extends State<MyHomePage> {
         ),
         Positioned(
           right: 16,
-          top: viewPadding.top + 16,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _zoomButton(icon: Icons.add, onTap: () => _adjustMapZoom(0.75)),
-              const SizedBox(height: 12),
-              _zoomButton(
-                icon: Icons.remove,
-                onTap: () => _adjustMapZoom(-0.75),
+          bottom: zoomBottomOffset,
+          child: Material(
+            elevation: 6,
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(32),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(32),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-            ],
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.add),
+                    tooltip: 'Zoom in',
+                    onPressed: () => _adjustMapZoom(0.75),
+                    iconSize: 28,
+                    padding: const EdgeInsets.all(12),
+                    constraints: const BoxConstraints(minWidth: 56, minHeight: 48),
+                  ),
+                  Container(
+                    width: 36,
+                    height: 1,
+                    color: Colors.black12,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.remove),
+                    tooltip: 'Zoom out',
+                    onPressed: () => _adjustMapZoom(-0.75),
+                    iconSize: 28,
+                    padding: const EdgeInsets.all(12),
+                    constraints: const BoxConstraints(minWidth: 56, minHeight: 48),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildWideLayout(BuildContext context) {
+  Widget _buildWideLayout(BuildContext context, Widget headerOverlay) {
     final width = MediaQuery.of(context).size.width;
     final hasRoutes = directionOptions.isNotEmpty;
     final panelWidth = math.min(440.0, width * 0.35);
@@ -534,18 +725,26 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
           ),
         if (hasRoutes) const VerticalDivider(width: 1),
-        Expanded(child: _buildMap(context)),
+        Expanded(
+          child: Stack(
+            children: [
+              _buildMap(context),
+              headerOverlay,
+            ],
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildPhoneLayout(BuildContext context) {
+  Widget _buildPhoneLayout(BuildContext context, Widget headerOverlay) {
     final hasRoutes = directionOptions.isNotEmpty;
     final initialSize = hasRoutes ? 0.4 : 0.25;
     final theme = Theme.of(context);
     return Stack(
       children: [
         Positioned.fill(child: _buildMap(context)),
+        headerOverlay,
         if (hasRoutes)
           DraggableScrollableSheet(
             initialChildSize: initialSize,
@@ -587,6 +786,7 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Widget _buildHomeHeader(BuildContext context, bool isWideLayout) {
+    final theme = Theme.of(context);
     final start = selectedStartStopId != null
         ? stopLookup[selectedStartStopId!]
         : null;
@@ -594,24 +794,58 @@ class _MyHomePageState extends State<MyHomePage> {
         ? stopLookup[selectedDestinationStopId!]
         : null;
     final isCollapsed = _headerCollapsed;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(12, 4, 12, isWideLayout ? 4 : 0),
-      child: AnimatedCrossFade(
-        crossFadeState:
-            isCollapsed ? CrossFadeState.showFirst : CrossFadeState.showSecond,
-        duration: const Duration(milliseconds: 300),
-        firstChild: Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: _buildCollapsedHeaderContent(context, start, dest),
-        ),
-        secondChild: Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildSelectionSummaryCard(context, start, dest),
-            ],
+    return Material(
+      elevation: 10,
+      borderRadius: BorderRadius.circular(24),
+      color: theme.colorScheme.surface,
+      clipBehavior: Clip.antiAlias,
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeInOut,
+        alignment: Alignment.topCenter,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            switchInCurve: Curves.easeInOut,
+            switchOutCurve: Curves.easeInOut,
+            transitionBuilder: (child, animation) {
+              return FadeTransition(opacity: animation, child: child);
+            },
+            child: isCollapsed
+                ? KeyedSubtree(
+                    key: const ValueKey('collapsed_header'),
+                    child:
+                        _buildCollapsedHeaderContent(context, start, dest),
+                  )
+                : KeyedSubtree(
+                    key: const ValueKey('expanded_header'),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildSelectionSummaryCard(context, start, dest),
+                      ],
+                    ),
+                  ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderOverlay(BuildContext context, bool isWideLayout) {
+    final horizontal = isWideLayout ? 32.0 : 16.0;
+    final topInset = MediaQuery.of(context).padding.top;
+    final top = topInset + 12.0;
+    final maxWidth = isWideLayout ? 520.0 : 600.0;
+    return Align(
+      alignment: Alignment.topCenter,
+      child: Padding(
+        padding: EdgeInsets.only(top: top, left: horizontal, right: horizontal),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: _buildHomeHeader(context, isWideLayout),
         ),
       ),
     );
@@ -632,6 +866,9 @@ class _MyHomePageState extends State<MyHomePage> {
     return IconButton(
       tooltip: 'Hide planner',
       icon: const Icon(Icons.unfold_less),
+      visualDensity: VisualDensity.compact,
+      constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+      padding: EdgeInsets.zero,
       onPressed: () {
         setState(() {
           _headerCollapsed = true;
@@ -748,6 +985,7 @@ class _MyHomePageState extends State<MyHomePage> {
       letterSpacing: 0.3,
     );
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
           child: Container(
@@ -758,9 +996,11 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
                   child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('Origin', style: labelStyle),
@@ -784,6 +1024,12 @@ class _MyHomePageState extends State<MyHomePage> {
                 IconButton(
                   tooltip: 'Clear selections',
                   icon: const Icon(Icons.close),
+                  padding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.compact,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 36,
+                    height: 36,
+                  ),
                   onPressed: () =>
                       _clearSelections(preserveHeaderState: true),
                 ),
@@ -826,20 +1072,12 @@ class _MyHomePageState extends State<MyHomePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: _buildStopSearchField(
-                    context,
-                    label: 'Origin',
-                    icon: Icons.trip_origin,
-                    asStart: true,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _collapseHeaderButton(),
-              ],
+            _buildStopSearchField(
+              context,
+              label: 'Origin',
+              icon: Icons.trip_origin,
+              asStart: true,
+              trailingAction: _collapseHeaderButton(),
             ),
             const SizedBox(height: 8),
             _buildStopSearchField(
@@ -897,6 +1135,7 @@ class _MyHomePageState extends State<MyHomePage> {
     required String label,
     required IconData icon,
     required bool asStart,
+    Widget? trailingAction,
   }) {
     final theme = Theme.of(context);
     final controller = asStart ? _startSearchController : _destSearchController;
@@ -921,6 +1160,31 @@ class _MyHomePageState extends State<MyHomePage> {
           searchController: controller,
           viewHintText: 'Search $label station',
           builder: (context, ctrl) {
+            final trailingWidgets = <Widget>[];
+            if (ctrl.text.isNotEmpty) {
+              trailingWidgets.add(
+                IconButton(
+                  tooltip: 'Clear $label field',
+                  icon: const Icon(Icons.close),
+                  onPressed: () {
+                    setState(() {
+                      ctrl.clear();
+                      if (asStart) {
+                        selectedStartStopId = null;
+                      } else {
+                        selectedDestinationStopId = null;
+                      }
+                      directionOptions = [];
+                      selectedDirectionIndex = 0;
+                      _headerCollapsed = false;
+                    });
+                  },
+                ),
+              );
+            }
+            if (trailingAction != null) {
+              trailingWidgets.add(trailingAction);
+            }
             return SearchBar(
               controller: ctrl,
               leading: Icon(icon),
@@ -939,26 +1203,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 }
                 setState(() {});
               },
-              trailing: [
-                if (ctrl.text.isNotEmpty)
-                  IconButton(
-                    tooltip: 'Clear $label field',
-                    icon: const Icon(Icons.close),
-                    onPressed: () {
-                      setState(() {
-                        ctrl.clear();
-                        if (asStart) {
-                          selectedStartStopId = null;
-                        } else {
-                          selectedDestinationStopId = null;
-                        }
-                        directionOptions = [];
-                        selectedDirectionIndex = 0;
-                        _headerCollapsed = false;
-                      });
-                    },
-                  ),
-              ],
+              trailing: trailingWidgets,
             );
           },
           suggestionsBuilder: (context, ctrl) {
@@ -1374,6 +1619,12 @@ class _MyHomePageState extends State<MyHomePage> {
     ).push(MaterialPageRoute(builder: (context) => const TransportLinesPage()));
   }
 
+  void _openTransitUpdatePage() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => const TransitUpdatePage()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -1387,13 +1638,28 @@ class _MyHomePageState extends State<MyHomePage> {
     }
     final width = MediaQuery.of(context).size.width;
     final isWideLayout = width >= 900;
-    final bool showHome = _selectedNavIndex == 0 || !showNav;
-    final body = showHome
-        ? _buildHomeContent(context, isWideLayout)
-        : _buildMorePage(context);
+    final bool showHome = !showNav || _selectedNavIndex == 0;
+    late final Widget body;
+    if (showHome) {
+      body = _buildHomeContent(context, isWideLayout);
+    } else if (_selectedNavIndex == 1) {
+      body = TransitUpdatesListPage(
+        initialReports: _transitReports,
+        loadReports: TransitUpdatesRepository.fetchLatestReports,
+      );
+    } else {
+      body = MorePage(
+        onOpenTransportLines: _openTransportLines,
+        onOpenTransitUpdates: _openTransitUpdatePage,
+        profile: _profile,
+      );
+    }
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
-      body: SafeArea(child: body),
+      body: SafeArea(
+        top: false,
+        child: body,
+      ),
       floatingActionButton:
           showHome ? _buildLocationFab(context) : null,
       bottomNavigationBar: showNav ? _buildNavigationBar() : null,
@@ -1401,19 +1667,17 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Widget _buildHomeContent(BuildContext context, bool isWideLayout) {
-    return Column(
-      children: [
-        _buildHomeHeader(context, isWideLayout),
-        const SizedBox(height: 4),
-        Expanded(
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 400),
-            child: isWideLayout
-                ? _buildWideLayout(context)
-                : _buildPhoneLayout(context),
-          ),
+    final headerOverlay = _buildHeaderOverlay(context, isWideLayout);
+    return SizedBox.expand(
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 400),
+        child: KeyedSubtree(
+          key: ValueKey<bool>(isWideLayout),
+          child: isWideLayout
+              ? _buildWideLayout(context, headerOverlay)
+              : _buildPhoneLayout(context, headerOverlay),
         ),
-      ],
+      ),
     );
   }
 
@@ -1430,39 +1694,14 @@ class _MyHomePageState extends State<MyHomePage> {
           label: 'Home',
         ),
         NavigationDestination(
+          icon: Icon(Icons.campaign_outlined),
+          selectedIcon: Icon(Icons.campaign),
+          label: 'Updates',
+        ),
+        NavigationDestination(
           icon: Icon(Icons.more_horiz),
           selectedIcon: Icon(Icons.more),
           label: 'More',
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMorePage(BuildContext context) {
-    final theme = Theme.of(context);
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-      children: [
-        Text(
-          'More options',
-          style: theme.textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 16),
-        Card(
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            children: [
-              ListTile(
-                leading: const Icon(Icons.list_alt_rounded),
-                title: const Text('Transit lines'),
-                subtitle: const Text('Browse every available line'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: _openTransportLines,
-              ),
-            ],
-          ),
         ),
       ],
     );

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:route/services/direction_service.dart';
-import 'package:route/services/fare_calculator.dart';
 import 'package:route/services/route_formatters.dart';
 
 import 'widget_types.dart';
@@ -51,11 +50,6 @@ class RouteDetailsSheet extends StatelessWidget {
     final segments = splitRouteByLine(option.stops, lineNameResolver);
     final tags = option.tags.toList();
     final totalFare = option.fareBreakdown['total'] ?? 0;
-    final mCount = option.fareBreakdown['mCount'] ?? 0;
-    final mPrice = option.fareBreakdown['mPrice'] ?? 0;
-    final sCount = option.fareBreakdown['sCount'] ?? 0;
-    final sPrice = option.fareBreakdown['sPrice'] ?? 0;
-    final mrtSrtFares = _mrtSrtFaresFrom(option.fareBreakdown);
     final theme = Theme.of(context);
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(
@@ -97,36 +91,6 @@ class RouteDetailsSheet extends StatelessWidget {
               children: tags.map((tag) => Chip(label: Text(tag))).toList(),
             ),
           ],
-          const SizedBox(height: 16),
-          Text('Fare sections', style: theme.textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              FareSectionTile(
-                title: 'Main network',
-                color: theme.colorScheme.primary,
-                subtitle: '$mCount segments',
-                price: mPrice,
-              ),
-              FareSectionTile(
-                title: 'Secondary network',
-                color: theme.colorScheme.secondary,
-                subtitle: '$sCount segments',
-                price: sPrice,
-              ),
-              ...mrtSrtFares.map(
-                (fare) => FareSectionTile(
-                  title: fare.lineName,
-                  color:
-                      lineColors[fare.lineName] ?? theme.colorScheme.tertiary,
-                  subtitle: '${fare.stopCount} stations (max 8 charged)',
-                  price: fare.price,
-                ),
-              ),
-            ],
-          ),
           const SizedBox(height: 24),
           Text('Line segments', style: theme.textTheme.titleMedium),
           const SizedBox(height: 8),
@@ -197,104 +161,3 @@ class RouteDetailsSheet extends StatelessWidget {
   }
 }
 
-class FareSectionTile extends StatelessWidget {
-  const FareSectionTile({
-    super.key,
-    required this.title,
-    required this.subtitle,
-    required this.price,
-    required this.color,
-  });
-
-  final String title;
-  final String subtitle;
-  final int price;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final priceText = '฿$price';
-    return Container(
-      width: 160,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                height: 10,
-                width: 10,
-                decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-              Text(
-                priceText,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.onSurface,
-                ),
-              ),
-            ],
-          ),
-          Text(
-            title,
-            style: theme.textTheme.titleMedium,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            subtitle,
-            style: theme.textTheme.bodySmall,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LineFareBreakdown {
-  const _LineFareBreakdown(
-    this.lineName,
-    this.stopCount,
-    this.price,
-  );
-
-  final String lineName;
-  final int stopCount;
-  final int price;
-}
-
-List<_LineFareBreakdown> _mrtSrtFaresFrom(Map<String, int> breakdown) {
-  final prefix = kMrtSrtFarePrefix;
-  final countSuffix = kMrtSrtCountSuffix;
-  final priceSuffix = kMrtSrtPriceSuffix;
-  final buffer = <String, Map<String, int>>{};
-  breakdown.forEach((key, value) {
-    if (!key.startsWith(prefix)) return;
-    if (key.endsWith(countSuffix)) {
-      final line = key.substring(prefix.length, key.length - countSuffix.length);
-      buffer.putIfAbsent(line, () => <String, int>{})['count'] = value;
-    } else if (key.endsWith(priceSuffix)) {
-      final line = key.substring(prefix.length, key.length - priceSuffix.length);
-      buffer.putIfAbsent(line, () => <String, int>{})['price'] = value;
-    }
-  });
-  final result = <_LineFareBreakdown>[];
-  buffer.forEach((line, values) {
-    final count = values['count'] ?? 0;
-    final price = values['price'] ?? 0;
-    if (count <= 0 && price <= 0) return;
-    result.add(_LineFareBreakdown(line, count, price));
-  });
-  result.sort((a, b) => a.lineName.compareTo(b.lineName));
-  return result;
-}
