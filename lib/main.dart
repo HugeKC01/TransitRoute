@@ -48,7 +48,6 @@ class MyHomePage extends StatefulWidget {
   @override
   State<MyHomePage> createState() => _MyHomePageState();
 }
-
 class _MyHomePageState extends State<MyHomePage>
   with TickerProviderStateMixin {
   final MapController _mapController = MapController();
@@ -64,7 +63,10 @@ class _MyHomePageState extends State<MyHomePage>
   );
   final List<TransitReport> _transitReports =
       TransitUpdatesRepository.sampleReports;
+  // Combined stops used for search/routing (rail + bus)
   List<gtfs.Stop> allStops = [];
+  // Rail-only stops for the default rail marker layer
+  List<gtfs.Stop> railStops = [];
   Map<String, gtfs.Stop> stopLookup = {};
   late DirectionService _directionService;
 
@@ -80,6 +82,7 @@ class _MyHomePageState extends State<MyHomePage>
   static const double _busStopZoomThreshold = 15.0;
 
   String routingMode = 'Shortest';
+  String transitPreference = 'Auto';
   bool _headerCollapsed = false;
 
   String? _getLineName(String stopId) {
@@ -182,6 +185,7 @@ class _MyHomePageState extends State<MyHomePage>
     }
     final result = await _directionService.findDirections(
       routingMode: routingMode,
+      preferredTransit: transitPreference,
       startStopId: startId,
       destStopId: destId,
     );
@@ -655,9 +659,9 @@ class _MyHomePageState extends State<MyHomePage>
                     )
                     .toList(),
               ),
-            if (allStops.isNotEmpty)
+            if (railStops.isNotEmpty)
               MarkerLayer(
-                markers: allStops
+                markers: railStops
                     .map(
                       (stop) => Marker(
                         point: LatLng(stop.lat, stop.lon),
@@ -1159,6 +1163,8 @@ class _MyHomePageState extends State<MyHomePage>
                 ),
               ],
             ),
+            const SizedBox(height: 8),
+            _buildTransitPreferenceChooser(context),
             const SizedBox(height: 4),
             TextButton.icon(
               onPressed:
@@ -1178,6 +1184,40 @@ class _MyHomePageState extends State<MyHomePage>
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildTransitPreferenceChooser(BuildContext context) {
+    final theme = Theme.of(context);
+    final options = ['Auto', 'Prefer Rail', 'Prefer Bus'];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Transit priority',
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: options.map((opt) {
+            return ChoiceChip(
+              label: Text(opt),
+              selected: transitPreference == opt,
+              onSelected: (_) {
+                setState(() => transitPreference = opt);
+                if (selectedStartStopId != null &&
+                    selectedDestinationStopId != null) {
+                  _findDirection();
+                }
+              },
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 
@@ -1403,9 +1443,10 @@ class _MyHomePageState extends State<MyHomePage>
         colorMap[route.longName] = Color(int.parse('0xFF${route.color!}'));
       }
     }
-    final stopMap = {for (final stop in stops) stop.stopId: stop};
+    final combinedStops = <gtfs.Stop>[...stops, ...busStopList];
+    final stopMap = {for (final stop in combinedStops) stop.stopId: stop};
     _directionService.updateData(
-      allStops: stops,
+      allStops: combinedStops,
       stopLookup: stopMap,
       routes: routes,
       fareTypeMap: fareTypeMap,
@@ -1428,7 +1469,8 @@ class _MyHomePageState extends State<MyHomePage>
     } catch (_) {}
     setState(() {
       allRoutes = routes;
-      allStops = stops;
+      railStops = stops;
+      allStops = combinedStops;
       busStops = busStopList;
       linePrefixes = prefixMap;
       lineColors = colorMap;

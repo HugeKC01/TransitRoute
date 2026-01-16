@@ -47,6 +47,11 @@ class DirectionResult {
 class DirectionService {
   DirectionService({required this.lineNameResolver});
 
+  static const List<String> _stopTimeAssets = [
+    'assets/gtfs_data/stop_times.txt',
+    'assets/gtfs_data/bus_stop_times.txt',
+  ];
+
   final LineNameResolver lineNameResolver;
 
   List<gtfs.Stop> _allStops = const [];
@@ -72,6 +77,9 @@ class DirectionService {
     ['RN06', 'PK14'],
     ['PK10'],
     ['BL11', 'RW01', 'RN01'],
+    ['N2', 'A8'],
+    ['BL21', 'A6'],
+    ['YL11', 'A4'],
   ];
 
   final Map<String, Map<String, double>> _distanceGraph = {};
@@ -112,6 +120,7 @@ class DirectionService {
 
   Future<DirectionResult> findDirections({
     required String routingMode,
+    required String preferredTransit,
     required String startStopId,
     required String destStopId,
   }) async {
@@ -217,7 +226,31 @@ class DirectionService {
       }
     }
 
+    int transitRank(_RouteMetrics metric) {
+      final hasBus = metric.route.stops
+          .any((s) => s.stopId.toUpperCase().startsWith('ST_'));
+      final hasRail = metric.route.stops.length !=
+          metric.route.stops
+              .where((s) => s.stopId.toUpperCase().startsWith('ST_'))
+              .length;
+      switch (preferredTransit) {
+        case 'Prefer Bus':
+          if (hasBus && !hasRail) return 0;
+          if (hasBus) return 1;
+          return 2;
+        case 'Prefer Rail':
+          if (hasRail && !hasBus) return 0;
+          if (hasRail) return 1;
+          return 2;
+        default:
+          return 1;
+      }
+    }
+
     metrics.sort((a, b) {
+      final transitCompare = transitRank(a).compareTo(transitRank(b));
+      if (transitCompare != 0) return transitCompare;
+
       final aPriority = a.route.tags.contains(routingMode) ? 0 : 1;
       final bPriority = b.route.tags.contains(routingMode) ? 0 : 1;
       if (aPriority != bPriority) return aPriority.compareTo(bPriority);
@@ -267,38 +300,11 @@ class DirectionService {
 
   Future<void> _buildGraphs() async {
     try {
-      final stopTimesContent = await rootBundle.loadString(
-        'assets/gtfs_data/stop_times.txt',
-      );
-      final lines = const LineSplitter().convert(stopTimesContent);
-      if (lines.length <= 1) return;
-      final header = parseCsvLine(lines.first).map((s) => s.trim()).toList();
-      final idxTrip = header.indexOf('trip_id');
-      final idxStop = header.indexOf('stop_id');
-      final idxSeq = header.indexOf('stop_sequence');
-      final tripMap = <String, List<Map<String, dynamic>>>{};
-      for (int i = 1; i < lines.length; i++) {
-        final line = lines[i].trimRight();
-        if (line.isEmpty) continue;
-        final row = parseCsvLine(line);
-        if (row.length <= idxTrip ||
-            row.length <= idxStop ||
-            row.length <= idxSeq ||
-            idxTrip < 0 ||
-            idxStop < 0 ||
-            idxSeq < 0) {
-          continue;
-        }
-        final tripId = row[idxTrip].trim();
-        final stopId = row[idxStop].trim();
-        final seq = int.tryParse(row[idxSeq].trim()) ?? i;
-        tripMap.putIfAbsent(tripId, () => []).add({
-          'stopId': stopId,
-          'seq': seq,
-        });
-      }
-      for (final entry in tripMap.entries) {
-        entry.value.sort((a, b) => (a['seq'] as int).compareTo(b['seq'] as int));
+      final stopTimes = await _loadStopTimesFromAssets(_stopTimeAssets);
+      if (stopTimes.isEmpty) return;
+      for (final entry in stopTimes.entries) {
+        entry.value.sort((a, b) =>
+            (a['stopSequence'] as int).compareTo(b['stopSequence'] as int));
         for (int j = 0; j < entry.value.length - 1; j++) {
           final a = entry.value[j]['stopId'] as String;
           final b = entry.value[j + 1]['stopId'] as String;
@@ -354,46 +360,52 @@ class DirectionService {
   }
 
   Future<Map<String, List<Map<String, dynamic>>>> _loadStopTimes() async {
-    try {
-      final content = await rootBundle.loadString(
-        'assets/gtfs_data/stop_times.txt',
-      );
-      final lines = const LineSplitter().convert(content);
-      if (lines.length <= 1) return {};
-      final header = parseCsvLine(lines.first).map((s) => s.trim()).toList();
-      final idxTripId = header.indexOf('trip_id');
-      final idxStopId = header.indexOf('stop_id');
-      final idxStopSeq = header.indexOf('stop_sequence');
-      if (idxTripId < 0 || idxStopId < 0 || idxStopSeq < 0) {
-        return {};
-      }
-      final result = <String, List<Map<String, dynamic>>>{};
-      for (int i = 1; i < lines.length; i++) {
-        final line = lines[i].trimRight();
-        if (line.isEmpty) continue;
-        final row = parseCsvLine(line);
-        if (row.length <= idxTripId ||
-            row.length <= idxStopId ||
-            row.length <= idxStopSeq) {
+    return _loadStopTimesFromAssets(_stopTimeAssets);
+  }
+
+  Future<Map<String, List<Map<String, dynamic>>>> _loadStopTimesFromAssets(
+    List<String> assets,
+  ) async {
+    final result = <String, List<Map<String, dynamic>>>{};
+    for (final asset in assets) {
+      try {
+        final content = await rootBundle.loadString(asset);
+        final lines = const LineSplitter().convert(content);
+        if (lines.length <= 1) continue;
+        final header = parseCsvLine(lines.first).map((s) => s.trim()).toList();
+        final idxTripId = header.indexOf('trip_id');
+        final idxStopId = header.indexOf('stop_id');
+        final idxStopSeq = header.indexOf('stop_sequence');
+        if (idxTripId < 0 || idxStopId < 0 || idxStopSeq < 0) {
           continue;
         }
-        final tripId = row[idxTripId].trim();
-        final stopId = row[idxStopId].trim();
-        final stopSequence = int.tryParse(row[idxStopSeq].trim()) ?? i;
-        if (tripId.isEmpty || stopId.isEmpty) continue;
-        result.putIfAbsent(tripId, () => []).add({
-          'stopId': stopId,
-          'stopSequence': stopSequence,
-        });
+        for (int i = 1; i < lines.length; i++) {
+          final line = lines[i].trimRight();
+          if (line.isEmpty) continue;
+          final row = parseCsvLine(line);
+          if (row.length <= idxTripId ||
+              row.length <= idxStopId ||
+              row.length <= idxStopSeq) {
+            continue;
+          }
+          final tripId = row[idxTripId].trim();
+          final stopId = row[idxStopId].trim();
+          final stopSequence = int.tryParse(row[idxStopSeq].trim()) ?? i;
+          if (tripId.isEmpty || stopId.isEmpty) continue;
+          result.putIfAbsent(tripId, () => []).add({
+            'stopId': stopId,
+            'stopSequence': stopSequence,
+          });
+        }
+      } catch (_) {
+        continue;
       }
-      for (final entry in result.entries) {
-        entry.value.sort((a, b) =>
-            (a['stopSequence'] as int).compareTo(b['stopSequence'] as int));
-      }
-      return result;
-    } catch (_) {
-      return {};
     }
+    for (final entry in result.entries) {
+      entry.value.sort((a, b) =>
+          (a['stopSequence'] as int).compareTo(b['stopSequence'] as int));
+    }
+    return result;
   }
 
   Future<Map<String, gtfs.Trip>> loadTrips() async {
