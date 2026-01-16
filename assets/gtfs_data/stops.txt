@@ -195,20 +195,18 @@ A5,Ramkhamkhaeng,13.7429933,100.6001541,A5,Air Port Link,
 A6,Makkasan,13.750869, 100.561134,A6,Air Port Link,
 A7,Ratchaprarop,13.755093, 100.542122,A7,Air Port Link,
 A8,Phaya Thai,13.756713, 100.534910,A8,Air Port Link,
-กท,Hua Lamphong,13.7397608,100.5166812,SRT
-คต,Khlong Tan,13.744339,100.5895169,SRT
-กภ,Krung Thep Aphiwat,13.8040313,100.5417111,SRT
-งญ,Wongwian Yai,13.7244254,100.4914744,SRT
-ลู,Talat Phlu,13.7207881,100.4780325,SRT
-วุ,Wutthakat,13.7123692,100.4725837,SRT
-ไซ,Khlong Ton Sai,13.7062534,100.4696868,SRT
-ทจ,Chom Thong,13.7016469,100.4646906,SRT
-สิ,Wat Sing,13.6833027,100.447779,SRT
-าา,Bang Bon,13.6664939,100.428825,SRT
-เค,Kan Kheha,13.6525133,100.4132188,SRT
-รแ,Rang Sakae,13.6494007,100.447779,SRT
-รโ,Rang Pho,13.639153,100.3982168,SRT
-แย,Sam Yaek,13.6301861,100.3882537,SRT
-พแ,Phrom Daen,13.6209539,100.3779709,SRT
+WWY,Wongwian Yai,13.7244254,100.4914744,SRT Suburban MaeKlong Line,
+TLP,Talat Phlu,13.7207917, 100.4780312,SRT Suburban MaeKlong Line,
+WTK,Wutthakat,13.712532, 100.472661,SRT Suburban MaeKlong Line,
+KTS,Khlong Ton Sai,13.706473, 100.469791,SRT Suburban MaeKlong Line,
+CTO,Chom Thong,13.701816, 100.465138,SRT Suburban MaeKlong Line,
+WAI,Wat Sai,13.691536, 100.457576,SRT Suburban MaeKlong Line,
+WTS,Wat Sing,13.6833027,100.447779,SRT Suburban MaeKlong Line,
+BBO,Bang Bon,13.666473, 100.428842,SRT Suburban MaeKlong Line,
+KKH,Kan Kheha,13.652537, 100.413199,SRT Suburban MaeKlong Line,
+RSK,Rang Sakae,13.649448, 100.409744,SRT Suburban MaeKlong Line,
+RPO,Rang Pho,13.639153,100.3982168,SRT Suburban MaeKlong Line,
+SAY,Sam Yaek,13.630207, 100.388237,SRT Suburban MaeKlong Line,
+PDA,Phrom Daen,13.620973, 100.377949,SRT Suburban MaeKlong Line,
 
 
