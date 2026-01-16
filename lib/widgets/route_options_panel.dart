@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:route/services/direction_service.dart';
-import 'package:route/services/fare_calculator.dart';
 import 'package:route/services/route_formatters.dart';
 
 class RouteOptionsPanel extends StatelessWidget {
@@ -25,6 +24,28 @@ class RouteOptionsPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     if (options.isEmpty) {
       return const SizedBox.shrink();
+    }
+    int? fastestIndex;
+    int? shortestIndex;
+    int? cheapestIndex;
+    int? fastestMinutes;
+    double? shortestDistance;
+    int? cheapestFare;
+    for (int i = 0; i < options.length; i++) {
+      final option = options[i];
+      if (fastestMinutes == null || option.minutes < fastestMinutes) {
+        fastestMinutes = option.minutes;
+        fastestIndex = i;
+      }
+      if (shortestDistance == null || option.distanceMeters < shortestDistance) {
+        shortestDistance = option.distanceMeters;
+        shortestIndex = i;
+      }
+      final totalFare = option.fareBreakdown['total'] ?? 0;
+      if (cheapestFare == null || totalFare < cheapestFare) {
+        cheapestFare = totalFare;
+        cheapestIndex = i;
+      }
     }
     final theme = Theme.of(context);
     return Padding(
@@ -54,6 +75,13 @@ class RouteOptionsPanel extends StatelessWidget {
               onViewDetails: () => onViewDetails(options[index]),
               lineNameResolver: lineNameResolver,
               lineColors: lineColors,
+              highlightType: index == fastestIndex
+                  ? _HighlightType.fastest
+                  : index == cheapestIndex
+                      ? _HighlightType.cheapest
+                      : null,
+              showShortestTag: index == shortestIndex,
+              showFastestTag: index == fastestIndex,
             ),
           ),
         ],
@@ -61,6 +89,8 @@ class RouteOptionsPanel extends StatelessWidget {
     );
   }
 }
+
+enum _HighlightType { fastest, cheapest }
 
 class _RouteOptionCard extends StatelessWidget {
   const _RouteOptionCard({
@@ -71,6 +101,9 @@ class _RouteOptionCard extends StatelessWidget {
     required this.onViewDetails,
     required this.lineNameResolver,
     required this.lineColors,
+    this.highlightType,
+    required this.showShortestTag,
+    required this.showFastestTag,
   });
 
   final DirectionOption option;
@@ -80,6 +113,9 @@ class _RouteOptionCard extends StatelessWidget {
   final VoidCallback onViewDetails;
   final LineNameResolver lineNameResolver;
   final Map<String, Color> lineColors;
+  final _HighlightType? highlightType;
+  final bool showShortestTag;
+  final bool showFastestTag;
 
   static const List<String> _tagOrder = [
     'Shortest',
@@ -108,13 +144,23 @@ class _RouteOptionCard extends StatelessWidget {
         if (bi == -1) return -1;
         return ai.compareTo(bi);
       });
-    final headlineTags = sortedTags.take(3).toList();
-    final remainingTags = sortedTags.length - headlineTags.length;
+    final filteredTags = sortedTags.where((tag) {
+      if (tag == 'Shortest' && !showShortestTag) return false;
+      if (tag == 'Fastest' && !showFastestTag) return false;
+      return true;
+    }).toList();
+    final headlineTags = filteredTags.take(3).toList();
+    final remainingTags = filteredTags.length - headlineTags.length;
     final distanceText = formatDistance(option.distanceMeters);
-    final ladderTotal = option.fareBreakdown[kMrtSrtTotalKey] ?? 0;
     final lineSegments = splitRouteByLine(stops, lineNameResolver);
 
     final theme = Theme.of(context);
+    final highlightColor = switch (highlightType) {
+      _HighlightType.fastest => const Color(0xFF2E7D32),
+      _HighlightType.cheapest => const Color(0xFFF9A825),
+      _ => null,
+    };
+    final applyHighlight = highlightColor != null && !isSelected;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: InkWell(
@@ -126,9 +172,16 @@ class _RouteOptionCard extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: isSelected
+                color: isSelected
                   ? theme.colorScheme.primary
-                  : theme.colorScheme.outlineVariant,
+                  : applyHighlight
+                    ? highlightColor
+                    : theme.colorScheme.outlineVariant,
+              width: isSelected
+                  ? 2.4
+                  : applyHighlight
+                      ? 2.0
+                      : 1.0,
             ),
             color: isSelected
                 ? theme.colorScheme.primaryContainer.withValues(alpha: 0.7)
@@ -141,6 +194,14 @@ class _RouteOptionCard extends StatelessWidget {
                       offset: const Offset(0, 6),
                     ),
                   ]
+                : applyHighlight
+                    ? [
+                        BoxShadow(
+                          color: highlightColor.withValues(alpha: 0.25),
+                          blurRadius: 18,
+                          offset: const Offset(0, 6),
+                        ),
+                      ]
                 : null,
           ),
           padding: const EdgeInsets.all(16),
@@ -220,33 +281,30 @@ class _RouteOptionCard extends StatelessWidget {
                   color: theme.colorScheme.primary.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Estimated fare',
-                            style: theme.textTheme.bodySmall,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Estimated fare',
+                                style: theme.textTheme.bodySmall,
+                              ),
+                              Text(
+                                '฿${option.fareBreakdown['total'] ?? 0}',
+                                style: theme.textTheme.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
                           ),
-                          Text(
-                            '฿${option.fareBreakdown['total'] ?? 0}',
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Flexible(
-                      child: Text(
-                        'm:${option.fareBreakdown['mCount'] ?? 0} (฿${option.fareBreakdown['mPrice'] ?? 0})  '
-                        's:${option.fareBreakdown['sCount'] ?? 0} (฿${option.fareBreakdown['sPrice'] ?? 0})'
-                        '${ladderTotal > 0 ? '\nMRT/SRT: ฿$ladderTotal' : ''}',
-                        style: theme.textTheme.bodySmall,
-                        textAlign: TextAlign.end,
-                      ),
+                        ),
+                        
+                      ],
                     ),
                   ],
                 ),
