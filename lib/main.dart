@@ -74,6 +74,8 @@ class _MyHomePageState extends State<MyHomePage>
   List<ShapeSegment> shapeSegments = [];
   Map<String, String> fareTypeMap = {};
   Map<String, int> fareDataMap = {};
+  Map<String, int> stopOrderMap = {};
+  Map<String, List<int>> fareTableMap = {};
 
   String routingMode = 'Shortest';
   bool _headerCollapsed = false;
@@ -1356,6 +1358,8 @@ class _MyHomePageState extends State<MyHomePage>
       routes: routes,
       fareTypeMap: fareTypeMap,
       fareDataMap: fareDataMap,
+      stopOrderMap: stopOrderMap,
+      fareTableMap: fareTableMap,
     );
     // Load GTFS shapes (preferred) — use tripMap loaded from DirectionService to avoid re-parsing
     List<ShapeSegment> shapes = const <ShapeSegment>[];
@@ -1499,6 +1503,8 @@ class _MyHomePageState extends State<MyHomePage>
   Future<void> _loadFareMappings() async {
     fareTypeMap.clear();
     fareDataMap.clear();
+    stopOrderMap.clear();
+    fareTableMap.clear();
     try {
       // Faretype mapping: fareId -> status ('m'|'s')
       final content = await rootBundle.loadString(
@@ -1556,6 +1562,53 @@ class _MyHomePageState extends State<MyHomePage>
               : 0;
           if (id.isNotEmpty) fareDataMap[id] = price;
         }
+      }
+    } catch (_) {}
+
+    // stopOrderMap: stopId → ลำดับสถานีบนสาย (เฉพาะ non-BTS ที่เป็นตัวเลข)
+    try {
+      final content = await rootBundle.loadString(
+        'assets/gtfs_data/Faretype.txt',
+      );
+      final lines = const LineSplitter().convert(content);
+      if (lines.length > 1) {
+        final header = _parseCsvLine(lines[0]).map((s) => s.toLowerCase()).toList();
+        int idxFareId = header.indexOf('fareid');
+        if (idxFareId < 0) idxFareId = 0;
+        int idxStatus = header.indexOf('agencystatus');
+        if (idxStatus < 0) idxStatus = header.indexOf('agsscystatus');
+        if (idxStatus < 0) idxStatus = 1;
+        for (var i = 1; i < lines.length; i++) {
+          final line = lines[i].trimRight();
+          if (line.isEmpty) continue;
+          final row = _parseCsvLine(line);
+          if (row.length <= idxFareId) continue;
+          final id = row[idxFareId].trim();
+          final raw = (row.length > idxStatus) ? row[idxStatus].trim() : '';
+          final order = int.tryParse(raw);
+          if (id.isNotEmpty && order != null) stopOrderMap[id] = order;
+        }
+      }
+    } catch (_) {}
+
+    // fareTableMap: rowKey → List<int> จาก fare_table.txt
+    try {
+      final content = await rootBundle.loadString(
+        'assets/gtfs_data/fare_table.txt',
+      );
+      final lines = const LineSplitter().convert(content);
+      for (var i = 0; i < lines.length; i++) {
+        final line = lines[i].trimRight();
+        if (line.isEmpty) continue;
+        final row = _parseCsvLine(line);
+        if (row.isEmpty) continue;
+        final rowKey = row[0].trim();
+        if (rowKey.isEmpty) continue;
+        final fares = <int>[];
+        for (int j = 1; j < row.length; j++) {
+          fares.add(int.tryParse(row[j].trim()) ?? 0);
+        }
+        fareTableMap[rowKey] = fares;
       }
     } catch (_) {}
   }

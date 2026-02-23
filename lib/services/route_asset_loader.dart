@@ -179,6 +179,66 @@ class RouteAssetLoader {
     return result;
   }
 
+  /// โหลด stopOrderMap จาก Faretype.txt:
+  /// เก็บเฉพาะแถวที่ agsscystatus เป็นตัวเลข (สำหรับ MRT/SRT/BTS Gold/Airport Link)
+  /// ผลลัพธ์: stopId → ลำดับสถานีบนสาย เช่น "BL10" → 10
+  static Future<Map<String, int>> loadStopOrderMap(String assetPath) async {
+    final result = <String, int>{};
+    try {
+      final content = await rootBundle.loadString(assetPath);
+      final lines = const LineSplitter().convert(content);
+      if (lines.length <= 1) return result;
+      final header = parseCsvLine(lines.first).map((s) => s.toLowerCase()).toList();
+      int idxFareId = header.indexOf('fareid');
+      if (idxFareId < 0) idxFareId = 0;
+      int idxStatus = header.indexOf('agencystatus');
+      if (idxStatus < 0) idxStatus = header.indexOf('agsscystatus');
+      if (idxStatus < 0) idxStatus = 1;
+      for (int i = 1; i < lines.length; i++) {
+        final line = lines[i].trimRight();
+        if (line.isEmpty) continue;
+        final row = parseCsvLine(line);
+        if (row.length <= idxFareId) continue;
+        final id = row[idxFareId].trim();
+        final statusRaw = row.length > idxStatus ? row[idxStatus].trim() : '';
+        // เก็บเฉพาะแถวที่ค่าเป็นตัวเลข (ลำดับสถานี)
+        final order = int.tryParse(statusRaw);
+        if (id.isNotEmpty && order != null) {
+          result[id] = order;
+        }
+      }
+    } catch (_) {}
+    return result;
+  }
+
+  /// โหลด fare_table.txt → `Map<rowKey, List<int>>`
+  /// rowKey เช่น "BL10" (ถอยหลัง) หรือ "BL10-" (ไปข้างหน้า)
+  /// `List<int>` = ค่าโดยสารตามระยะห่าง (index 0 = ห่าง 1 สถานี)
+  static Future<Map<String, List<int>>> loadFareTableMap(String assetPath) async {
+    final result = <String, List<int>>{};
+    try {
+      final content = await rootBundle.loadString(assetPath);
+      final lines = const LineSplitter().convert(content);
+      for (int i = 0; i < lines.length; i++) {
+        final line = lines[i].trimRight();
+        if (line.isEmpty) continue;
+        final row = parseCsvLine(line);
+        if (row.isEmpty) continue;
+        final rowKey = row[0].trim();
+        if (rowKey.isEmpty) continue;
+        // ข้ามแถว header ถ้ามี
+        if (rowKey.toLowerCase() == 'stopid' || rowKey.toLowerCase() == 'stop_id') continue;
+        final fares = <int>[];
+        for (int j = 1; j < row.length; j++) {
+          final val = int.tryParse(row[j].trim()) ?? 0;
+          fares.add(val);
+        }
+        result[rowKey] = fares;
+      }
+    } catch (_) {}
+    return result;
+  }
+
   static String? _cleanHex(String? hex) {
     if (hex == null) return null;
     final value = hex.trim().replaceAll('\r', '').replaceAll('#', '');

@@ -153,5 +153,30 @@ class Faretype{
   });
  }
 
- 
+/// ตารางค่าโดยสารสำหรับสายที่ไม่ใช่ BTS (MRT Blue, Purple, Pink, Yellow, SRT Red)
+/// rowKey เช่น "BL10" = เดินทางถอยหลัง (ปลายทางมีลำดับน้อยกว่าต้นทาง)
+/// rowKey เช่น "BL10-" = เดินทางไปข้างหน้า (ปลายทางมีลำดับมากกว่าต้นทาง)
+class FareTableRow {
+  /// stop_id ของสถานีต้นทาง เช่น "BL10"
+  final String stopId;
+
+  /// true = row สำหรับเดินทางไปข้างหน้า (suffix "-")
+  /// false = row สำหรับเดินทางถอยหลัง (ไม่มี suffix)
+  final bool isForward;
+
+  /// รายการค่าโดยสารตามระยะห่าง (1-indexed)
+  /// fares[0] = ค่าโดยสารเมื่อห่างกัน 1 สถานี
+  /// fares[1] = ค่าโดยสารเมื่อห่างกัน 2 สถานี ฯลฯ
+  final List<int> fares;
+
+  FareTableRow({
+    required this.stopId,
+    required this.isForward,
+    required this.fares,
+  });
+
+  /// key ที่ใช้ใน Map เช่น "BL10" หรือ "BL10-"
+  String get rowKey => isForward ? '$stopId-' : stopId;
+}
+
 // You can extend these models for more GTFS fields as needed.
