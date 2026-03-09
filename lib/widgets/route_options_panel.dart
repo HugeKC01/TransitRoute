@@ -9,6 +9,7 @@ class RouteOptionsPanel extends StatelessWidget {
     required this.selectedIndex,
     required this.onSelectOption,
     required this.onViewDetails,
+    required this.onStartNavigation,
     required this.lineNameResolver,
     required this.lineColors,
   });
@@ -17,6 +18,7 @@ class RouteOptionsPanel extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelectOption;
   final ValueChanged<DirectionOption> onViewDetails;
+  final ValueChanged<DirectionOption> onStartNavigation;
   final LineNameResolver lineNameResolver;
   final Map<String, Color> lineColors;
 
@@ -73,6 +75,7 @@ class RouteOptionsPanel extends StatelessWidget {
               isSelected: index == selectedIndex,
               onSelect: () => onSelectOption(index),
               onViewDetails: () => onViewDetails(options[index]),
+              onStartNavigation: () => onStartNavigation(options[index]),
               lineNameResolver: lineNameResolver,
               lineColors: lineColors,
               highlightType: index == fastestIndex
@@ -99,6 +102,7 @@ class _RouteOptionCard extends StatelessWidget {
     required this.isSelected,
     required this.onSelect,
     required this.onViewDetails,
+    required this.onStartNavigation,
     required this.lineNameResolver,
     required this.lineColors,
     this.highlightType,
@@ -111,6 +115,7 @@ class _RouteOptionCard extends StatelessWidget {
   final bool isSelected;
   final VoidCallback onSelect;
   final VoidCallback onViewDetails;
+  final VoidCallback onStartNavigation;
   final LineNameResolver lineNameResolver;
   final Map<String, Color> lineColors;
   final _HighlightType? highlightType;
@@ -333,6 +338,26 @@ class _RouteOptionCard extends StatelessWidget {
                   }).toList(),
                 ),
               ],
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: onViewDetails,
+                      icon: const Icon(Icons.info_outline),
+                      label: const Text('Details'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: onStartNavigation,
+                      icon: const Icon(Icons.navigation),
+                      label: const Text('Navigate'),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),

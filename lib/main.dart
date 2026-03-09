@@ -15,6 +15,7 @@ import 'station_details_page.dart';
 import 'transit_update_page.dart';
 import 'transit_updates_list_page.dart';
 import 'transport_lines_page.dart';
+import 'navigation_page.dart';
 import 'widgets/route_details_sheet.dart';
 import 'widgets/route_options_panel.dart';
 
@@ -47,7 +48,6 @@ class MyHomePage extends StatefulWidget {
   @override
   State<MyHomePage> createState() => _MyHomePageState();
 }
-
 class _MyHomePageState extends State<MyHomePage>
   with TickerProviderStateMixin {
   final MapController _mapController = MapController();
@@ -63,7 +63,10 @@ class _MyHomePageState extends State<MyHomePage>
   );
   final List<TransitReport> _transitReports =
       TransitUpdatesRepository.sampleReports;
+  // Combined stops used for search/routing (rail + bus)
   List<gtfs.Stop> allStops = [];
+  // Rail-only stops for the default rail marker layer
+  List<gtfs.Stop> railStops = [];
   Map<String, gtfs.Stop> stopLookup = {};
   late DirectionService _directionService;
 
@@ -72,12 +75,14 @@ class _MyHomePageState extends State<MyHomePage>
   List<gtfs.Route> allRoutes = [];
   bool _didFitRails = false;
   List<ShapeSegment> shapeSegments = [];
+  List<gtfs.Stop> busStops = [];
   Map<String, String> fareTypeMap = {};
   Map<String, int> fareDataMap = {};
   Map<String, int> stopOrderMap = {};
   Map<String, List<int>> fareTableMap = {};
 
   String routingMode = 'Shortest';
+  String transitPreference = 'Auto';
   bool _headerCollapsed = false;
 
   String? _getLineName(String stopId) {
@@ -180,6 +185,7 @@ class _MyHomePageState extends State<MyHomePage>
     }
     final result = await _directionService.findDirections(
       routingMode: routingMode,
+      preferredTransit: transitPreference,
       startStopId: startId,
       destStopId: destId,
     );
@@ -566,6 +572,7 @@ class _MyHomePageState extends State<MyHomePage>
         lineColorResolver: _getLineColor,
         lineColors: lineColors,
       ),
+      onStartNavigation: _openNavigation,
       lineNameResolver: _getLineName,
       lineColors: lineColors,
     );
@@ -581,13 +588,21 @@ class _MyHomePageState extends State<MyHomePage>
     const fabHeight = 56.0;
     final fabGap = isCompact ? 24.0 : 32.0;
     final zoomBottomOffset = viewPadding.bottom + fabHeight + fabGap;
+    final showBusStops =
+        busStops.isNotEmpty && _currentZoom >= _busStopZoomThreshold;
     return Stack(
       children: [
         FlutterMap(
           mapController: _mapController,
-          options: const MapOptions(
-            initialCenter: LatLng(13.7463, 100.5347),
+          options: MapOptions(
+            initialCenter: const LatLng(13.7463, 100.5347),
             initialZoom: 12.0,
+            onMapEvent: (event) {
+              final newZoom = event.camera.zoom;
+              if ((newZoom - _currentZoom).abs() > 0.05) {
+                setState(() => _currentZoom = newZoom);
+              }
+            },
           ),
           children: [
             TileLayer(
@@ -606,9 +621,47 @@ class _MyHomePageState extends State<MyHomePage>
                     )
                     .toList(),
               ),
-            if (allStops.isNotEmpty)
+            if (showBusStops)
               MarkerLayer(
-                markers: allStops
+                markers: busStops
+                    .map(
+                      (stop) => Marker(
+                        point: LatLng(stop.lat, stop.lon),
+                        width: 18,
+                        height: 22,
+                        child: GestureDetector(
+                          onTap: () => _showStopDetails(context, stop),
+                          child: Tooltip(
+                            message: stop.name,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.orange.shade600,
+                                border: Border.all(
+                                  color: Colors.black.withValues(alpha: 0.18),
+                                  width: 1,
+                                ),
+                                borderRadius: const BorderRadius.only(
+                                  topLeft: Radius.circular(6),
+                                  topRight: Radius.circular(6),
+                                ),
+                              ),
+                              child: const Center(
+                                child: Icon(
+                                  Icons.directions_bus,
+                                  color: Colors.white,
+                                  size: 12,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+            if (railStops.isNotEmpty)
+              MarkerLayer(
+                markers: railStops
                     .map(
                       (stop) => Marker(
                         point: LatLng(stop.lat, stop.lon),
@@ -1110,6 +1163,8 @@ class _MyHomePageState extends State<MyHomePage>
                 ),
               ],
             ),
+            const SizedBox(height: 8),
+            _buildTransitPreferenceChooser(context),
             const SizedBox(height: 4),
             TextButton.icon(
               onPressed:
@@ -1129,6 +1184,40 @@ class _MyHomePageState extends State<MyHomePage>
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildTransitPreferenceChooser(BuildContext context) {
+    final theme = Theme.of(context);
+    final options = ['Auto', 'Prefer Rail', 'Prefer Bus'];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Transit priority',
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: options.map((opt) {
+            return ChoiceChip(
+              label: Text(opt),
+              selected: transitPreference == opt,
+              onSelected: (_) {
+                setState(() => transitPreference = opt);
+                if (selectedStartStopId != null &&
+                    selectedDestinationStopId != null) {
+                  _findDirection();
+                }
+              },
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 
@@ -1340,6 +1429,9 @@ class _MyHomePageState extends State<MyHomePage>
       'assets/gtfs_data/stops.txt',
       thaiNames: thaiNames,
     );
+    final busStopList = await _parseBusStopsFromAsset(
+      'assets/gtfs_data/bus_stop.txt',
+    );
     // Load fare mappings used for fare calculation
     await _loadFareMappings();
     // Build linePrefixes and lineColors from routes
@@ -1351,9 +1443,10 @@ class _MyHomePageState extends State<MyHomePage>
         colorMap[route.longName] = Color(int.parse('0xFF${route.color!}'));
       }
     }
-    final stopMap = {for (final stop in stops) stop.stopId: stop};
+    final combinedStops = <gtfs.Stop>[...stops, ...busStopList];
+    final stopMap = {for (final stop in combinedStops) stop.stopId: stop};
     _directionService.updateData(
-      allStops: stops,
+      allStops: combinedStops,
       stopLookup: stopMap,
       routes: routes,
       fareTypeMap: fareTypeMap,
@@ -1378,7 +1471,9 @@ class _MyHomePageState extends State<MyHomePage>
     } catch (_) {}
     setState(() {
       allRoutes = routes;
-      allStops = stops;
+      railStops = stops;
+      allStops = combinedStops;
+      busStops = busStopList;
       linePrefixes = prefixMap;
       lineColors = colorMap;
       stopLookup = stopMap;
@@ -1459,6 +1554,58 @@ class _MyHomePageState extends State<MyHomePage>
                 : null,
             zoneId: (idxZone >= 0 && row.length > idxZone)
                 ? row[idxZone].trim()
+                : null,
+          ),
+        );
+      }
+      return stops;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<List<gtfs.Stop>> _parseBusStopsFromAsset(String assetPath) async {
+    try {
+      final content = await rootBundle.loadString(assetPath);
+      final lines = const LineSplitter().convert(content);
+      if (lines.length <= 1) return [];
+      final header = _parseCsvLine(lines.first).map((s) => s.trim()).toList();
+      int idxStopId = header.indexOf('stop_id');
+      if (idxStopId < 0) idxStopId = 0;
+      int idxName = header.indexOf('stop_name');
+      if (idxName < 0) idxName = 1;
+      int idxLat = header.indexOf('stop_lat');
+      if (idxLat < 0) idxLat = 2;
+      int idxLon = header.indexOf('stop_lon');
+      if (idxLon < 0) idxLon = 3;
+      final idxCode = header.indexOf('stop_code');
+      final idxDesc = header.indexOf('stop_desc');
+      final stops = <gtfs.Stop>[];
+      for (var i = 1; i < lines.length; i++) {
+        final line = lines[i].trimRight();
+        if (line.isEmpty) continue;
+        final row = _parseCsvLine(line);
+        if (row.length <= idxStopId || row.length <= idxName) continue;
+        if (row.length <= idxLat || row.length <= idxLon) continue;
+        final baseId = row[idxStopId].trim().isEmpty
+          ? 'BUS_$i'
+          : row[idxStopId].trim();
+        final stopId = baseId;
+        final name = row[idxName].trim();
+        final lat = double.tryParse(row[idxLat].trim());
+        final lon = double.tryParse(row[idxLon].trim());
+        if (name.isEmpty || lat == null || lon == null) continue;
+        stops.add(
+          gtfs.Stop(
+            stopId: stopId,
+            name: name,
+            lat: lat,
+            lon: lon,
+            code: (idxCode >= 0 && row.length > idxCode)
+                ? row[idxCode].trim()
+                : null,
+            desc: (idxDesc >= 0 && row.length > idxDesc)
+                ? row[idxDesc].trim()
                 : null,
           ),
         );
@@ -1675,6 +1822,19 @@ class _MyHomePageState extends State<MyHomePage>
   void _openTransitUpdatePage() {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (context) => const TransitUpdatePage()),
+    );
+  }
+
+  void _openNavigation(DirectionOption option) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => NavigationPage(
+          option: option,
+          lineNameResolver: _getLineName,
+          lineColorResolver: _getLineColor,
+          lineColors: lineColors,
+        ),
+      ),
     );
   }
 
