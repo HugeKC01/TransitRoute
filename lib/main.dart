@@ -11,11 +11,13 @@ import 'package:route/services/gtfs_models.dart' as gtfs;
 import 'package:route/services/gtfs_shapes.dart';
 
 import 'more_page.dart';
+import 'cards_page.dart';
 import 'station_details_page.dart';
 import 'transit_update_page.dart';
 import 'transit_updates_list_page.dart';
 import 'transport_lines_page.dart';
 import 'navigation_page.dart';
+import 'graphic_map_page.dart';
 import 'widgets/route_details_sheet.dart';
 import 'widgets/route_options_panel.dart';
 
@@ -593,7 +595,9 @@ class _MyHomePageState extends State<MyHomePage>
     final isCompact = screenWidth < 520;
     const fabHeight = 56.0;
     final fabGap = isCompact ? 24.0 : 32.0;
-    final zoomBottomOffset = viewPadding.bottom + fabHeight + fabGap;
+    final hasRoutes = directionOptions.isNotEmpty;
+    final sheetOffset = hasRoutes ? 320.0 : 0.0;
+    final zoomBottomOffset = viewPadding.bottom + fabHeight + fabGap + sheetOffset;
     final showBusStops =
         busStops.isNotEmpty && _currentZoom >= _busStopZoomThreshold;
     return Stack(
@@ -1123,72 +1127,93 @@ class _MyHomePageState extends State<MyHomePage>
   ) {
     final theme = Theme.of(context);
     final hasBoth = start != null && dest != null;
-    final cardColor = theme.colorScheme.surfaceContainerHigh;
-    return Card(
-      color: cardColor,
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildStopSearchField(
-              context,
-              label: 'Origin',
-              icon: Icons.trip_origin,
-              asStart: true,
-              trailingAction: _collapseHeaderButton(),
-            ),
-            const SizedBox(height: 8),
-            _buildStopSearchField(
-              context,
-              label: 'Destination',
-              icon: Icons.flag,
-              asStart: false,
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: hasBoth ? () => _findDirection() : null,
-                    icon: const Icon(Icons.route),
-                    label: Text(hasBoth ? 'Plan route' : 'Pick both stops'),
-                  ),
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+           BoxShadow(
+             color: Colors.black.withValues(alpha: 0.05),
+             blurRadius: 10,
+             offset: const Offset(0, 4),
+           ),
+        ],
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  children: [
+                    _buildStopSearchField(
+                      context,
+                      label: 'Origin',
+                      icon: Icons.trip_origin,
+                      asStart: true,
+                    ),
+                    const SizedBox(height: 12),
+                    _buildStopSearchField(
+                      context,
+                      label: 'Destination',
+                      icon: Icons.flag,
+                      asStart: false,
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 6),
-                FilledButton.tonalIcon(
-                  onPressed:
-                      (selectedStartStopId != null ||
-                          selectedDestinationStopId != null)
-                      ? () => _swapStops()
-                      : null,
-                  icon: const Icon(Icons.swap_vert),
-                  label: const Text('Swap'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            _buildTransitPreferenceChooser(context),
-            const SizedBox(height: 4),
-            TextButton.icon(
-              onPressed:
-                  (selectedStartStopId != null ||
-                      selectedDestinationStopId != null)
-                  ? _clearSelections
-                  : null,
-              icon: const Icon(Icons.clear),
-              label: const Text('Clear selections'),
-              style: TextButton.styleFrom(
-                alignment: Alignment.centerLeft,
-                padding: EdgeInsets.zero,
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
-            ),
-          ],
-        ),
+              const SizedBox(width: 12),
+              Column(
+                children: [
+                  _collapseHeaderButton(),
+                  if (selectedStartStopId != null || selectedDestinationStopId != null)
+                   Padding(
+                     padding: const EdgeInsets.only(top: 12),
+                     child: IconButton(
+                       icon: const Icon(Icons.swap_vert),
+                       style: IconButton.styleFrom(
+                         backgroundColor: theme.colorScheme.secondaryContainer,
+                       ),
+                       onPressed: _swapStops,
+                     ),
+                   ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: hasBoth ? () => _findDirection() : null,
+                  icon: const Icon(Icons.route),
+                  label: Text(hasBoth ? 'Plan route' : 'Pick both stops', style: const TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+               Expanded(child: _buildTransitPreferenceChooser(context)),
+               if (selectedStartStopId != null || selectedDestinationStopId != null)
+                 TextButton.icon(
+                    onPressed: _clearSelections,
+                    icon: const Icon(Icons.clear, size: 16),
+                    label: const Text('Clear'),
+                 ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -1240,7 +1265,7 @@ class _MyHomePageState extends State<MyHomePage>
         ? selectedStartStopId
         : selectedDestinationStopId;
     final selectedStop = selectedId != null ? stopLookup[selectedId] : null;
-    final textColor = theme.colorScheme.onSurface;
+    final textColor = theme.colorScheme.onSurfaceVariant;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1248,7 +1273,7 @@ class _MyHomePageState extends State<MyHomePage>
         Text(
           label,
           style: theme.textTheme.labelMedium?.copyWith(
-            color: textColor.withValues(alpha: 0.9),
+            color: textColor,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -1289,9 +1314,9 @@ class _MyHomePageState extends State<MyHomePage>
               padding: const WidgetStatePropertyAll(
                 EdgeInsets.symmetric(horizontal: 12),
               ),
-              elevation: const WidgetStatePropertyAll<double>(1),
+              elevation: const WidgetStatePropertyAll<double>(0),
               backgroundColor: WidgetStatePropertyAll(
-                theme.colorScheme.surfaceContainerLow,
+                theme.colorScheme.surfaceContainerHighest,
               ),
               onTap: ctrl.openView,
               onChanged: (value) {
@@ -1831,6 +1856,21 @@ class _MyHomePageState extends State<MyHomePage>
     );
   }
 
+  void _openGraphicMap() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => GraphicMapPage(
+        railStops: railStops,
+        shapeSegments: shapeSegments,
+      )),
+    );
+  }
+
+  void _openCardsPage() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => const CardsPage()),
+    );
+  }
+
   void _openNavigation(DirectionOption option) {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -1870,6 +1910,8 @@ class _MyHomePageState extends State<MyHomePage>
       body = MorePage(
         onOpenTransportLines: _openTransportLines,
         onOpenTransitUpdates: _openTransitUpdatePage,
+        onOpenGraphicMap: _openGraphicMap,
+        onOpenCards: _openCardsPage,
         profile: _profile,
       );
     }

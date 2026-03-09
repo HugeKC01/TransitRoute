@@ -22,7 +22,7 @@ class LocationPoint {
   final double lat;
   final double lon;
   final String name;
-  final String? stopId; // null if this is an arbitrary map coordinate 
+  final String? stopId; // null if this is an arbitrary map coordinate
 
   LocationPoint({
     required this.lat,
@@ -48,11 +48,12 @@ class RouteSegment {
   final double distanceMeters;
   final int durationMinutes;
   final int fare; // Monetary cost for this specific segment
-  
+
   // Transit-specific details
   final String? routeId;
   final String? routeShortName;
-  final String? instruction; // e.g., "Walk to BTS Siam" or "Take Sukhumvit Line"
+  final String?
+  instruction; // e.g., "Walk to BTS Siam" or "Take Sukhumvit Line"
   final List<gtfs.Stop>? intermediateStops;
 
   RouteSegment({
@@ -85,7 +86,7 @@ class DirectionOption {
   final double distanceMeters;
   final int minutes;
   final Map<String, int> fareBreakdown;
-  
+
   // Helper to retrieve all transit stops involved across all segments
   List<gtfs.Stop> get allStops {
     return segments
@@ -96,18 +97,13 @@ class DirectionOption {
 }
 
 class DirectionResult {
-  DirectionResult({
-    required this.options,
-    required this.selectionIndex,
-  });
+  DirectionResult({required this.options, required this.selectionIndex});
 
   final List<DirectionOption> options;
   final int selectionIndex;
 
-  factory DirectionResult.empty() => DirectionResult(
-        options: const [],
-        selectionIndex: 0,
-      );
+  factory DirectionResult.empty() =>
+      DirectionResult(options: const [], selectionIndex: 0);
 }
 
 class DirectionService {
@@ -173,7 +169,10 @@ class DirectionService {
     if (routes != null) {
       _routes = List<gtfs.Route>.from(routes);
     }
-    if (fareTypeMap != null || fareDataMap != null || stopOrderMap != null || fareTableMap != null) {
+    if (fareTypeMap != null ||
+        fareDataMap != null ||
+        stopOrderMap != null ||
+        fareTableMap != null) {
       _fareCalculator.updateData(
         fareTypeMap: fareTypeMap,
         fareDataMap: fareDataMap,
@@ -226,7 +225,9 @@ class DirectionService {
         _allStops.isEmpty) {
       return DirectionResult.empty();
     }
-    if (startStopId == destStopId && startPoint.stopId != null && destPoint.stopId != null) {
+    if (startStopId == destStopId &&
+        startPoint.stopId != null &&
+        destPoint.stopId != null) {
       return DirectionResult.empty(); // It's exactly the same transit stop
     }
 
@@ -243,13 +244,18 @@ class DirectionService {
 
     final Map<String, _TaggedRoute> optionMap = {};
 
-    RouteSegment createFirstLastMileLeg(LocationPoint a, LocationPoint b, {required bool isStart, required gtfs.Stop anchorStop}) {
+    RouteSegment createFirstLastMileLeg(
+      LocationPoint a,
+      LocationPoint b, {
+      required bool isStart,
+      required gtfs.Stop anchorStop,
+    }) {
       final dist = geo.haversine(a.lat, a.lon, b.lat, b.lon);
       TravelMode mode = TravelMode.walk;
       int duration = (dist / 80.0).ceil();
       int calcFare = 0;
       String action = isStart ? 'Walk' : 'Walk';
-      
+
       if (dist > 1500) {
         mode = TravelMode.taxi;
         duration = (dist / 400.0).ceil() + 5; // 24km/h + 5m wait
@@ -257,7 +263,7 @@ class DirectionService {
         action = 'Taxi';
       } else if (dist > 600) {
         mode = TravelMode.bicycle; // Treating as Motorcycle Taxi / Win in BKK
-        duration = (dist / 250.0).ceil() + 2; 
+        duration = (dist / 250.0).ceil() + 2;
         calcFare = 15 + ((dist / 1000.0) * 10).ceil(); // Base Win Taxi
         action = 'Motorcycle Taxi';
       }
@@ -275,21 +281,30 @@ class DirectionService {
 
     List<RouteSegment> synthesizeVirtualLegs(List<gtfs.Stop> transitCore) {
       final segments = _buildSegmentsFromStops(transitCore);
-      
+
       if (startPoint.stopId == null && transitCore.isNotEmpty) {
         final firstStop = transitCore.first;
-        segments.insert(0, createFirstLastMileLeg(
-          startPoint, LocationPoint.fromStop(firstStop), 
-          isStart: true, anchorStop: firstStop
-        ));
+        segments.insert(
+          0,
+          createFirstLastMileLeg(
+            startPoint,
+            LocationPoint.fromStop(firstStop),
+            isStart: true,
+            anchorStop: firstStop,
+          ),
+        );
       }
 
       if (destPoint.stopId == null && transitCore.isNotEmpty) {
         final lastStop = transitCore.last;
-        segments.add(createFirstLastMileLeg(
-          LocationPoint.fromStop(lastStop), destPoint, 
-          isStart: false, anchorStop: lastStop
-        ));
+        segments.add(
+          createFirstLastMileLeg(
+            LocationPoint.fromStop(lastStop),
+            destPoint,
+            isStart: false,
+            anchorStop: lastStop,
+          ),
+        );
       }
 
       return segments;
@@ -301,9 +316,11 @@ class DirectionService {
       final entry = optionMap.putIfAbsent(
         key,
         () => _TaggedRoute(
-          stops: List<gtfs.Stop>.from(stops), 
+          stops: List<gtfs.Stop>.from(stops),
           tags: tags,
-          segments: synthesizeVirtualLegs(stops), // Bake in the multi-modal legs correctly
+          segments: synthesizeVirtualLegs(
+            stops,
+          ), // Bake in the multi-modal legs correctly
         ),
       );
       entry.tags.addAll(tags);
@@ -342,19 +359,23 @@ class DirectionService {
 
     final metrics = <_RouteMetrics>[];
     for (final option in optionMap.values) {
-      final distance = option.segments?.fold(0.0, (sum, seg) => sum + seg.distanceMeters) ?? geo.routeDistanceMeters(option.stops);
-      final minutes = option.segments?.fold(0, (sum, seg) => sum + seg.durationMinutes) ?? _estimateRouteMinutes(option.stops);
-      
+      final distance =
+          option.segments?.fold(0.0, (sum, seg) => sum + seg.distanceMeters) ??
+          geo.routeDistanceMeters(option.stops);
+      final minutes =
+          option.segments?.fold(0, (sum, seg) => sum + seg.durationMinutes) ??
+          _estimateRouteMinutes(option.stops);
+
       final fareBreakdown = _fareCalculator.calculateFare(option.stops);
-      
+
       if (option.segments != null) {
-         for (final seg in option.segments!) {
-            if (seg.fare > 0) {
-                String subLabel = seg.instruction ?? 'Transit';
-                fareBreakdown[subLabel] = (fareBreakdown[subLabel] ?? 0) + seg.fare;
-                fareBreakdown['total'] = (fareBreakdown['total'] ?? 0) + seg.fare;
-            }
-         }
+        for (final seg in option.segments!) {
+          if (seg.fare > 0) {
+            String subLabel = seg.instruction ?? 'Transit';
+            fareBreakdown[subLabel] = (fareBreakdown[subLabel] ?? 0) + seg.fare;
+            fareBreakdown['total'] = (fareBreakdown['total'] ?? 0) + seg.fare;
+          }
+        }
       }
 
       metrics.add(
@@ -387,9 +408,11 @@ class DirectionService {
     }
 
     int transitRank(_RouteMetrics metric) {
-      final hasBus = metric.route.stops
-          .any((s) => s.stopId.toUpperCase().startsWith('ST_'));
-      final hasRail = metric.route.stops.length !=
+      final hasBus = metric.route.stops.any(
+        (s) => s.stopId.toUpperCase().startsWith('ST_'),
+      );
+      final hasRail =
+          metric.route.stops.length !=
           metric.route.stops
               .where((s) => s.stopId.toUpperCase().startsWith('ST_'))
               .length;
@@ -427,7 +450,9 @@ class DirectionService {
     final options = metrics
         .map(
           (metric) => DirectionOption(
-            segments: metric.route.segments ?? _buildSegmentsFromStops(metric.route.stops),
+            segments:
+                metric.route.segments ??
+                _buildSegmentsFromStops(metric.route.stops),
             tags: Set<String>.from(metric.route.tags),
             label: _optionLabelText(metric.route.tags),
             distanceMeters: metric.distanceMeters,
@@ -463,22 +488,31 @@ class DirectionService {
       final stopTimes = await _loadStopTimesFromAssets(_stopTimeAssets);
       if (stopTimes.isEmpty) return;
       for (final entry in stopTimes.entries) {
-        entry.value.sort((a, b) =>
-            (a['stopSequence'] as int).compareTo(b['stopSequence'] as int));
+        entry.value.sort(
+          (a, b) =>
+              (a['stopSequence'] as int).compareTo(b['stopSequence'] as int),
+        );
         for (int j = 0; j < entry.value.length - 1; j++) {
           final a = entry.value[j]['stopId'] as String;
           final b = entry.value[j + 1]['stopId'] as String;
-          final stopA = _stopLookup[a] ??
+          final stopA =
+              _stopLookup[a] ??
               _allStops.firstWhere(
                 (s) => s.stopId == a,
                 orElse: () => gtfs.Stop(stopId: a, name: a, lat: 0, lon: 0),
               );
-          final stopB = _stopLookup[b] ??
+          final stopB =
+              _stopLookup[b] ??
               _allStops.firstWhere(
                 (s) => s.stopId == b,
                 orElse: () => gtfs.Stop(stopId: b, name: b, lat: 0, lon: 0),
               );
-          final dist = geo.haversine(stopA.lat, stopA.lon, stopB.lat, stopB.lon);
+          final dist = geo.haversine(
+            stopA.lat,
+            stopA.lon,
+            stopB.lat,
+            stopB.lon,
+          );
           _distanceGraph.putIfAbsent(a, () => {})[b] = dist;
           _distanceGraph.putIfAbsent(b, () => {})[a] = dist;
           final estMinutes = (dist / 800.0 * 2).clamp(1, 6).toInt();
@@ -491,8 +525,9 @@ class DirectionService {
   }
 
   void _addTransferEdges() {
-    const double maxWalkTransferMeters = 300.0; // 300m walk is standard max seamless transfer
-    
+    const double maxWalkTransferMeters =
+        300.0; // 300m walk is standard max seamless transfer
+
     void storeEdge(String from, String to, double distStr, int minutes) {
       final existingD = _distanceGraph[from]?[to];
       if (existingD == null || distStr < existingD) {
@@ -506,7 +541,7 @@ class DirectionService {
       }
     }
 
-    // 1. Hardcoded hubs for guaranteed complex intersections 
+    // 1. Hardcoded hubs for guaranteed complex intersections
     // They are physically connected, so low penalty
     for (final hubGroup in _transferHubs) {
       for (int i = 0; i < hubGroup.length; i++) {
@@ -526,14 +561,14 @@ class DirectionService {
       final stopA = _allStops[i];
       for (int j = i + 1; j < _allStops.length; j++) {
         final stopB = _allStops[j];
-        
+
         if (stopA.stopId == stopB.stopId) continue;
-        
+
         // Quick lat/lon diff check to avoid thousands of haversine trig calls
         // 0.003 degrees is roughly 330m in latitude
-        if ((stopA.lat - stopB.lat).abs() > 0.003 || 
+        if ((stopA.lat - stopB.lat).abs() > 0.003 ||
             (stopA.lon - stopB.lon).abs() > 0.003) {
-            continue;
+          continue;
         }
 
         final dist = geo.haversine(stopA.lat, stopA.lon, stopB.lat, stopB.lon);
@@ -589,8 +624,10 @@ class DirectionService {
       }
     }
     for (final entry in result.entries) {
-      entry.value.sort((a, b) =>
-          (a['stopSequence'] as int).compareTo(b['stopSequence'] as int));
+      entry.value.sort(
+        (a, b) =>
+            (a['stopSequence'] as int).compareTo(b['stopSequence'] as int),
+      );
     }
     return result;
   }
@@ -748,7 +785,9 @@ class DirectionService {
       bestSpan = -1;
       for (final entry in stopTimes.entries) {
         final tripStops = entry.value;
-        final startIdx = tripStops.indexWhere((s) => s['stopId'] == startStopId);
+        final startIdx = tripStops.indexWhere(
+          (s) => s['stopId'] == startStopId,
+        );
         final destIdx = tripStops.indexWhere((s) => s['stopId'] == destStopId);
         if (startIdx != -1 && destIdx != -1) {
           final span = (destIdx - startIdx).abs();
@@ -770,19 +809,14 @@ class DirectionService {
     final segment = startIdx <= destIdx
         ? tripStops.sublist(startIdx, destIdx + 1)
         : tripStops.sublist(destIdx, startIdx + 1).reversed.toList();
-    final stopsList = segment
-        .map(
-          (step) {
-            final id = step['stopId'] as String;
-            return _stopLookup[id] ??
-                _allStops.firstWhere(
-                  (stop) => stop.stopId == id,
-                  orElse: () =>
-                      gtfs.Stop(stopId: id, name: id, lat: 0, lon: 0),
-                );
-          },
-        )
-        .toList();
+    final stopsList = segment.map((step) {
+      final id = step['stopId'] as String;
+      return _stopLookup[id] ??
+          _allStops.firstWhere(
+            (stop) => stop.stopId == id,
+            orElse: () => gtfs.Stop(stopId: id, name: id, lat: 0, lon: 0),
+          );
+    }).toList();
     return stopsList;
   }
 
@@ -863,9 +897,7 @@ class DirectionService {
     int cheapestFare = 1 << 30;
     final fares = <_TaggedRoute, int>{};
     for (final route in taggedRoutes) {
-      final fare = _fareCalculator.calculateFare(
-        route.stops,
-      )['total'] ?? 0;
+      final fare = _fareCalculator.calculateFare(route.stops)['total'] ?? 0;
       fares[route] = fare;
       if (fare < cheapestFare) {
         cheapestFare = fare;
@@ -1010,7 +1042,8 @@ class DirectionService {
     final reversed = pathIds.reversed.toList();
     return reversed
         .map(
-          (id) => _stopLookup[id] ??
+          (id) =>
+              _stopLookup[id] ??
               _allStops.firstWhere(
                 (stop) => stop.stopId == id,
                 orElse: () => gtfs.Stop(stopId: id, name: id, lat: 0, lon: 0),
@@ -1051,17 +1084,19 @@ class DirectionService {
       visited.add(current);
 
       final neighborIds = <String>{};
-      neighborIds.addAll(_distanceGraph[current]?.keys ?? const Iterable.empty());
+      neighborIds.addAll(
+        _distanceGraph[current]?.keys ?? const Iterable.empty(),
+      );
       neighborIds.addAll(_timeGraph[current]?.keys ?? const Iterable.empty());
       for (final neighbor in neighborIds) {
         final edgeDistance =
             _distanceGraph[current]?[neighbor] ??
             _distanceBetweenStops(current, neighbor);
         if (edgeDistance <= 0) continue;
-        final edgeTime = (_timeGraph[current]?[neighbor]?.toDouble()) ??
+        final edgeTime =
+            (_timeGraph[current]?[neighbor]?.toDouble()) ??
             math.max(1, edgeDistance / 500.0);
-        double edgeCost =
-            edgeDistance * distanceWeight + edgeTime * timeWeight;
+        double edgeCost = edgeDistance * distanceWeight + edgeTime * timeWeight;
         if (transferPenalty > 0) {
           final currentLine = lineNameResolver(current);
           final neighborLine = lineNameResolver(neighbor);
@@ -1093,7 +1128,8 @@ class DirectionService {
     final reversed = path.reversed.toList();
     return reversed
         .map(
-          (id) => _stopLookup[id] ??
+          (id) =>
+              _stopLookup[id] ??
               _allStops.firstWhere(
                 (stop) => stop.stopId == id,
                 orElse: () => gtfs.Stop(stopId: id, name: id, lat: 0, lon: 0),
@@ -1171,30 +1207,44 @@ class DirectionService {
         // Build transit segment up to here
         final subStops = stops.sublist(currentSegmentStartIndex, i);
         if (subStops.isNotEmpty) {
-          segments.add(RouteSegment(
-            mode: subStops.length > 1 ? TravelMode.transit : TravelMode.walk,
-            start: LocationPoint.fromStop(subStops.first),
-            end: LocationPoint.fromStop(subStops.last),
-            distanceMeters: subStops.length > 1 ? geo.routeDistanceMeters(subStops) : 0.0,
-            durationMinutes: subStops.length > 1 ? _estimateRouteMinutes(subStops) : 0,
-            intermediateStops: subStops,
-            routeShortName: currentLineName,
-          ));
+          segments.add(
+            RouteSegment(
+              mode: subStops.length > 1 ? TravelMode.transit : TravelMode.walk,
+              start: LocationPoint.fromStop(subStops.first),
+              end: LocationPoint.fromStop(subStops.last),
+              distanceMeters: subStops.length > 1
+                  ? geo.routeDistanceMeters(subStops)
+                  : 0.0,
+              durationMinutes: subStops.length > 1
+                  ? _estimateRouteMinutes(subStops)
+                  : 0,
+              intermediateStops: subStops,
+              routeShortName: currentLineName,
+            ),
+          );
         }
 
         // Add a walk/transfer segment between the disjoint stops if needed, or just pivot to a new group
         // If they are physically different stops in a transfer hub
         if (subStops.isNotEmpty && subStops.last.stopId != stop.stopId) {
-          double dx = geo.haversine(subStops.last.lat, subStops.last.lon, stop.lat, stop.lon);
-          segments.add(RouteSegment(
-            mode: TravelMode.walk, // Explicit transfer
-            start: LocationPoint.fromStop(subStops.last),
-            end: LocationPoint.fromStop(stop),
-            distanceMeters: dx,
-            durationMinutes: (dx / 80.0).ceil(), // 80m per min
-            instruction: 'Walk to transfer',
-          ));
-          currentSegmentStartIndex = i; // The new starting transit node is the current one
+          double dx = geo.haversine(
+            subStops.last.lat,
+            subStops.last.lon,
+            stop.lat,
+            stop.lon,
+          );
+          segments.add(
+            RouteSegment(
+              mode: TravelMode.walk, // Explicit transfer
+              start: LocationPoint.fromStop(subStops.last),
+              end: LocationPoint.fromStop(stop),
+              distanceMeters: dx,
+              durationMinutes: (dx / 80.0).ceil(), // 80m per min
+              instruction: 'Walk to transfer',
+            ),
+          );
+          currentSegmentStartIndex =
+              i; // The new starting transit node is the current one
         } else {
           currentSegmentStartIndex = i - 1; // overlapping node
         }
@@ -1206,18 +1256,20 @@ class DirectionService {
     if (currentSegmentStartIndex < stops.length) {
       final remainingStops = stops.sublist(currentSegmentStartIndex);
       if (remainingStops.length > 1) {
-        segments.add(RouteSegment(
-          mode: TravelMode.transit,
-          start: LocationPoint.fromStop(remainingStops.first),
-          end: LocationPoint.fromStop(remainingStops.last),
-          distanceMeters: geo.routeDistanceMeters(remainingStops),
-          durationMinutes: _estimateRouteMinutes(remainingStops),
-          intermediateStops: remainingStops,
-          routeShortName: currentLineName,
-        ));
+        segments.add(
+          RouteSegment(
+            mode: TravelMode.transit,
+            start: LocationPoint.fromStop(remainingStops.first),
+            end: LocationPoint.fromStop(remainingStops.last),
+            distanceMeters: geo.routeDistanceMeters(remainingStops),
+            durationMinutes: _estimateRouteMinutes(remainingStops),
+            intermediateStops: remainingStops,
+            routeShortName: currentLineName,
+          ),
+        );
       }
     }
-    
+
     return segments;
   }
 
@@ -1230,15 +1282,11 @@ class DirectionService {
     }
     return false;
   }
-
 }
 
 class _TaggedRoute {
-  _TaggedRoute({
-    required this.stops,
-    this.segments,
-    Set<String>? tags,
-  }) : tags = tags != null ? {...tags} : <String>{};
+  _TaggedRoute({required this.stops, this.segments, Set<String>? tags})
+    : tags = tags != null ? {...tags} : <String>{};
 
   final List<gtfs.Stop> stops;
   final List<RouteSegment>? segments;

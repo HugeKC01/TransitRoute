@@ -39,7 +39,8 @@ class RouteOptionsPanel extends StatelessWidget {
         fastestMinutes = option.minutes;
         fastestIndex = i;
       }
-      if (shortestDistance == null || option.distanceMeters < shortestDistance) {
+      if (shortestDistance == null ||
+          option.distanceMeters < shortestDistance) {
         shortestDistance = option.distanceMeters;
         shortestIndex = i;
       }
@@ -53,18 +54,32 @@ class RouteOptionsPanel extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'Route options (${options.length})',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Tap a card to preview the path or open details for full breakdowns.',
-            style: theme.textTheme.bodySmall,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Available Routes',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${options.length} options',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: theme.colorScheme.onPrimaryContainer,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           ...List.generate(
@@ -81,8 +96,8 @@ class RouteOptionsPanel extends StatelessWidget {
               highlightType: index == fastestIndex
                   ? _HighlightType.fastest
                   : index == cheapestIndex
-                      ? _HighlightType.cheapest
-                      : null,
+                  ? _HighlightType.cheapest
+                  : null,
               showShortestTag: index == shortestIndex,
               showFastestTag: index == fastestIndex,
             ),
@@ -139,7 +154,9 @@ class _RouteOptionCard extends StatelessWidget {
     if (stops.isEmpty) {
       return const SizedBox.shrink();
     }
-    final label = option.label.isNotEmpty ? option.label : 'Option ${index + 1}';
+    final label = option.label.isNotEmpty
+        ? option.label
+        : 'Option ${index + 1}';
     final sortedTags = option.tags.toList()
       ..sort((a, b) {
         final ai = _tagOrder.indexOf(a);
@@ -166,199 +183,255 @@ class _RouteOptionCard extends StatelessWidget {
       _ => null,
     };
     final applyHighlight = highlightColor != null && !isSelected;
+    
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onSelect,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: onSelect,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeInOut,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
                 color: isSelected
-                  ? theme.colorScheme.primary
-                  : applyHighlight
-                    ? highlightColor
-                    : theme.colorScheme.outlineVariant,
-              width: isSelected
-                  ? 2.4
-                  : applyHighlight
-                      ? 2.0
-                      : 1.0,
+                    ? theme.colorScheme.primary
+                    : applyHighlight
+                    ? highlightColor.withValues(alpha: 0.5)
+                    : theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+                width: isSelected ? 2.0 : 1.0,
+              ),
+              color: isSelected
+                  ? theme.colorScheme.primaryContainer.withValues(alpha: 0.3)
+                  : theme.colorScheme.surface,
+              boxShadow: [
+                if (isSelected)
+                  BoxShadow(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.15),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  )
+                else
+                  BoxShadow(
+                    color: theme.colorScheme.shadow.withValues(alpha: 0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+              ],
             ),
-            color: isSelected
-                ? theme.colorScheme.primaryContainer.withValues(alpha: 0.7)
-                : theme.colorScheme.surface,
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: theme.colorScheme.primary.withValues(alpha: 0.2),
-                      blurRadius: 16,
-                      offset: const Offset(0, 6),
-                    ),
-                  ]
-                : applyHighlight
-                    ? [
-                        BoxShadow(
-                          color: highlightColor.withValues(alpha: 0.25),
-                          blurRadius: 18,
-                          offset: const Offset(0, 6),
-                        ),
-                      ]
-                : null,
-          ),
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          label,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        if (headlineTags.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 6),
-                            child: Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: [
-                                ...headlineTags.map(
-                                  (tag) => _TagPill(label: tag),
-                                ),
-                                if (remainingTags > 0)
-                                  _TagPill(label: '+$remainingTags more'),
-                              ],
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              label,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.onSurface,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'View route details',
-                    onPressed: onViewDetails,
-                    icon: const Icon(Icons.info_outline),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _MetricTile(
-                      icon: Icons.schedule,
-                      label: 'Duration',
-                      value: '${option.minutes} min',
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _MetricTile(
-                      icon: Icons.route,
-                      label: 'Distance',
-                      value: distanceText,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _MetricTile(
-                      icon: Icons.signpost,
-                      label: 'Stops',
-                      value: '${stops.length}',
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            if (headlineTags.isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: [
+                                  ...headlineTags.map((tag) => _TagPill(
+                                        label: tag,
+                                        color: tag == 'Fastest'
+                                            ? const Color(0xFF2E7D32)
+                                            : tag == 'Cheapest'
+                                            ? const Color(0xFFF9A825)
+                                            : theme.colorScheme.primary,
+                                      )),
+                                  if (remainingTags > 0)
+                                    _TagPill(
+                                      label: '+$remainingTags',
+                                      color: theme.colorScheme.secondary,
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                            textBaseline: TextBaseline.alphabetic,
                             children: [
                               Text(
-                                'Estimated fare',
-                                style: theme.textTheme.bodySmall,
+                                '${option.minutes}',
+                                style: theme.textTheme.headlineSmall?.copyWith(
+                                  fontWeight: FontWeight.w900,
+                                  color: applyHighlight
+                                      ? highlightColor
+                                      : theme.colorScheme.primary,
+                                ),
                               ),
+                              const SizedBox(width: 2),
                               Text(
-                                '฿${option.fareBreakdown['total'] ?? 0}',
-                                style: theme.textTheme.titleLarge?.copyWith(
-                                  fontWeight: FontWeight.bold,
+                                'min',
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: theme.colorScheme.onSurfaceVariant,
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                        
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              if (lineSegments.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: lineSegments.map((segment) {
-                    final lineName = resolveSegmentLineName(
-                      segment,
-                      lineNameResolver,
-                    );
-                    final color =
-                        lineColors[lineName] ?? theme.colorScheme.primary;
-                    return InputChip(
-                      avatar: CircleAvatar(
-                        backgroundColor: color,
-                        radius: 6,
+                          Text(
+                            '฿${option.fareBreakdown['total'] ?? 0}',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: theme.colorScheme.onSurface,
+                            ),
+                          ),
+                        ],
                       ),
-                      label: Text(lineName),
-                      onPressed: null,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    );
-                  }).toList(),
-                ),
-              ],
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: onViewDetails,
-                      icon: const Icon(Icons.info_outline),
-                      label: const Text('Details'),
-                    ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: onStartNavigation,
-                      icon: const Icon(Icons.navigation),
-                      label: const Text('Navigate'),
+                  const SizedBox(height: 16),
+                  
+                  // Transit Line Visualizer
+                  if (lineSegments.isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            for (int i = 0; i < lineSegments.length; i++) ...[
+                              if (i > 0)
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                                  child: Icon(Icons.arrow_right_alt, size: 20, color: theme.colorScheme.onSurfaceVariant),
+                                ),
+                              Builder(
+                                builder: (context) {
+                                  final lineName = resolveSegmentLineName(lineSegments[i], lineNameResolver);
+                                  final color = lineColors[lineName] ?? theme.colorScheme.primary;
+                                  final textColor = color.computeLuminance() > 0.5 ? Colors.black87 : Colors.white;
+                                  
+                                  IconData getTransportIcon(String name) {
+                                    final lower = name.toLowerCase();
+                                    if (lower.contains('walk')) return Icons.directions_walk;
+                                    if (lower.contains('bus')) return Icons.directions_bus;
+                                    if (lower.contains('boat') || lower.contains('ferry')) return Icons.directions_boat;
+                                    return Icons.directions_transit;
+                                  }
+
+                                  return Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: color,
+                                      borderRadius: BorderRadius.circular(8),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: color.withValues(alpha: 0.3),
+                                          blurRadius: 4,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          getTransportIcon(lineName),
+                                          size: 16,
+                                          color: textColor,
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          lineName,
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                            color: textColor,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
                     ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // Metrics Footer
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.route, size: 16, color: theme.colorScheme.onSurfaceVariant),
+                          const SizedBox(width: 4),
+                          Text(distanceText, style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w500,
+                          )),
+                          const SizedBox(width: 12),
+                          Icon(Icons.signpost, size: 16, color: theme.colorScheme.onSurfaceVariant),
+                          const SizedBox(width: 4),
+                          Text('${stops.length} stops', style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w500,
+                          )),
+                        ],
+                      ),
+                      if (isSelected)
+                        Row(
+                          children: [
+                            IconButton.filledTonal(
+                              onPressed: onViewDetails,
+                              icon: const Icon(Icons.info_outline, size: 20),
+                              constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+                              padding: EdgeInsets.zero,
+                              tooltip: 'Details',
+                            ),
+                            const SizedBox(width: 8),
+                            FilledButton.icon(
+                              onPressed: onStartNavigation,
+                              icon: const Icon(Icons.navigation, size: 18),
+                              label: const Text('Go'),
+                              style: FilledButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                minimumSize: const Size(0, 40),
+                              ),
+                            ),
+                          ],
+                        ),
+                    ],
                   ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -366,72 +439,27 @@ class _RouteOptionCard extends StatelessWidget {
   }
 }
 
-class _MetricTile extends StatelessWidget {
-  const _MetricTile({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: theme.colorScheme.primary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  label,
-                  style: theme.textTheme.bodySmall,
-                ),
-                Text(
-                  value,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _TagPill extends StatelessWidget {
-  const _TagPill({required this.label});
+  const _TagPill({required this.label, required this.color});
 
   final String label;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: theme.colorScheme.secondary.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Text(
         label,
-        style: theme.textTheme.bodySmall?.copyWith(
-          fontWeight: FontWeight.w500,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: color,
         ),
       ),
     );
