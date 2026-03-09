@@ -92,6 +92,8 @@ class DirectionService {
     List<gtfs.Route>? routes,
     Map<String, String>? fareTypeMap,
     Map<String, int>? fareDataMap,
+    Map<String, int>? stopOrderMap,
+    Map<String, List<int>>? fareTableMap,
   }) {
     bool resetGraphs = false;
     if (allStops != null) {
@@ -105,10 +107,12 @@ class DirectionService {
     if (routes != null) {
       _routes = List<gtfs.Route>.from(routes);
     }
-    if (fareTypeMap != null || fareDataMap != null) {
+    if (fareTypeMap != null || fareDataMap != null || stopOrderMap != null || fareTableMap != null) {
       _fareCalculator.updateData(
         fareTypeMap: fareTypeMap,
         fareDataMap: fareDataMap,
+        stopOrderMap: stopOrderMap,
+        fareTableMap: fareTableMap,
       );
     }
     if (resetGraphs) {
@@ -195,7 +199,6 @@ class DirectionService {
       final minutes = _estimateRouteMinutes(option.stops);
       final fare = _fareCalculator.calculateFare(
         option.stops,
-        lineNameResolver: lineNameResolver,
       );
       metrics.add(
         _RouteMetrics(
@@ -711,7 +714,6 @@ class DirectionService {
     for (final route in taggedRoutes) {
       final fare = _fareCalculator.calculateFare(
         route.stops,
-        lineNameResolver: lineNameResolver,
       )['total'] ?? 0;
       fares[route] = fare;
       if (fare < cheapestFare) {
