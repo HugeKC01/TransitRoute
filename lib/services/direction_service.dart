@@ -11,9 +11,67 @@ import 'package:flutter/material.dart';
 
 typedef LineNameResolver = String? Function(String stopId);
 
+enum TravelMode {
+  walk,
+  bicycle,
+  taxi,
+  transit, // Broken down further via tags or routeId (BTS, MRT, Bus, Ferry)
+}
+
+class LocationPoint {
+  final double lat;
+  final double lon;
+  final String name;
+  final String? stopId; // null if this is an arbitrary map coordinate 
+
+  LocationPoint({
+    required this.lat,
+    required this.lon,
+    required this.name,
+    this.stopId,
+  });
+
+  factory LocationPoint.fromStop(gtfs.Stop stop) {
+    return LocationPoint(
+      lat: stop.lat,
+      lon: stop.lon,
+      name: stop.name,
+      stopId: stop.stopId,
+    );
+  }
+}
+
+class RouteSegment {
+  final TravelMode mode;
+  final LocationPoint start;
+  final LocationPoint end;
+  final double distanceMeters;
+  final int durationMinutes;
+  final int fare; // Monetary cost for this specific segment
+  
+  // Transit-specific details
+  final String? routeId;
+  final String? routeShortName;
+  final String? instruction; // e.g., "Walk to BTS Siam" or "Take Sukhumvit Line"
+  final List<gtfs.Stop>? intermediateStops;
+
+  RouteSegment({
+    required this.mode,
+    required this.start,
+    required this.end,
+    required this.distanceMeters,
+    required this.durationMinutes,
+    this.fare = 0,
+    this.routeId,
+    this.routeShortName,
+    this.instruction,
+    this.intermediateStops,
+  });
+}
+
 class DirectionOption {
   DirectionOption({
-    required this.stops,
+    required this.segments,
     required this.tags,
     required this.label,
     required this.distanceMeters,
@@ -21,12 +79,20 @@ class DirectionOption {
     required this.fareBreakdown,
   });
 
-  final List<gtfs.Stop> stops;
+  final List<RouteSegment> segments;
   final Set<String> tags;
   final String label;
   final double distanceMeters;
   final int minutes;
   final Map<String, int> fareBreakdown;
+  
+  // Helper to retrieve all transit stops involved across all segments
+  List<gtfs.Stop> get allStops {
+    return segments
+        .where((s) => s.intermediateStops != null)
+        .expand((s) => s.intermediateStops!)
+        .toList();
+  }
 }
 
 class DirectionResult {
@@ -122,12 +188,36 @@ class DirectionService {
     }
   }
 
+  String? _findClosestStop(LocationPoint point) {
+    if (point.stopId != null) return point.stopId;
+    if (_allStops.isEmpty) return null;
+
+    gtfs.Stop? closestStop;
+    double minDistance = double.infinity;
+
+    for (final stop in _allStops) {
+      final distance = geo.haversine(point.lat, point.lon, stop.lat, stop.lon);
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestStop = stop;
+      }
+    }
+
+    return closestStop?.stopId;
+  }
+
   Future<DirectionResult> findDirections({
     required String routingMode,
     required String preferredTransit,
-    required String startStopId,
-    required String destStopId,
+    required LocationPoint startPoint,
+    required LocationPoint destPoint,
   }) async {
+    final startStopId = startPoint.stopId ?? _findClosestStop(startPoint);
+    final destStopId = destPoint.stopId ?? _findClosestStop(destPoint);
+
+    if (startStopId == null || destStopId == null) {
+      return DirectionResult.empty();
+    }
     if (startStopId.isEmpty || destStopId.isEmpty) {
       return DirectionResult.empty();
     }
@@ -136,8 +226,8 @@ class DirectionService {
         _allStops.isEmpty) {
       return DirectionResult.empty();
     }
-    if (startStopId == destStopId) {
-      return DirectionResult.empty();
+    if (startStopId == destStopId && startPoint.stopId != null && destPoint.stopId != null) {
+      return DirectionResult.empty(); // It's exactly the same transit stop
     }
 
     await _ensureGraphsBuilt();
@@ -152,12 +242,69 @@ class DirectionService {
     };
 
     final Map<String, _TaggedRoute> optionMap = {};
+
+    RouteSegment createFirstLastMileLeg(LocationPoint a, LocationPoint b, {required bool isStart, required gtfs.Stop anchorStop}) {
+      final dist = geo.haversine(a.lat, a.lon, b.lat, b.lon);
+      TravelMode mode = TravelMode.walk;
+      int duration = (dist / 80.0).ceil();
+      int calcFare = 0;
+      String action = isStart ? 'Walk' : 'Walk';
+      
+      if (dist > 1500) {
+        mode = TravelMode.taxi;
+        duration = (dist / 400.0).ceil() + 5; // 24km/h + 5m wait
+        calcFare = 35 + ((dist / 1000.0) * 6).ceil(); // Base BKK Taxi
+        action = 'Taxi';
+      } else if (dist > 600) {
+        mode = TravelMode.bicycle; // Treating as Motorcycle Taxi / Win in BKK
+        duration = (dist / 250.0).ceil() + 2; 
+        calcFare = 15 + ((dist / 1000.0) * 10).ceil(); // Base Win Taxi
+        action = 'Motorcycle Taxi';
+      }
+
+      return RouteSegment(
+        mode: mode,
+        start: a,
+        end: b,
+        distanceMeters: dist,
+        durationMinutes: duration,
+        fare: calcFare,
+        instruction: '$action ${isStart ? 'to' : 'from'} ${anchorStop.name}',
+      );
+    }
+
+    List<RouteSegment> synthesizeVirtualLegs(List<gtfs.Stop> transitCore) {
+      final segments = _buildSegmentsFromStops(transitCore);
+      
+      if (startPoint.stopId == null && transitCore.isNotEmpty) {
+        final firstStop = transitCore.first;
+        segments.insert(0, createFirstLastMileLeg(
+          startPoint, LocationPoint.fromStop(firstStop), 
+          isStart: true, anchorStop: firstStop
+        ));
+      }
+
+      if (destPoint.stopId == null && transitCore.isNotEmpty) {
+        final lastStop = transitCore.last;
+        segments.add(createFirstLastMileLeg(
+          LocationPoint.fromStop(lastStop), destPoint, 
+          isStart: false, anchorStop: lastStop
+        ));
+      }
+
+      return segments;
+    }
+
     void addOption(List<gtfs.Stop> stops, Set<String> tags) {
       if (stops.isEmpty || _containsLoop(stops)) return;
       final key = stops.map((s) => s.stopId).join('>');
       final entry = optionMap.putIfAbsent(
         key,
-        () => _TaggedRoute(stops: List<gtfs.Stop>.from(stops), tags: tags),
+        () => _TaggedRoute(
+          stops: List<gtfs.Stop>.from(stops), 
+          tags: tags,
+          segments: synthesizeVirtualLegs(stops), // Bake in the multi-modal legs correctly
+        ),
       );
       entry.tags.addAll(tags);
     }
@@ -195,17 +342,27 @@ class DirectionService {
 
     final metrics = <_RouteMetrics>[];
     for (final option in optionMap.values) {
-  final distance = geo.routeDistanceMeters(option.stops);
-      final minutes = _estimateRouteMinutes(option.stops);
-      final fare = _fareCalculator.calculateFare(
-        option.stops,
-      );
+      final distance = option.segments?.fold(0.0, (sum, seg) => sum + seg.distanceMeters) ?? geo.routeDistanceMeters(option.stops);
+      final minutes = option.segments?.fold(0, (sum, seg) => sum + seg.durationMinutes) ?? _estimateRouteMinutes(option.stops);
+      
+      final fareBreakdown = _fareCalculator.calculateFare(option.stops);
+      
+      if (option.segments != null) {
+         for (final seg in option.segments!) {
+            if (seg.fare > 0) {
+                String subLabel = seg.instruction ?? 'Transit';
+                fareBreakdown[subLabel] = (fareBreakdown[subLabel] ?? 0) + seg.fare;
+                fareBreakdown['total'] = (fareBreakdown['total'] ?? 0) + seg.fare;
+            }
+         }
+      }
+
       metrics.add(
         _RouteMetrics(
           route: option,
           distanceMeters: distance,
           minutes: minutes,
-          fareBreakdown: fare,
+          fareBreakdown: fareBreakdown, // Now true integrated fare calculation
         ),
       );
     }
@@ -270,7 +427,7 @@ class DirectionService {
     final options = metrics
         .map(
           (metric) => DirectionOption(
-            stops: List<gtfs.Stop>.from(metric.route.stops),
+            segments: metric.route.segments ?? _buildSegmentsFromStops(metric.route.stops),
             tags: Set<String>.from(metric.route.tags),
             label: _optionLabelText(metric.route.tags),
             distanceMeters: metric.distanceMeters,
@@ -334,22 +491,23 @@ class DirectionService {
   }
 
   void _addTransferEdges() {
-    const double transferDistanceMeters = 30.0;
-    const int transferMinutes = 3;
-    const double proximityTransferMeters = 200.0;
-    const int proximityTransferMinutes = 5;
-
-    void storeEdge(String from, String to) {
-      final existingDistance = _distanceGraph[from]?[to];
-      if (existingDistance == null || transferDistanceMeters < existingDistance) {
-        _distanceGraph.putIfAbsent(from, () => {})[to] = transferDistanceMeters;
+    const double maxWalkTransferMeters = 300.0; // 300m walk is standard max seamless transfer
+    
+    void storeEdge(String from, String to, double distStr, int minutes) {
+      final existingD = _distanceGraph[from]?[to];
+      if (existingD == null || distStr < existingD) {
+        _distanceGraph.putIfAbsent(from, () => {})[to] = distStr;
+        _distanceGraph.putIfAbsent(to, () => {})[from] = distStr;
       }
-      final existingMinutes = _timeGraph[from]?[to];
-      if (existingMinutes == null || transferMinutes < existingMinutes) {
-        _timeGraph.putIfAbsent(from, () => {})[to] = transferMinutes;
+      final existingM = _timeGraph[from]?[to];
+      if (existingM == null || minutes < existingM) {
+        _timeGraph.putIfAbsent(from, () => {})[to] = minutes;
+        _timeGraph.putIfAbsent(to, () => {})[from] = minutes;
       }
     }
 
+    // 1. Hardcoded hubs for guaranteed complex intersections 
+    // They are physically connected, so low penalty
     for (final hubGroup in _transferHubs) {
       for (int i = 0; i < hubGroup.length; i++) {
         final fromStop = hubGroup[i];
@@ -357,39 +515,32 @@ class DirectionService {
         for (int j = i + 1; j < hubGroup.length; j++) {
           final toStop = hubGroup[j];
           if (!_stopLookup.containsKey(toStop)) continue;
-          storeEdge(fromStop, toStop);
-          storeEdge(toStop, fromStop);
+          storeEdge(fromStop, toStop, 30.0, 3);
         }
       }
     }
 
-    final busStops = _allStops
-        .where((stop) => stop.stopId.toUpperCase().startsWith('B'))
-        .toList();
-    final railStops = _allStops
-        .where((stop) => !stop.stopId.toUpperCase().startsWith('B'))
-        .toList();
-    for (final busStop in busStops) {
-      for (final railStop in railStops) {
-        final dist = geo.haversine(
-          busStop.lat,
-          busStop.lon,
-          railStop.lat,
-          railStop.lon,
-        );
-        if (dist <= proximityTransferMeters) {
-          final existingDistance = _distanceGraph[busStop.stopId]?[railStop.stopId];
-          if (existingDistance == null || dist < existingDistance) {
-            _distanceGraph.putIfAbsent(busStop.stopId, () => {})[railStop.stopId] = dist;
-            _distanceGraph.putIfAbsent(railStop.stopId, () => {})[busStop.stopId] = dist;
-          }
-          final existingMinutes = _timeGraph[busStop.stopId]?[railStop.stopId];
-          if (existingMinutes == null || proximityTransferMinutes < existingMinutes) {
-            _timeGraph.putIfAbsent(busStop.stopId, () => {})[railStop.stopId] =
-                proximityTransferMinutes;
-            _timeGraph.putIfAbsent(railStop.stopId, () => {})[busStop.stopId] =
-                proximityTransferMinutes;
-          }
+    // 2. Dynamic Spatial Proximity (Less complicate, dynamic)
+    // Connecting ANY two stops within 300 meters
+    for (int i = 0; i < _allStops.length; i++) {
+      final stopA = _allStops[i];
+      for (int j = i + 1; j < _allStops.length; j++) {
+        final stopB = _allStops[j];
+        
+        if (stopA.stopId == stopB.stopId) continue;
+        
+        // Quick lat/lon diff check to avoid thousands of haversine trig calls
+        // 0.003 degrees is roughly 330m in latitude
+        if ((stopA.lat - stopB.lat).abs() > 0.003 || 
+            (stopA.lon - stopB.lon).abs() > 0.003) {
+            continue;
+        }
+
+        final dist = geo.haversine(stopA.lat, stopA.lon, stopB.lat, stopB.lon);
+        if (dist <= maxWalkTransferMeters) {
+          // Dynamic calculation: distance / 80 meters per min + 2 mins wait/connection overhead
+          final walkMinutes = (dist / 80.0).ceil() + 2;
+          storeEdge(stopA.stopId, stopB.stopId, dist, walkMinutes);
         }
       }
     }
@@ -1004,6 +1155,72 @@ class DirectionService {
     return ordered.take(3).join(' • ');
   }
 
+  List<RouteSegment> _buildSegmentsFromStops(List<gtfs.Stop> stops) {
+    if (stops.isEmpty) return [];
+
+    final segments = <RouteSegment>[];
+    int currentSegmentStartIndex = 0;
+    String? currentLineName = lineNameResolver(stops[0].stopId);
+
+    for (int i = 1; i < stops.length; i++) {
+      final stop = stops[i];
+      final lineName = lineNameResolver(stop.stopId);
+
+      // If we switch lines or we hit an intentional hub/transfer point, break a segment out
+      if (lineName != currentLineName || lineName == null) {
+        // Build transit segment up to here
+        final subStops = stops.sublist(currentSegmentStartIndex, i);
+        if (subStops.isNotEmpty) {
+          segments.add(RouteSegment(
+            mode: subStops.length > 1 ? TravelMode.transit : TravelMode.walk,
+            start: LocationPoint.fromStop(subStops.first),
+            end: LocationPoint.fromStop(subStops.last),
+            distanceMeters: subStops.length > 1 ? geo.routeDistanceMeters(subStops) : 0.0,
+            durationMinutes: subStops.length > 1 ? _estimateRouteMinutes(subStops) : 0,
+            intermediateStops: subStops,
+            routeShortName: currentLineName,
+          ));
+        }
+
+        // Add a walk/transfer segment between the disjoint stops if needed, or just pivot to a new group
+        // If they are physically different stops in a transfer hub
+        if (subStops.isNotEmpty && subStops.last.stopId != stop.stopId) {
+          double dx = geo.haversine(subStops.last.lat, subStops.last.lon, stop.lat, stop.lon);
+          segments.add(RouteSegment(
+            mode: TravelMode.walk, // Explicit transfer
+            start: LocationPoint.fromStop(subStops.last),
+            end: LocationPoint.fromStop(stop),
+            distanceMeters: dx,
+            durationMinutes: (dx / 80.0).ceil(), // 80m per min
+            instruction: 'Walk to transfer',
+          ));
+          currentSegmentStartIndex = i; // The new starting transit node is the current one
+        } else {
+          currentSegmentStartIndex = i - 1; // overlapping node
+        }
+        currentLineName = lineName;
+      }
+    }
+
+    // Append final segment
+    if (currentSegmentStartIndex < stops.length) {
+      final remainingStops = stops.sublist(currentSegmentStartIndex);
+      if (remainingStops.length > 1) {
+        segments.add(RouteSegment(
+          mode: TravelMode.transit,
+          start: LocationPoint.fromStop(remainingStops.first),
+          end: LocationPoint.fromStop(remainingStops.last),
+          distanceMeters: geo.routeDistanceMeters(remainingStops),
+          durationMinutes: _estimateRouteMinutes(remainingStops),
+          intermediateStops: remainingStops,
+          routeShortName: currentLineName,
+        ));
+      }
+    }
+    
+    return segments;
+  }
+
   bool _containsLoop(List<gtfs.Stop> stops) {
     final seen = <String>{};
     for (final stop in stops) {
@@ -1017,10 +1234,14 @@ class DirectionService {
 }
 
 class _TaggedRoute {
-  _TaggedRoute({required this.stops, Set<String>? tags})
-    : tags = tags != null ? {...tags} : <String>{};
+  _TaggedRoute({
+    required this.stops,
+    this.segments,
+    Set<String>? tags,
+  }) : tags = tags != null ? {...tags} : <String>{};
 
   final List<gtfs.Stop> stops;
+  final List<RouteSegment>? segments;
   final Set<String> tags;
 }
 

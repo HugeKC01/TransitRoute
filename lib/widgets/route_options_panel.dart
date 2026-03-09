@@ -135,7 +135,7 @@ class _RouteOptionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final stops = option.stops;
+    final stops = option.allStops;
     if (stops.isEmpty) {
       return const SizedBox.shrink();
     }

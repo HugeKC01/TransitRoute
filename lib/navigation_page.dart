@@ -41,7 +41,7 @@ class _NavigationPageState extends State<NavigationPage> {
   LocationData? _lastLocation;
   StreamSubscription<LocationData>? _locationSub;
 
-  List<gtfs.Stop> get _stops => widget.option.stops;
+  List<gtfs.Stop> get _stops => widget.option.allStops;
 
   @override
   void initState() {

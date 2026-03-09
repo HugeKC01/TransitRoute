@@ -47,7 +47,7 @@ class RouteDetailsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final segments = splitRouteByLine(option.stops, lineNameResolver);
+    final segments = splitRouteByLine(option.allStops, lineNameResolver);
     final tags = option.tags.toList();
     final totalFare = option.fareBreakdown['total'] ?? 0;
     final theme = Theme.of(context);
@@ -81,7 +81,7 @@ class RouteDetailsSheet extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            '${formatDistance(option.distanceMeters)} • ~${option.minutes} min • ${option.stops.length} stops',
+            '${formatDistance(option.distanceMeters)} • ~${option.minutes} min • ${option.allStops.length} stops',
             style: theme.textTheme.bodyMedium,
           ),
           if (tags.isNotEmpty) ...[
@@ -131,10 +131,10 @@ class RouteDetailsSheet extends StatelessWidget {
           ListView.separated(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            itemCount: option.stops.length,
+            itemCount: option.allStops.length,
             separatorBuilder: (_, __) => const Divider(height: 1),
             itemBuilder: (context, index) {
-              final stop = option.stops[index];
+              final stop = option.allStops[index];
               final color = lineColorResolver(stop.stopId);
               return ListTile(
                 dense: true,

@@ -84,6 +84,8 @@ class _MyHomePageState extends State<MyHomePage>
   String routingMode = 'Shortest';
   String transitPreference = 'Auto';
   bool _headerCollapsed = false;
+  double _currentZoom = 12.0;
+  static const double _busStopZoomThreshold = 15.0;
 
   String? _getLineName(String stopId) {
     for (final entry in linePrefixes.entries) {
@@ -183,11 +185,15 @@ class _MyHomePageState extends State<MyHomePage>
     if (startId == null || destId == null) {
       return;
     }
+    
+    final startStop = allStops.firstWhere((s) => s.stopId == startId);
+    final destStop = allStops.firstWhere((s) => s.stopId == destId);
+
     final result = await _directionService.findDirections(
       routingMode: routingMode,
       preferredTransit: transitPreference,
-      startStopId: startId,
-      destStopId: destId,
+      startPoint: LocationPoint.fromStop(startStop),
+      destPoint: LocationPoint.fromStop(destStop),
     );
     setState(() {
       directionOptions = List<DirectionOption>.from(result.options);
@@ -1398,8 +1404,8 @@ class _MyHomePageState extends State<MyHomePage>
   List<gtfs.Stop> get directionStopsView {
     if (directionOptions.isNotEmpty &&
         selectedDirectionIndex < directionOptions.length &&
-        directionOptions[selectedDirectionIndex].stops.isNotEmpty) {
-      return directionOptions[selectedDirectionIndex].stops;
+        directionOptions[selectedDirectionIndex].allStops.isNotEmpty) {
+      return directionOptions[selectedDirectionIndex].allStops;
     }
     return const <gtfs.Stop>[];
   }
