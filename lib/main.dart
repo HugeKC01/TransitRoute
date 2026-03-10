@@ -50,8 +50,8 @@ class MyHomePage extends StatefulWidget {
   @override
   State<MyHomePage> createState() => _MyHomePageState();
 }
-class _MyHomePageState extends State<MyHomePage>
-  with TickerProviderStateMixin {
+
+class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   final MapController _mapController = MapController();
   late final SearchController _startSearchController;
   late final SearchController _destSearchController;
@@ -175,27 +175,42 @@ class _MyHomePageState extends State<MyHomePage>
 
   String? selectedStartStopId;
   String? selectedDestinationStopId;
+  LocationPoint? _customStartPoint;
+  LocationPoint? _customDestPoint;
   List<DirectionOption> directionOptions = [];
   int selectedDirectionIndex = 0;
 
   Future<void> _findDirection() async {
-    if (allStops.isEmpty) {
-      return;
-    }
     final startId = selectedStartStopId;
     final destId = selectedDestinationStopId;
-    if (startId == null || destId == null) {
-      return;
+
+    LocationPoint? startOpt = _customStartPoint;
+    if (startOpt == null && startId != null && allStops.isNotEmpty) {
+      final startStop = allStops.firstWhere(
+        (s) => s.stopId == startId,
+        orElse: () => allStops.first,
+      );
+      if (startStop.stopId == startId) {
+        startOpt = LocationPoint.fromStop(startStop);
+      }
     }
-    
-    final startStop = allStops.firstWhere((s) => s.stopId == startId);
-    final destStop = allStops.firstWhere((s) => s.stopId == destId);
+
+    LocationPoint? destOpt = _customDestPoint;
+    if (destOpt == null && destId != null && allStops.isNotEmpty) {
+      final destStop = allStops.firstWhere(
+        (s) => s.stopId == destId,
+        orElse: () => allStops.first,
+      );
+      if (destStop.stopId == destId) destOpt = LocationPoint.fromStop(destStop);
+    }
+
+    if (startOpt == null || destOpt == null) return;
 
     final result = await _directionService.findDirections(
       routingMode: routingMode,
       preferredTransit: transitPreference,
-      startPoint: LocationPoint.fromStop(startStop),
-      destPoint: LocationPoint.fromStop(destStop),
+      startPoint: startOpt,
+      destPoint: destOpt,
     );
     setState(() {
       directionOptions = List<DirectionOption>.from(result.options);
@@ -231,24 +246,60 @@ class _MyHomePageState extends State<MyHomePage>
     return Polyline(points: [from, to], color: color, strokeWidth: 6.0);
   }
 
-  List<Polyline> _buildRoutePolylines(List<gtfs.Stop> route) {
+  List<Polyline> _buildRoutePolylines(List<RouteSegment> segments) {
     final polylines = <Polyline>[];
-    if (route.length < 2) return polylines;
-    String? previousLine = _getLineName(route[0].stopId);
-    for (int i = 1; i < route.length; i++) {
-      final currentLine = _getLineName(route[i].stopId);
-      final from = LatLng(route[i - 1].lat, route[i - 1].lon);
-      final to = LatLng(route[i].lat, route[i].lon);
-      if (currentLine == previousLine) {
+    for (final segment in segments) {
+      if (segment.mode == TravelMode.walk ||
+          segment.mode == TravelMode.bicycle ||
+          segment.mode == TravelMode.taxi) {
+        List<LatLng> points = [];
+        if (segment.roadPolyline != null && segment.roadPolyline!.isNotEmpty) {
+          points = segment.roadPolyline!
+              .map((p) => LatLng(p.lat, p.lon))
+              .toList();
+        } else {
+          points = [
+            LatLng(segment.start.lat, segment.start.lon),
+            LatLng(segment.end.lat, segment.end.lon),
+          ];
+        }
+
+        Color lineColor = Colors.grey.shade600;
+        if (segment.mode == TravelMode.bicycle) {
+          lineColor = Colors.green.shade600;
+        }
+        if (segment.mode == TravelMode.taxi) {
+          lineColor = Colors.orange.shade600;
+        }
+
         polylines.add(
-          _linePolyline(
-            from,
-            to,
-            _getPolylineColor(currentLine ?? previousLine ?? ''),
+          Polyline(
+            points: points,
+            color: lineColor,
+            strokeWidth: 4.0,
+            pattern: const StrokePattern.dotted(),
           ),
         );
+      } else {
+        final route = segment.intermediateStops;
+        if (route == null || route.length < 2) continue;
+        String? previousLine = _getLineName(route[0].stopId);
+        for (int i = 1; i < route.length; i++) {
+          final currentLine = _getLineName(route[i].stopId);
+          final from = LatLng(route[i - 1].lat, route[i - 1].lon);
+          final to = LatLng(route[i].lat, route[i].lon);
+          if (currentLine == previousLine) {
+            polylines.add(
+              _linePolyline(
+                from,
+                to,
+                _getPolylineColor(currentLine ?? previousLine ?? ''),
+              ),
+            );
+          }
+          previousLine = currentLine;
+        }
       }
-      previousLine = currentLine;
     }
     return polylines;
   }
@@ -257,9 +308,11 @@ class _MyHomePageState extends State<MyHomePage>
     setState(() {
       if (asStart) {
         selectedStartStopId = stop.stopId;
+        _customStartPoint = null;
         _startSearchController.text = stop.name;
       } else {
         selectedDestinationStopId = stop.stopId;
+        _customDestPoint = null;
         _destSearchController.text = stop.name;
       }
       _headerCollapsed = false;
@@ -311,6 +364,7 @@ class _MyHomePageState extends State<MyHomePage>
             ),
           );
         }
+
         Widget quickAction({
           required IconData icon,
           required String title,
@@ -356,6 +410,7 @@ class _MyHomePageState extends State<MyHomePage>
             ),
           );
         }
+
         return SafeArea(
           top: false,
           child: SingleChildScrollView(
@@ -380,10 +435,7 @@ class _MyHomePageState extends State<MyHomePage>
                           color: lineColor,
                           borderRadius: BorderRadius.circular(14),
                         ),
-                        child: const Icon(
-                          Icons.train,
-                          color: Colors.white,
-                        ),
+                        child: const Icon(Icons.train, color: Colors.white),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
@@ -417,10 +469,11 @@ class _MyHomePageState extends State<MyHomePage>
                                   ),
                                   child: Text(
                                     lineName,
-                                    style: theme.textTheme.labelMedium?.copyWith(
-                                      color: lineColor,
-                                      fontWeight: FontWeight.w700,
-                                    ),
+                                    style: theme.textTheme.labelMedium
+                                        ?.copyWith(
+                                          color: lineColor,
+                                          fontWeight: FontWeight.w700,
+                                        ),
                                   ),
                                 ),
                               ),
@@ -500,22 +553,224 @@ class _MyHomePageState extends State<MyHomePage>
     );
   }
 
+  void _assignCustomPointSelection(LatLng point, {required bool asStart}) {
+    setState(() {
+      if (asStart) {
+        selectedStartStopId = null;
+        _customStartPoint = LocationPoint(
+          lat: point.latitude,
+          lon: point.longitude,
+          name: 'Dropped Pin',
+        );
+        _startSearchController.text = 'Dropped Pin';
+      } else {
+        selectedDestinationStopId = null;
+        _customDestPoint = LocationPoint(
+          lat: point.latitude,
+          lon: point.longitude,
+          name: 'Dropped Pin',
+        );
+        _destSearchController.text = 'Dropped Pin';
+      }
+      _headerCollapsed = false;
+    });
+
+    if ((selectedStartStopId != null || _customStartPoint != null) &&
+        (selectedDestinationStopId != null || _customDestPoint != null)) {
+      _findDirection();
+    }
+  }
+
+  void _showDroppedPinDetails(BuildContext context, LatLng point) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        final theme = Theme.of(sheetContext);
+        final colorScheme = theme.colorScheme;
+        final bottomInset = MediaQuery.of(sheetContext).padding.bottom;
+
+        Widget infoChip(String label, String value) {
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: colorScheme.outlineVariant),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label.toUpperCase(),
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        Widget quickAction({
+          required IconData icon,
+          required String title,
+          required String subtitle,
+          required VoidCallback onTap,
+        }) {
+          return Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerHigh,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(icon, color: colorScheme.primary),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(title, style: theme.textTheme.titleMedium),
+                          const SizedBox(height: 2),
+                          Text(
+                            subtitle,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+
+        return SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(24, 12, 24, bottomInset + 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: colorScheme.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(Icons.place, color: Colors.white),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Text(
+                          'Dropped Pin',
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
+                  children: [
+                    infoChip(
+                      'Coordinates',
+                      'Lat ${point.latitude.toStringAsFixed(4)}, Lon ${point.longitude.toStringAsFixed(4)}',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                quickAction(
+                  icon: Icons.trip_origin,
+                  title: 'Set as origin',
+                  subtitle: 'Plan a route starting here',
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _assignCustomPointSelection(point, asStart: true);
+                  },
+                ),
+                quickAction(
+                  icon: Icons.flag,
+                  title: 'Set as destination',
+                  subtitle: 'Use this location as your endpoint',
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _assignCustomPointSelection(point, asStart: false);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _swapStops() async {
-    if (selectedStartStopId == null && selectedDestinationStopId == null) {
+    if (selectedStartStopId == null &&
+        selectedDestinationStopId == null &&
+        _customStartPoint == null &&
+        _customDestPoint == null) {
       return;
     }
     setState(() {
-      final temp = selectedStartStopId;
+      final tempId = selectedStartStopId;
       selectedStartStopId = selectedDestinationStopId;
-      selectedDestinationStopId = temp;
+      selectedDestinationStopId = tempId;
+
+      final tempCustom = _customStartPoint;
+      _customStartPoint = _customDestPoint;
+      _customDestPoint = tempCustom;
+
       final tempText = _startSearchController.text;
       _startSearchController.text = _destSearchController.text;
       _destSearchController.text = tempText;
-      if (selectedStartStopId != null || selectedDestinationStopId != null) {
+      if (selectedStartStopId != null ||
+          selectedDestinationStopId != null ||
+          _customStartPoint != null ||
+          _customDestPoint != null) {
         _headerCollapsed = false;
       }
     });
-    if (selectedStartStopId != null && selectedDestinationStopId != null) {
+    if ((selectedStartStopId != null || _customStartPoint != null) &&
+        (selectedDestinationStopId != null || _customDestPoint != null)) {
       await _findDirection();
     }
   }
@@ -523,12 +778,16 @@ class _MyHomePageState extends State<MyHomePage>
   void _clearSelections({bool preserveHeaderState = false}) {
     if (selectedStartStopId == null &&
         selectedDestinationStopId == null &&
+        _customStartPoint == null &&
+        _customDestPoint == null &&
         directionOptions.isEmpty) {
       return;
     }
     setState(() {
       selectedStartStopId = null;
       selectedDestinationStopId = null;
+      _customStartPoint = null;
+      _customDestPoint = null;
       directionOptions = [];
       selectedDirectionIndex = 0;
       _startSearchController.clear();
@@ -589,7 +848,7 @@ class _MyHomePageState extends State<MyHomePage>
   Widget _buildMap(BuildContext context) {
     final startId = selectedStartStopId;
     final destId = selectedDestinationStopId;
-    final routeStops = directionStopsView;
+    final activeSegments = activeRouteSegments;
     final viewPadding = MediaQuery.of(context).padding;
     final screenWidth = MediaQuery.of(context).size.width;
     final isCompact = screenWidth < 520;
@@ -597,7 +856,8 @@ class _MyHomePageState extends State<MyHomePage>
     final fabGap = isCompact ? 24.0 : 32.0;
     final hasRoutes = directionOptions.isNotEmpty;
     final sheetOffset = hasRoutes ? 320.0 : 0.0;
-    final zoomBottomOffset = viewPadding.bottom + fabHeight + fabGap + sheetOffset;
+    final zoomBottomOffset =
+        viewPadding.bottom + fabHeight + fabGap + sheetOffset;
     final showBusStops =
         busStops.isNotEmpty && _currentZoom >= _busStopZoomThreshold;
     return Stack(
@@ -612,6 +872,9 @@ class _MyHomePageState extends State<MyHomePage>
               if ((newZoom - _currentZoom).abs() > 0.05) {
                 setState(() => _currentZoom = newZoom);
               }
+            },
+            onLongPress: (tapPosition, point) {
+              _showDroppedPinDetails(context, point);
             },
           ),
           children: [
@@ -689,10 +952,10 @@ class _MyHomePageState extends State<MyHomePage>
                             child: Container(
                               decoration: BoxDecoration(
                                 color: (stop.stopId == startId)
-                                  ? Colors.greenAccent.withValues(alpha: 0.85)
-                                  : (stop.stopId == destId)
-                                  ? Colors.redAccent.withValues(alpha: 0.85)
-                                  : Colors.white,
+                                    ? Colors.greenAccent.withValues(alpha: 0.85)
+                                    : (stop.stopId == destId)
+                                    ? Colors.redAccent.withValues(alpha: 0.85)
+                                    : Colors.white,
                                 shape: BoxShape.circle,
                                 border: Border.all(
                                   color: _getLineColor(stop.stopId),
@@ -710,8 +973,43 @@ class _MyHomePageState extends State<MyHomePage>
                     )
                     .toList(),
               ),
-            if (routeStops.isNotEmpty)
-              PolylineLayer(polylines: _buildRoutePolylines(routeStops)),
+            if (_customStartPoint != null)
+              MarkerLayer(
+                markers: [
+                  Marker(
+                    point: LatLng(
+                      _customStartPoint!.lat,
+                      _customStartPoint!.lon,
+                    ),
+                    width: 30,
+                    height: 30,
+                    alignment: Alignment.topCenter,
+                    child: const Icon(
+                      Icons.location_on,
+                      color: Colors.green,
+                      size: 30,
+                    ),
+                  ),
+                ],
+              ),
+            if (_customDestPoint != null)
+              MarkerLayer(
+                markers: [
+                  Marker(
+                    point: LatLng(_customDestPoint!.lat, _customDestPoint!.lon),
+                    width: 30,
+                    height: 30,
+                    alignment: Alignment.topCenter,
+                    child: const Icon(
+                      Icons.location_on,
+                      color: Colors.red,
+                      size: 30,
+                    ),
+                  ),
+                ],
+              ),
+            if (activeSegments.isNotEmpty)
+              PolylineLayer(polylines: _buildRoutePolylines(activeSegments)),
             const RichAttributionWidget(
               attributions: [
                 TextSourceAttribution('© OpenStreetMap contributors'),
@@ -746,20 +1044,22 @@ class _MyHomePageState extends State<MyHomePage>
                     onPressed: () => _adjustMapZoom(0.75),
                     iconSize: 28,
                     padding: const EdgeInsets.all(12),
-                    constraints: const BoxConstraints(minWidth: 56, minHeight: 48),
+                    constraints: const BoxConstraints(
+                      minWidth: 56,
+                      minHeight: 48,
+                    ),
                   ),
-                  Container(
-                    width: 36,
-                    height: 1,
-                    color: Colors.black12,
-                  ),
+                  Container(width: 36, height: 1, color: Colors.black12),
                   IconButton(
                     icon: const Icon(Icons.remove),
                     tooltip: 'Zoom out',
                     onPressed: () => _adjustMapZoom(-0.75),
                     iconSize: 28,
                     padding: const EdgeInsets.all(12),
-                    constraints: const BoxConstraints(minWidth: 56, minHeight: 48),
+                    constraints: const BoxConstraints(
+                      minWidth: 56,
+                      minHeight: 48,
+                    ),
                   ),
                 ],
               ),
@@ -784,20 +1084,11 @@ class _MyHomePageState extends State<MyHomePage>
             color: theme.colorScheme.surface,
             child: ListView(
               padding: const EdgeInsets.only(bottom: 24),
-              children: [
-                _buildRouteOptionsSection(context),
-              ],
+              children: [_buildRouteOptionsSection(context)],
             ),
           ),
         if (hasRoutes) const VerticalDivider(width: 1),
-        Expanded(
-          child: Stack(
-            children: [
-              _buildMap(context),
-              headerOverlay,
-            ],
-          ),
-        ),
+        Expanded(child: Stack(children: [_buildMap(context), headerOverlay])),
       ],
     );
   }
@@ -858,6 +1149,12 @@ class _MyHomePageState extends State<MyHomePage>
     final dest = selectedDestinationStopId != null
         ? stopLookup[selectedDestinationStopId!]
         : null;
+    final startLabel =
+        _customStartPoint?.name ??
+        (start != null ? _stopDisplayLabel(start) : null);
+    final destLabel =
+        _customDestPoint?.name ??
+        (dest != null ? _stopDisplayLabel(dest) : null);
     final isCollapsed = _headerCollapsed;
     return Material(
       elevation: 10,
@@ -880,8 +1177,11 @@ class _MyHomePageState extends State<MyHomePage>
             child: isCollapsed
                 ? KeyedSubtree(
                     key: const ValueKey('collapsed_header'),
-                    child:
-                        _buildCollapsedHeaderContent(context, start, dest),
+                    child: _buildCollapsedHeaderContent(
+                      context,
+                      startLabel,
+                      destLabel,
+                    ),
                   )
                 : KeyedSubtree(
                     key: const ValueKey('expanded_header'),
@@ -918,11 +1218,11 @@ class _MyHomePageState extends State<MyHomePage>
 
   Widget _buildCollapsedHeaderContent(
     BuildContext context,
-    gtfs.Stop? start,
-    gtfs.Stop? dest,
+    String? startLabel,
+    String? destLabel,
   ) {
-    if (start != null && dest != null) {
-      return _buildCollapsedSelectionSummary(context, start, dest);
+    if (startLabel != null && destLabel != null) {
+      return _buildCollapsedSelectionSummary(context, startLabel, destLabel);
     }
     return _buildCollapsedSearchBar(context);
   }
@@ -1040,8 +1340,8 @@ class _MyHomePageState extends State<MyHomePage>
 
   Widget _buildCollapsedSelectionSummary(
     BuildContext context,
-    gtfs.Stop start,
-    gtfs.Stop dest,
+    String startLabel,
+    String destLabel,
   ) {
     final theme = Theme.of(context);
     final labelStyle = theme.textTheme.labelSmall?.copyWith(
@@ -1070,7 +1370,7 @@ class _MyHomePageState extends State<MyHomePage>
                     children: [
                       Text('Origin', style: labelStyle),
                       Text(
-                        _stopDisplayLabel(start),
+                        startLabel,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w600,
                         ),
@@ -1078,7 +1378,7 @@ class _MyHomePageState extends State<MyHomePage>
                       const SizedBox(height: 6),
                       Text('Destination', style: labelStyle),
                       Text(
-                        _stopDisplayLabel(dest),
+                        destLabel,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w600,
                         ),
@@ -1095,8 +1395,7 @@ class _MyHomePageState extends State<MyHomePage>
                     width: 36,
                     height: 36,
                   ),
-                  onPressed: () =>
-                      _clearSelections(preserveHeaderState: true),
+                  onPressed: () => _clearSelections(preserveHeaderState: true),
                 ),
               ],
             ),
@@ -1126,17 +1425,19 @@ class _MyHomePageState extends State<MyHomePage>
     gtfs.Stop? dest,
   ) {
     final theme = Theme.of(context);
-    final hasBoth = start != null && dest != null;
+    final hasStart = start != null || _customStartPoint != null;
+    final hasDest = dest != null || _customDestPoint != null;
+    final hasBoth = hasStart && hasDest;
     return Container(
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-           BoxShadow(
-             color: Colors.black.withValues(alpha: 0.05),
-             blurRadius: 10,
-             offset: const Offset(0, 4),
-           ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -1169,17 +1470,17 @@ class _MyHomePageState extends State<MyHomePage>
               Column(
                 children: [
                   _collapseHeaderButton(),
-                  if (selectedStartStopId != null || selectedDestinationStopId != null)
-                   Padding(
-                     padding: const EdgeInsets.only(top: 12),
-                     child: IconButton(
-                       icon: const Icon(Icons.swap_vert),
-                       style: IconButton.styleFrom(
-                         backgroundColor: theme.colorScheme.secondaryContainer,
-                       ),
-                       onPressed: _swapStops,
-                     ),
-                   ),
+                  if (hasStart || hasDest)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: IconButton(
+                        icon: const Icon(Icons.swap_vert),
+                        style: IconButton.styleFrom(
+                          backgroundColor: theme.colorScheme.secondaryContainer,
+                        ),
+                        onPressed: _swapStops,
+                      ),
+                    ),
                 ],
               ),
             ],
@@ -1191,11 +1492,16 @@ class _MyHomePageState extends State<MyHomePage>
                 child: FilledButton.icon(
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                   onPressed: hasBoth ? () => _findDirection() : null,
                   icon: const Icon(Icons.route),
-                  label: Text(hasBoth ? 'Plan route' : 'Pick both stops', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  label: Text(
+                    hasBoth ? 'Plan route' : 'Pick both stops',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
             ],
@@ -1204,13 +1510,14 @@ class _MyHomePageState extends State<MyHomePage>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-               Expanded(child: _buildTransitPreferenceChooser(context)),
-               if (selectedStartStopId != null || selectedDestinationStopId != null)
-                 TextButton.icon(
-                    onPressed: _clearSelections,
-                    icon: const Icon(Icons.clear, size: 16),
-                    label: const Text('Clear'),
-                 ),
+              Expanded(child: _buildTransitPreferenceChooser(context)),
+              if (selectedStartStopId != null ||
+                  selectedDestinationStopId != null)
+                TextButton.icon(
+                  onPressed: _clearSelections,
+                  icon: const Icon(Icons.clear, size: 16),
+                  label: const Text('Clear'),
+                ),
             ],
           ),
         ],
@@ -1293,8 +1600,10 @@ class _MyHomePageState extends State<MyHomePage>
                       ctrl.clear();
                       if (asStart) {
                         selectedStartStopId = null;
+                        _customStartPoint = null;
                       } else {
                         selectedDestinationStopId = null;
+                        _customDestPoint = null;
                       }
                       directionOptions = [];
                       selectedDirectionIndex = 0;
@@ -1424,6 +1733,14 @@ class _MyHomePageState extends State<MyHomePage>
     if (selectedStartStopId != null && selectedDestinationStopId != null) {
       await _findDirection();
     }
+  }
+
+  List<RouteSegment> get activeRouteSegments {
+    if (directionOptions.isNotEmpty &&
+        selectedDirectionIndex < directionOptions.length) {
+      return directionOptions[selectedDirectionIndex].segments;
+    }
+    return const <RouteSegment>[];
   }
 
   List<gtfs.Stop> get directionStopsView {
@@ -1619,8 +1936,8 @@ class _MyHomePageState extends State<MyHomePage>
         if (row.length <= idxStopId || row.length <= idxName) continue;
         if (row.length <= idxLat || row.length <= idxLon) continue;
         final baseId = row[idxStopId].trim().isEmpty
-          ? 'BUS_$i'
-          : row[idxStopId].trim();
+            ? 'BUS_$i'
+            : row[idxStopId].trim();
         final stopId = baseId;
         final name = row[idxName].trim();
         final lat = double.tryParse(row[idxLat].trim());
@@ -1750,7 +2067,9 @@ class _MyHomePageState extends State<MyHomePage>
       );
       final lines = const LineSplitter().convert(content);
       if (lines.length > 1) {
-        final header = _parseCsvLine(lines[0]).map((s) => s.toLowerCase()).toList();
+        final header = _parseCsvLine(
+          lines[0],
+        ).map((s) => s.toLowerCase()).toList();
         int idxFareId = header.indexOf('fareid');
         if (idxFareId < 0) idxFareId = 0;
         int idxStatus = header.indexOf('agencystatus');
@@ -1851,24 +2170,24 @@ class _MyHomePageState extends State<MyHomePage>
   }
 
   void _openTransitUpdatePage() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (context) => const TransitUpdatePage()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const TransitUpdatePage()));
   }
 
   void _openGraphicMap() {
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (context) => GraphicMapPage(
-        railStops: railStops,
-        shapeSegments: shapeSegments,
-      )),
+      MaterialPageRoute(
+        builder: (context) =>
+            GraphicMapPage(railStops: railStops, shapeSegments: shapeSegments),
+      ),
     );
   }
 
   void _openCardsPage() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (context) => const CardsPage()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const CardsPage()));
   }
 
   void _openNavigation(DirectionOption option) {
@@ -1917,12 +2236,8 @@ class _MyHomePageState extends State<MyHomePage>
     }
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
-      body: SafeArea(
-        top: false,
-        child: body,
-      ),
-      floatingActionButton:
-          showHome ? _buildLocationFab(context) : null,
+      body: SafeArea(top: false, child: body),
+      floatingActionButton: showHome ? _buildLocationFab(context) : null,
       bottomNavigationBar: showNav ? _buildNavigationBar() : null,
     );
   }

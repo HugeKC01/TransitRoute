@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:http/http.dart' as http;
 
 import 'package:route/services/csv_utils.dart';
 import 'package:route/services/fare_calculator.dart';
@@ -45,16 +46,16 @@ class RouteSegment {
   final TravelMode mode;
   final LocationPoint start;
   final LocationPoint end;
-  final double distanceMeters;
-  final int durationMinutes;
+  double distanceMeters;
+  int durationMinutes;
   final int fare; // Monetary cost for this specific segment
 
   // Transit-specific details
   final String? routeId;
   final String? routeShortName;
-  final String?
-  instruction; // e.g., "Walk to BTS Siam" or "Take Sukhumvit Line"
+  String? instruction; // e.g., "Walk to BTS Siam" or "Take Sukhumvit Line"
   final List<gtfs.Stop>? intermediateStops;
+  List<LocationPoint>? roadPolyline;
 
   RouteSegment({
     required this.mode,
@@ -67,6 +68,7 @@ class RouteSegment {
     this.routeShortName,
     this.instruction,
     this.intermediateStops,
+    this.roadPolyline,
   });
 }
 
@@ -211,6 +213,8 @@ class DirectionService {
     required LocationPoint startPoint,
     required LocationPoint destPoint,
   }) async {
+    await _ensureGraphsBuilt();
+
     final startStopId = startPoint.stopId ?? _findClosestStop(startPoint);
     final destStopId = destPoint.stopId ?? _findClosestStop(destPoint);
 
@@ -230,8 +234,6 @@ class DirectionService {
         destPoint.stopId != null) {
       return DirectionResult.empty(); // It's exactly the same transit stop
     }
-
-    await _ensureGraphsBuilt();
 
     final stopTimes = await _loadStopTimes();
     if (stopTimes.isEmpty) {
@@ -474,7 +476,65 @@ class DirectionService {
       }
     }
 
+    await _enrichSegmentsWithRoadRouting(options);
+
     return DirectionResult(options: options, selectionIndex: selectionIndex);
+  }
+
+  Future<void> _enrichSegmentsWithRoadRouting(
+    List<DirectionOption> options,
+  ) async {
+    final List<Future<void>> futures = [];
+    for (final option in options) {
+      for (final segment in option.segments) {
+        if (segment.mode == TravelMode.walk ||
+            segment.mode == TravelMode.bicycle ||
+            segment.mode == TravelMode.taxi) {
+          futures.add(_fetchRoadRouting(segment));
+        }
+      }
+    }
+    await Future.wait(futures);
+  }
+
+  Future<void> _fetchRoadRouting(RouteSegment segment) async {
+    final profile = segment.mode == TravelMode.walk
+        ? 'walking'
+        : (segment.mode == TravelMode.bicycle ? 'cycling' : 'driving');
+    final url =
+        'https://router.project-osrm.org/route/v1/$profile/${segment.start.lon},${segment.start.lat};${segment.end.lon},${segment.end.lat}?overview=full&geometries=geojson';
+    try {
+      final response = await http
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 3));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['routes'] != null && data['routes'].isNotEmpty) {
+          final geom = data['routes'][0]['geometry'];
+          if (geom != null && geom['type'] == 'LineString') {
+            final coords = geom['coordinates'] as List;
+            final polyline = coords
+                .map(
+                  (c) => LocationPoint(
+                    lat: c[1] as double,
+                    lon: c[0] as double,
+                    name: '',
+                  ),
+                )
+                .toList();
+            segment.roadPolyline = polyline;
+            final dist = data['routes'][0]['distance'];
+            final duration = data['routes'][0]['duration'];
+            if (dist != null) segment.distanceMeters = (dist as num).toDouble();
+            if (duration != null) {
+              segment.durationMinutes = ((duration as num) / 60).ceil();
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Error routing road: $e");
+    }
   }
 
   Future<void> _ensureGraphsBuilt() async {
