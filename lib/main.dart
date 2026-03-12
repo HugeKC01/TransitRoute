@@ -21,6 +21,8 @@ import 'graphic_map_page.dart';
 import 'widgets/route_details_sheet.dart';
 import 'widgets/route_options_panel.dart';
 
+import 'widgets/search_tabs.dart';
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
@@ -96,11 +98,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       }
     }
     return null;
-  }
-
-  bool _hasThaiName(gtfs.Stop stop) {
-    final value = stop.thaiName;
-    return value != null && value.isNotEmpty;
   }
 
   String _stopDisplayLabel(gtfs.Stop stop) {
@@ -1254,6 +1251,41 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     );
   }
 
+  Widget _buildSearchSuggestionTile(gtfs.Stop stop, VoidCallback onTap) {
+    final theme = Theme.of(context);
+    final lineColor = _getLineColor(stop.stopId);
+    
+    return ListTile(
+      leading: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: lineColor,
+          border: Border.all(color: theme.colorScheme.surface, width: 2),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          stop.code ?? stop.stopId,
+          style: TextStyle(
+            color: (lineColor.computeLuminance() > 0.5) ? Colors.black : Colors.white, 
+            fontWeight: FontWeight.bold, 
+            fontSize: 10
+          ),
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+      title: Text(stop.name),
+      subtitle: Text(
+        (stop.thaiName != null && stop.thaiName!.isNotEmpty) 
+            ? stop.thaiName! 
+            : 'Thai Station provide later',
+        style: theme.textTheme.bodySmall,
+      ),
+      onTap: onTap,
+    );
+  }
+
   Widget _buildCollapsedSearchBar(BuildContext context) {
     final theme = Theme.of(context);
     return Row(
@@ -1294,8 +1326,23 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               );
             },
             suggestionsBuilder: (context, controller) {
+              if (controller.text.isEmpty) {
+                return [
+                  ServiceTabs(
+                    allStops: allStops,
+                    busStops: busStops,
+                    linePrefixes: linePrefixes,
+                    lineColors: lineColors,
+                    getLineName: _getLineName,
+                    onSelect: (stop) {
+                      controller.closeView(stop.name);
+                      _handleCollapsedStopSelection(stop);
+                    },
+                  ),
+                ];
+              }
+
               final results = _filterStops(controller.text);
-              final theme = Theme.of(context);
               if (results.isEmpty) {
                 return [
                   const ListTile(
@@ -1305,25 +1352,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                 ];
               }
               return results.map(
-                (stop) => ListTile(
-                  leading: CircleAvatar(
-                    radius: 12,
-                    backgroundColor: _getLineColor(stop.stopId),
-                  ),
-                  title: Text(stop.name),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (_hasThaiName(stop))
-                        Text(stop.thaiName!, style: theme.textTheme.bodySmall),
-                      Text(
-                        'ID: ${stop.stopId}',
-                        style: theme.textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
-                  onTap: () {
+                (stop) => _buildSearchSuggestionTile(
+                  stop,
+                  () {
                     controller.closeView(stop.name);
                     _handleCollapsedStopSelection(stop);
                   },
@@ -1638,6 +1669,22 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             );
           },
           suggestionsBuilder: (context, ctrl) {
+            if (ctrl.text.isEmpty) {
+              return [
+                ServiceTabs(
+                  allStops: allStops,
+                  busStops: busStops,
+                  linePrefixes: linePrefixes,
+                  lineColors: lineColors,
+                  getLineName: _getLineName,
+                  onSelect: (stop) {
+                    ctrl.closeView(stop.name);
+                    _selectStopFromSearch(stop, asStart: asStart);
+                  },
+                ),
+              ];
+            }
+
             final results = _filterStops(ctrl.text);
             if (results.isEmpty) {
               return [
@@ -1648,25 +1695,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               ];
             }
             return results.map(
-              (stop) => ListTile(
-                leading: CircleAvatar(
-                  radius: 12,
-                  backgroundColor: _getLineColor(stop.stopId),
-                ),
-                title: Text(stop.name),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (_hasThaiName(stop))
-                      Text(stop.thaiName!, style: theme.textTheme.bodySmall),
-                    Text(
-                      'ID: ${stop.stopId}',
-                      style: theme.textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-                onTap: () {
+              (stop) => _buildSearchSuggestionTile(
+                stop,
+                () {
                   ctrl.closeView(stop.name);
                   _selectStopFromSearch(stop, asStart: asStart);
                 },
@@ -1688,6 +1719,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     );
   }
 
+  int _getServicePriority(gtfs.Stop stop) {
+    if (stop.stopId.startsWith('F')) return 4;
+    if (busStops.any((s) => s.stopId == stop.stopId)) return 3;
+    final lineName = _getLineName(stop.stopId) ?? '';
+    if (lineName.contains('SRT') || lineName.contains('Train')) return 2;
+    return 1;
+  }
+
   List<gtfs.Stop> _filterStops(String query) {
     final trimmed = query.trim().toLowerCase();
     if (trimmed.isEmpty || allStops.isEmpty) {
@@ -1702,12 +1741,20 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           thai.contains(trimmed);
     }).toList();
     matches.sort((a, b) {
+      // 1. Sort by service priority
+      final aPriority = _getServicePriority(a);
+      final bPriority = _getServicePriority(b);
+      if (aPriority != bPriority) return aPriority.compareTo(bPriority);
+
+      // 2. Sort by prefix score
       final aScore = _stopPrefixScore(a, trimmed);
       final bScore = _stopPrefixScore(b, trimmed);
       if (aScore != bScore) return aScore.compareTo(bScore);
+
+      // 3. Sort alphabetically
       return _stopDisplayLabel(a).compareTo(_stopDisplayLabel(b));
     });
-    return matches.take(8).toList();
+    return matches.take(20).toList();
   }
 
   Future<void> _selectStopFromSearch(
