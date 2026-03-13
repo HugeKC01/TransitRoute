@@ -26,16 +26,22 @@ class RouteAssetLoader {
         final line = lines[i].trimRight();
         if (line.isEmpty) continue;
         final row = parseCsvLine(line);
-        if ([idxRouteId, idxAgencyId, idxShortName, idxLongName, idxType]
-            .any((idx) => idx < 0 || idx >= row.length)) {
+        if ([
+          idxRouteId,
+          idxAgencyId,
+          idxShortName,
+          idxLongName,
+          idxType,
+        ].any((idx) => idx < 0 || idx >= row.length)) {
           continue;
         }
-        final linePrefixes = (idxLinePrefixes >= 0 && row.length > idxLinePrefixes)
+        final linePrefixes =
+            (idxLinePrefixes >= 0 && row.length > idxLinePrefixes)
             ? row
-                .sublist(idxLinePrefixes)
-                .map((s) => s.trim())
-                .where((s) => s.isNotEmpty)
-                .toList()
+                  .sublist(idxLinePrefixes)
+                  .map((s) => s.trim())
+                  .where((s) => s.isNotEmpty)
+                  .toList()
             : <String>[];
         routes.add(
           gtfs.Route(
@@ -44,8 +50,9 @@ class RouteAssetLoader {
             shortName: row[idxShortName].trim(),
             longName: row[idxLongName].trim(),
             type: row[idxType].trim(),
-            color:
-                idxColor >= 0 && idxColor < row.length ? _cleanHex(row[idxColor]) : null,
+            color: idxColor >= 0 && idxColor < row.length
+                ? _cleanHex(row[idxColor])
+                : null,
             textColor: idxTextColor >= 0 && idxTextColor < row.length
                 ? _cleanHex(row[idxTextColor])
                 : null,
@@ -131,7 +138,9 @@ class RouteAssetLoader {
       final content = await rootBundle.loadString(assetPath);
       final lines = const LineSplitter().convert(content);
       if (lines.length <= 1) return result;
-      final header = parseCsvLine(lines.first).map((s) => s.toLowerCase()).toList();
+      final header = parseCsvLine(
+        lines.first,
+      ).map((s) => s.toLowerCase()).toList();
       int idxFareId = header.indexOf('fareid');
       if (idxFareId < 0) idxFareId = 0;
       int idxStatus = header.indexOf('agencystatus');
@@ -143,7 +152,9 @@ class RouteAssetLoader {
         final row = parseCsvLine(line);
         if (row.length <= idxFareId) continue;
         final id = row[idxFareId].trim();
-        final status = row.length > idxStatus ? row[idxStatus].trim().toLowerCase() : '';
+        final status = row.length > idxStatus
+            ? row[idxStatus].trim().toLowerCase()
+            : '';
         if (id.isNotEmpty && (status == 'm' || status == 's')) {
           result[id] = status;
         }
@@ -158,7 +169,9 @@ class RouteAssetLoader {
       final content = await rootBundle.loadString(assetPath);
       final lines = const LineSplitter().convert(content);
       if (lines.length <= 1) return result;
-      final header = parseCsvLine(lines.first).map((s) => s.toLowerCase()).toList();
+      final header = parseCsvLine(
+        lines.first,
+      ).map((s) => s.toLowerCase()).toList();
       int idxId = header.indexOf('faredataid');
       if (idxId < 0) idxId = header.indexOf('fareid');
       if (idxId < 0) idxId = 0;
@@ -170,10 +183,79 @@ class RouteAssetLoader {
         final row = parseCsvLine(line);
         if (row.length <= idxId) continue;
         final id = row[idxId].trim();
-        final price = row.length > idxPrice ? int.tryParse(row[idxPrice].trim()) ?? 0 : 0;
+        final price = row.length > idxPrice
+            ? int.tryParse(row[idxPrice].trim()) ?? 0
+            : 0;
         if (id.isNotEmpty) {
           result[id] = price;
         }
+      }
+    } catch (_) {}
+    return result;
+  }
+
+  /// โหลด stopOrderMap จาก Faretype.txt:
+  /// เก็บเฉพาะแถวที่ agsscystatus เป็นตัวเลข (สำหรับ MRT/SRT/BTS Gold/Airport Link)
+  /// ผลลัพธ์: stopId → ลำดับสถานีบนสาย เช่น "BL10" → 10
+  static Future<Map<String, int>> loadStopOrderMap(String assetPath) async {
+    final result = <String, int>{};
+    try {
+      final content = await rootBundle.loadString(assetPath);
+      final lines = const LineSplitter().convert(content);
+      if (lines.length <= 1) return result;
+      final header = parseCsvLine(
+        lines.first,
+      ).map((s) => s.toLowerCase()).toList();
+      int idxFareId = header.indexOf('fareid');
+      if (idxFareId < 0) idxFareId = 0;
+      int idxStatus = header.indexOf('agencystatus');
+      if (idxStatus < 0) idxStatus = header.indexOf('agsscystatus');
+      if (idxStatus < 0) idxStatus = 1;
+      for (int i = 1; i < lines.length; i++) {
+        final line = lines[i].trimRight();
+        if (line.isEmpty) continue;
+        final row = parseCsvLine(line);
+        if (row.length <= idxFareId) continue;
+        final id = row[idxFareId].trim();
+        final statusRaw = row.length > idxStatus ? row[idxStatus].trim() : '';
+        // เก็บเฉพาะแถวที่ค่าเป็นตัวเลข (ลำดับสถานี)
+        final order = int.tryParse(statusRaw);
+        if (id.isNotEmpty && order != null) {
+          result[id] = order;
+        }
+      }
+    } catch (_) {}
+    return result;
+  }
+
+  /// โหลด fare_table.txt → `Map<rowKey, List<int>>`
+  /// rowKey เช่น "BL10" (ถอยหลัง) หรือ "BL10-" (ไปข้างหน้า)
+  /// `List<int>` = ค่าโดยสารตามระยะห่าง (index 0 = ห่าง 1 สถานี)
+  static Future<Map<String, List<int>>> loadFareTableMap(
+    String assetPath,
+  ) async {
+    final result = <String, List<int>>{};
+    try {
+      final content = await rootBundle.loadString(assetPath);
+      final lines = const LineSplitter().convert(content);
+      for (int i = 0; i < lines.length; i++) {
+        final line = lines[i].trimRight();
+        if (line.isEmpty) continue;
+        final row = parseCsvLine(line);
+        if (row.isEmpty) continue;
+        final rowKey = row[0].trim();
+        if (rowKey.isEmpty) continue;
+        // ข้ามแถว header ถ้ามี
+        if (rowKey.toLowerCase() == 'stopid' ||
+            rowKey.toLowerCase() == 'stop_id') {
+          continue;
+        }
+        final fares = <int>[];
+        for (int j = 1; j < row.length; j++) {
+          final val = int.tryParse(row[j].trim()) ?? 0;
+          fares.add(val);
+        }
+        result[rowKey] = fares;
       }
     } catch (_) {}
     return result;
