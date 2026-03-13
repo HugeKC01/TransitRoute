@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'dart:convert';
 import 'package:route/services/gtfs_models.dart' as gtfs;
+import 'package:route/services/route_asset_loader.dart';
 import 'package:route/transport_lines_details_page.dart';
 
 class TransportLinesPage extends StatefulWidget {
@@ -26,39 +27,20 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
 
   Future<void> _loadRoutes() async {
     try {
-      final routesFuture = rootBundle.loadString('assets/gtfs_data/routes.txt');
-      final agencyFuture = rootBundle.loadString('assets/gtfs_data/agency.txt');
-      final content = await routesFuture;
-      final agencyContent = await agencyFuture;
-      final lines = const LineSplitter().convert(content);
       final loadedRoutes = <gtfs.Route>[];
-      if (lines.length > 1) {
-        for (var i = 1; i < lines.length; i++) {
-          final line = lines[i].trimRight();
-          if (line.isEmpty) continue;
-          final row = _parseCsvLine(line);
-          if (row.length < 7) continue;
-          final linePrefixes = row.length > 7
-              ? row
-                    .sublist(7)
-                    .map((s) => s.trim())
-                    .where((s) => s.isNotEmpty)
-                    .toList()
-              : <String>[];
-          loadedRoutes.add(
-            gtfs.Route(
-              routeId: row[0].trim(),
-              agencyId: row[1].trim(),
-              shortName: row[2].trim(),
-              longName: row[3].trim(),
-              type: row[4].trim(),
-              color: row.length > 5 ? _cleanHex(row[5]) : null,
-              textColor: row.length > 6 ? _cleanHex(row[6]) : null,
-              linePrefixes: linePrefixes,
-            ),
-          );
-        }
-      }
+      final agencyFuture = rootBundle.loadString('assets/gtfs_data/agency.txt');
+
+      final mainRoutes = await RouteAssetLoader.loadRoutes(
+        'assets/gtfs_data/routes.txt',
+      );
+      final ferryRoutes = await RouteAssetLoader.loadRoutes(
+        'assets/gtfs_data/ferry_route.txt',
+      );
+
+      loadedRoutes.addAll(mainRoutes);
+      loadedRoutes.addAll(ferryRoutes);
+
+      final agencyContent = await agencyFuture;
       final loadedAgencies = _parseAgencies(agencyContent);
       setState(() {
         routes = loadedRoutes;
@@ -66,7 +48,7 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
         _loading = false;
       });
     } catch (e) {
-      debugPrint('Error loading routes.txt: $e');
+      debugPrint('Error loading routes: $e');
       setState(() {
         routes = [];
         agencies = {};
@@ -143,7 +125,7 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     if (_loading) {
       return Scaffold(
         appBar: AppBar(title: const Text('Transport Lines')),
@@ -168,7 +150,10 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16.0,
+                      vertical: 8.0,
+                    ),
                     child: TextField(
                       decoration: InputDecoration(
                         hintText: 'Search lines, agencies, or codes...',
@@ -190,7 +175,10 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
                   ),
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16.0,
+                      vertical: 8.0,
+                    ),
                     child: Row(
                       children: activeCategories.map((cat) {
                         return Padding(
@@ -222,7 +210,11 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.directions_bus_outlined, size: 64, color: theme.colorScheme.outline),
+                    Icon(
+                      Icons.directions_bus_outlined,
+                      size: 64,
+                      color: theme.colorScheme.outline,
+                    ),
                     const SizedBox(height: 16),
                     Text(
                       'No transport lines found.',
@@ -236,7 +228,12 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
             )
           else
             SliverPadding(
-              padding: const EdgeInsets.only(bottom: 24, left: 16, right: 16, top: 8),
+              padding: const EdgeInsets.only(
+                bottom: 24,
+                left: 16,
+                right: 16,
+                top: 8,
+              ),
               sliver: SliverList.list(
                 children: _buildGroupedRouteWidgets(theme, grouped),
               ),
@@ -256,7 +253,9 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
 
   List<gtfs.Route> _getFilteredRoutes() {
     return routes.where((route) {
-      final typeMatches = _selectedCategory == 'All' || _transportCategory(route) == _selectedCategory;
+      final typeMatches =
+          _selectedCategory == 'All' ||
+          _transportCategory(route) == _selectedCategory;
       if (!typeMatches) return false;
 
       if (_searchQuery.trim().isEmpty) return true;
@@ -265,9 +264,14 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
       final routeLongName = route.longName.toLowerCase();
       final routeShortName = route.shortName.toLowerCase();
       final agency = _agencyName(route.agencyId).toLowerCase();
-      final hasPrefix = route.linePrefixes.any((p) => p.toLowerCase().contains(q));
+      final hasPrefix = route.linePrefixes.any(
+        (p) => p.toLowerCase().contains(q),
+      );
 
-      return routeLongName.contains(q) || routeShortName.contains(q) || agency.contains(q) || hasPrefix;
+      return routeLongName.contains(q) ||
+          routeShortName.contains(q) ||
+          agency.contains(q) ||
+          hasPrefix;
     }).toList();
   }
 
@@ -282,7 +286,9 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
   }
 
   List<Widget> _buildGroupedRouteWidgets(
-      ThemeData theme, Map<String, Map<String, List<gtfs.Route>>> grouped) {
+    ThemeData theme,
+    Map<String, Map<String, List<gtfs.Route>>> grouped,
+  ) {
     final typeKeys = grouped.keys.toList()
       ..sort((a, b) {
         int indexFor(String key) {
@@ -318,11 +324,11 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
       final agenciesMap = grouped[type]!;
       final agencyIds = agenciesMap.keys.toList()
         ..sort((a, b) => _agencyName(a).compareTo(_agencyName(b)));
-      
+
       for (var i = 0; i < agencyIds.length; i++) {
         final agencyId = agencyIds[i];
         final agencyName = _agencyName(agencyId);
-        
+
         widgets.add(
           Padding(
             padding: const EdgeInsets.only(top: 12, bottom: 8),
@@ -347,15 +353,23 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
   }
 
   Widget _buildRouteCard(ThemeData theme, gtfs.Route route) {
-    final routeColor = _colorFromHexOr(route.color, theme.colorScheme.primaryContainer);
-    final routeTextColor = _colorFromHexOr(route.textColor, theme.colorScheme.onPrimaryContainer);
+    final routeColor = _colorFromHexOr(
+      route.color,
+      theme.colorScheme.primaryContainer,
+    );
+    final routeTextColor = _colorFromHexOr(
+      route.textColor,
+      theme.colorScheme.onPrimaryContainer,
+    );
 
     return Card(
       elevation: 0,
       margin: const EdgeInsets.symmetric(vertical: 6),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
+        side: BorderSide(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+        ),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
@@ -364,10 +378,8 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => TransportLinesDetailsPage(
-                route: route,
-                agency: agency,
-              ),
+              builder: (context) =>
+                  TransportLinesDetailsPage(route: route, agency: agency),
             ),
           );
         },
@@ -419,21 +431,25 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
                         runSpacing: 4,
                         children: route.linePrefixes
                             .where((p) => p.isNotEmpty)
-                            .map((p) => Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: theme.colorScheme.secondaryContainer,
-                                    borderRadius: BorderRadius.circular(6),
+                            .map(
+                              (p) => Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.secondaryContainer,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  p,
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color:
+                                        theme.colorScheme.onSecondaryContainer,
                                   ),
-                                  child: Text(
-                                    p,
-                                    style: theme.textTheme.labelSmall?.copyWith(
-                                      color:
-                                          theme.colorScheme.onSecondaryContainer,
-                                    ),
-                                  ),
-                                ))
+                                ),
+                              ),
+                            )
                             .toList(),
                       ),
                   ],
@@ -466,7 +482,9 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
     }
   }
 
-  Map<String, Map<String, List<gtfs.Route>>> _groupRoutes(List<gtfs.Route> routeList) {
+  Map<String, Map<String, List<gtfs.Route>>> _groupRoutes(
+    List<gtfs.Route> routeList,
+  ) {
     final map = <String, Map<String, List<gtfs.Route>>>{};
     for (final route in routeList) {
       final typeKey = _transportCategory(route);

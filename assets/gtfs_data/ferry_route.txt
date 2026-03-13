@@ -1,0 +1,6 @@
+route_id,agency_id,route_short_name,route_long_name,route_type,route_color,route_text_color,line_prefixes
+F_CPX,CPX,Boat,Chao Phraya Express Boat,4,FFA500,FFFFFF,F_
+F_CPX_G,CPX,Green,Chao Phraya Express Green Flag,4,008000,FFFFFF,F_
+F_CPX_O,CPX,Orange,Chao Phraya Express Orange Flag,4,FFA500,FFFFFF,F_
+F_CPX_Y,CPX,Yellow,Chao Phraya Express Yellow Flag,4,FFFF00,000000,F_
+F_CPX_B,CPX,Blue,Chao Phraya Tourist Blue Flag,4,0000FF,FFFFFF,F_

@@ -14,7 +14,8 @@ class TransportLinesDetailsPage extends StatefulWidget {
   });
 
   @override
-  State<TransportLinesDetailsPage> createState() => _TransportLinesDetailsPageState();
+  State<TransportLinesDetailsPage> createState() =>
+      _TransportLinesDetailsPageState();
 }
 
 class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
@@ -56,25 +57,29 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
     try {
       // 1. Load trips to find trip_id for this route
       final tripsFuture = rootBundle.loadString('assets/gtfs_data/trips.txt');
-      final stopTimesFuture = rootBundle.loadString('assets/gtfs_data/stop_times.txt');
+      final stopTimesFuture = rootBundle.loadString(
+        'assets/gtfs_data/stop_times.txt',
+      );
       final stopsFuture = rootBundle.loadString('assets/gtfs_data/stops.txt');
 
       final tripsContent = await tripsFuture;
       final tripsLines = const LineSplitter().convert(tripsContent);
-      
+
       String targetTripId = '';
       if (tripsLines.length > 1) {
         final headerRow = _parseCsvLine(tripsLines.first);
         final routeIdIdx = headerRow.indexOf('route_id');
         final tripIdIdx = headerRow.indexOf('trip_id');
-        
+
         for (int i = 1; i < tripsLines.length; i++) {
           final row = _parseCsvLine(tripsLines[i]);
           if (row.isEmpty) continue;
-          
-          if (routeIdIdx >= 0 && row.length > routeIdIdx && row[routeIdIdx] == widget.route.routeId) {
+
+          if (routeIdIdx >= 0 &&
+              row.length > routeIdIdx &&
+              row[routeIdIdx] == widget.route.routeId) {
             targetTripId = row[tripIdIdx];
-            break; // take the first matched trip 
+            break; // take the first matched trip
           }
         }
       }
@@ -89,7 +94,7 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
       // 2. Load stop_times to find stop_ids in sequence for this trip
       final stopTimesContent = await stopTimesFuture;
       final stopTimesLines = const LineSplitter().convert(stopTimesContent);
-      
+
       final orderedStopIds = <String>[];
       if (stopTimesLines.length > 1) {
         final headerRow = _parseCsvLine(stopTimesLines.first);
@@ -102,16 +107,20 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
         for (int i = 1; i < stopTimesLines.length; i++) {
           final row = _parseCsvLine(stopTimesLines[i]);
           if (row.isEmpty) continue;
-          
-          if (tripIdIdx >= 0 && row.length > tripIdIdx && row[tripIdIdx] == targetTripId) {
+
+          if (tripIdIdx >= 0 &&
+              row.length > tripIdIdx &&
+              row[tripIdIdx] == targetTripId) {
             tripStops.add({
               'stop_id': row[stopIdIdx],
               'sequence': int.tryParse(row[seqIdx]) ?? 0,
             });
           }
         }
-        
-        tripStops.sort((a, b) => (a['sequence'] as int).compareTo(b['sequence'] as int));
+
+        tripStops.sort(
+          (a, b) => (a['sequence'] as int).compareTo(b['sequence'] as int),
+        );
         orderedStopIds.addAll(tripStops.map((e) => e['stop_id'] as String));
       }
 
@@ -133,13 +142,14 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
         for (int i = 1; i < stopsLines.length; i++) {
           final row = _parseCsvLine(stopsLines[i]);
           if (row.isEmpty || row.length <= idIdx) continue;
-          
+
           final stopId = row[idIdx];
-          
+
           // Optimization: Only parse stops we actually need
           if (orderedStopIds.contains(stopId)) {
-            String valueAt(int idx) => (idx >= 0 && idx < row.length) ? row[idx].trim() : '';
-            
+            String valueAt(int idx) =>
+                (idx >= 0 && idx < row.length) ? row[idx].trim() : '';
+
             stopsMap[stopId] = gtfs.Stop(
               stopId: stopId,
               name: valueAt(nameIdx),
@@ -164,7 +174,6 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
         _routeStops = resultStops;
         _loading = false;
       });
-
     } catch (e) {
       debugPrint('Error loading stops for route: $e');
       setState(() {
@@ -201,12 +210,12 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
     final theme = Theme.of(context);
     final route = widget.route;
     final agency = widget.agency;
-    
+
     final routeColor = _colorFromHexOr(route.color, theme.colorScheme.primary);
-    
+
     // Choose text color based on background luminance, ensuring readability
     final routeTextColor = _colorFromHexOr(
-      route.textColor, 
+      route.textColor,
       routeColor.computeLuminance() > 0.5 ? Colors.black : Colors.white,
     );
 
@@ -226,10 +235,15 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
             color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(24),
-              side: BorderSide(color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
+              side: BorderSide(
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+              ),
             ),
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 32.0, horizontal: 16.0),
+              padding: const EdgeInsets.symmetric(
+                vertical: 32.0,
+                horizontal: 16.0,
+              ),
               child: Column(
                 children: [
                   Container(
@@ -273,29 +287,34 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
                       runSpacing: 8,
                       children: route.linePrefixes
                           .where((p) => p.isNotEmpty)
-                          .map((p) => Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: theme.colorScheme.secondaryContainer,
-                                  borderRadius: BorderRadius.circular(8),
+                          .map(
+                            (p) => Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.secondaryContainer,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                p,
+                                style: theme.textTheme.labelLarge?.copyWith(
+                                  color: theme.colorScheme.onSecondaryContainer,
+                                  fontWeight: FontWeight.w600,
                                 ),
-                                child: Text(
-                                  p,
-                                  style: theme.textTheme.labelLarge?.copyWith(
-                                    color: theme.colorScheme.onSecondaryContainer,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ))
+                              ),
+                            ),
+                          )
                           .toList(),
                     ),
-                  ]
+                  ],
                 ],
               ),
             ),
           ),
           const SizedBox(height: 32),
-          
+
           // Details Information Section
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8.0),
@@ -312,7 +331,9 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
             elevation: 0,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
-              side: BorderSide(color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
+              side: BorderSide(
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+              ),
             ),
             child: Column(
               children: [
@@ -326,9 +347,11 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
                 _buildInfoTile(
                   icon: Icons.business,
                   title: 'Operating Agency',
-                  subtitle: agency?.name.isNotEmpty == true 
-                      ? agency!.name 
-                      : (route.agencyId.isNotEmpty ? route.agencyId : 'Unknown Agency'),
+                  subtitle: agency?.name.isNotEmpty == true
+                      ? agency!.name
+                      : (route.agencyId.isNotEmpty
+                            ? route.agencyId
+                            : 'Unknown Agency'),
                   theme: theme,
                 ),
                 if (agency?.url.isNotEmpty == true) ...[
@@ -352,7 +375,7 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
               ],
             ),
           ),
-          
+
           if (_loading)
             const Padding(
               padding: EdgeInsets.all(32.0),
@@ -376,7 +399,11 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
               clipBehavior: Clip.antiAlias,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
-                side: BorderSide(color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
+                side: BorderSide(
+                  color: theme.colorScheme.outlineVariant.withValues(
+                    alpha: 0.5,
+                  ),
+                ),
               ),
               child: ListView.separated(
                 shrinkWrap: true,
@@ -386,7 +413,10 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
                 itemBuilder: (context, index) {
                   final stop = _routeStops[index];
                   return ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16.0,
+                      vertical: 4.0,
+                    ),
                     leading: Container(
                       width: 40,
                       height: 40,
@@ -421,12 +451,16 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
                             ),
                           )
                         : null,
-                    trailing: const Icon(Icons.location_on, size: 20, color: Colors.grey),
+                    trailing: const Icon(
+                      Icons.location_on,
+                      size: 20,
+                      color: Colors.grey,
+                    ),
                   );
                 },
               ),
             ),
-          ]
+          ],
         ],
       ),
     );
@@ -439,7 +473,10 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
     required ThemeData theme,
   }) {
     return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 16.0,
+        vertical: 8.0,
+      ),
       leading: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(

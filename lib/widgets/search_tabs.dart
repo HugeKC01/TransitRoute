@@ -23,9 +23,10 @@ class ServiceTabs extends StatefulWidget {
   State<ServiceTabs> createState() => _ServiceTabsState();
 }
 
-class _ServiceTabsState extends State<ServiceTabs> with SingleTickerProviderStateMixin {
+class _ServiceTabsState extends State<ServiceTabs>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  
+
   String? _selectedMetroLine;
   String? _selectedTrainLine;
   String? _selectedBusLine;
@@ -44,7 +45,10 @@ class _ServiceTabsState extends State<ServiceTabs> with SingleTickerProviderStat
   }
 
   // Group stops by line name
-  Map<String, List<gtfs.Stop>> _groupStopsByLine(List<gtfs.Stop> stops, bool Function(String, gtfs.Stop) filterLine) {
+  Map<String, List<gtfs.Stop>> _groupStopsByLine(
+    List<gtfs.Stop> stops,
+    bool Function(String, gtfs.Stop) filterLine,
+  ) {
     final Map<String, List<gtfs.Stop>> grouped = {};
     for (final stop in stops) {
       final lineName = widget.getLineName(stop.stopId) ?? 'Unknown';
@@ -67,7 +71,7 @@ class _ServiceTabsState extends State<ServiceTabs> with SingleTickerProviderStat
     final lineName = widget.getLineName(stop.stopId) ?? 'Unknown';
     final lineColor = widget.lineColors[lineName] ?? Colors.grey;
     final theme = Theme.of(context);
-    
+
     return ListTile(
       leading: Container(
         width: 40,
@@ -81,17 +85,19 @@ class _ServiceTabsState extends State<ServiceTabs> with SingleTickerProviderStat
         child: Text(
           stop.code ?? stop.stopId,
           style: TextStyle(
-            color: (lineColor.computeLuminance() > 0.5) ? Colors.black : Colors.white, 
-            fontWeight: FontWeight.bold, 
-            fontSize: 10
+            color: (lineColor.computeLuminance() > 0.5)
+                ? Colors.black
+                : Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 10,
           ),
           overflow: TextOverflow.ellipsis,
         ),
       ),
       title: Text(stop.name),
       subtitle: Text(
-        (stop.thaiName != null && stop.thaiName!.isNotEmpty) 
-            ? stop.thaiName! 
+        (stop.thaiName != null && stop.thaiName!.isNotEmpty)
+            ? stop.thaiName!
             : 'Thai Station provide later',
         style: theme.textTheme.bodySmall,
       ),
@@ -106,8 +112,9 @@ class _ServiceTabsState extends State<ServiceTabs> with SingleTickerProviderStat
     required ValueChanged<String?> onLineChanged,
   }) {
     final lines = groupedStops.keys.toList()..sort();
-    final effectiveSelectedLine = (selectedLine != null && lines.contains(selectedLine)) 
-        ? selectedLine 
+    final effectiveSelectedLine =
+        (selectedLine != null && lines.contains(selectedLine))
+        ? selectedLine
         : null;
 
     final List<Object> listItems = [];
@@ -135,7 +142,10 @@ class _ServiceTabsState extends State<ServiceTabs> with SingleTickerProviderStat
               items: [
                 const DropdownMenuItem<String?>(
                   value: null,
-                  child: Text('All Lines', style: TextStyle(fontWeight: FontWeight.w500)),
+                  child: Text(
+                    'All Lines',
+                    style: TextStyle(fontWeight: FontWeight.w500),
+                  ),
                 ),
                 ...lines.map((line) {
                   final color = widget.lineColors[line] ?? Colors.grey;
@@ -144,8 +154,8 @@ class _ServiceTabsState extends State<ServiceTabs> with SingleTickerProviderStat
                     child: Row(
                       children: [
                         Container(
-                          width: 20, 
-                          height: 20, 
+                          width: 20,
+                          height: 20,
                           margin: const EdgeInsets.only(right: 12),
                           decoration: BoxDecoration(
                             color: color,
@@ -154,7 +164,7 @@ class _ServiceTabsState extends State<ServiceTabs> with SingleTickerProviderStat
                         ),
                         Expanded(
                           child: Text(
-                            line, 
+                            line,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(fontWeight: FontWeight.w500),
                           ),
@@ -182,27 +192,38 @@ class _ServiceTabsState extends State<ServiceTabs> with SingleTickerProviderStat
                         children: [
                           if (index != 0) const Divider(height: 1),
                           Container(
-                            color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-                            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                            color: Theme.of(context)
+                                .colorScheme
+                                .surfaceContainerHighest
+                                .withValues(alpha: 0.3),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16.0,
+                              vertical: 8.0,
+                            ),
                             child: Row(
                               children: [
                                 Container(
-                                  width: 12, 
-                                  height: 12, 
+                                  width: 12,
+                                  height: 12,
                                   decoration: BoxDecoration(
-                                    color: color, 
-                                    shape: BoxShape.circle
+                                    color: color,
+                                    shape: BoxShape.circle,
                                   ),
                                 ),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
-                                    item, 
-                                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                      color: Theme.of(context).colorScheme.primary,
-                                    ),
-                                  )
+                                    item,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleSmall
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.primary,
+                                        ),
+                                  ),
                                 ),
                               ],
                             ),
@@ -212,7 +233,7 @@ class _ServiceTabsState extends State<ServiceTabs> with SingleTickerProviderStat
                     } else if (item is gtfs.Stop) {
                       return _buildStopTile(context, item);
                     }
-                    
+
                     return const SizedBox.shrink();
                   },
                 ),
@@ -224,23 +245,25 @@ class _ServiceTabsState extends State<ServiceTabs> with SingleTickerProviderStat
   @override
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
-    final height = mediaQuery.size.height * 0.7; // Take 70% of the screen height by default 
-    
+    final height =
+        mediaQuery.size.height *
+        0.7; // Take 70% of the screen height by default
+
     final metroStops = _groupStopsByLine(
-      widget.allStops, 
-      (line, stop) => _getServicePriority(stop) == 1
+      widget.allStops,
+      (line, stop) => _getServicePriority(stop) == 1,
     );
     final trainStops = _groupStopsByLine(
-      widget.allStops, 
-      (line, stop) => _getServicePriority(stop) == 2
+      widget.allStops,
+      (line, stop) => _getServicePriority(stop) == 2,
     );
     final busStops = _groupStopsByLine(
-      widget.allStops, 
-      (line, stop) => _getServicePriority(stop) == 3
+      widget.allStops,
+      (line, stop) => _getServicePriority(stop) == 3,
     );
     final ferryStops = _groupStopsByLine(
-      widget.allStops, 
-      (line, stop) => _getServicePriority(stop) == 4
+      widget.allStops,
+      (line, stop) => _getServicePriority(stop) == 4,
     );
 
     return SizedBox(
@@ -250,7 +273,9 @@ class _ServiceTabsState extends State<ServiceTabs> with SingleTickerProviderStat
           TabBar(
             controller: _tabController,
             labelColor: Theme.of(context).colorScheme.primary,
-            unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
+            unselectedLabelColor: Theme.of(
+              context,
+            ).colorScheme.onSurfaceVariant,
             isScrollable: true,
             tabs: const [
               Tab(text: 'Metro'),
@@ -267,25 +292,29 @@ class _ServiceTabsState extends State<ServiceTabs> with SingleTickerProviderStat
                   context,
                   groupedStops: metroStops,
                   selectedLine: _selectedMetroLine,
-                  onLineChanged: (val) => setState(() => _selectedMetroLine = val),
+                  onLineChanged: (val) =>
+                      setState(() => _selectedMetroLine = val),
                 ),
                 _buildTabView(
                   context,
                   groupedStops: trainStops,
                   selectedLine: _selectedTrainLine,
-                  onLineChanged: (val) => setState(() => _selectedTrainLine = val),
+                  onLineChanged: (val) =>
+                      setState(() => _selectedTrainLine = val),
                 ),
                 _buildTabView(
                   context,
                   groupedStops: busStops,
                   selectedLine: _selectedBusLine,
-                  onLineChanged: (val) => setState(() => _selectedBusLine = val),
+                  onLineChanged: (val) =>
+                      setState(() => _selectedBusLine = val),
                 ),
                 _buildTabView(
                   context,
                   groupedStops: ferryStops,
                   selectedLine: _selectedFerryLine,
-                  onLineChanged: (val) => setState(() => _selectedFerryLine = val),
+                  onLineChanged: (val) =>
+                      setState(() => _selectedFerryLine = val),
                 ),
               ],
             ),

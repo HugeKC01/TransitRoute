@@ -9,6 +9,7 @@ import 'package:location/location.dart';
 import 'package:route/services/direction_service.dart';
 import 'package:route/services/gtfs_models.dart' as gtfs;
 import 'package:route/services/gtfs_shapes.dart';
+import 'package:route/services/route_asset_loader.dart';
 
 import 'more_page.dart';
 import 'cards_page.dart';
@@ -80,6 +81,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   bool _didFitRails = false;
   List<ShapeSegment> shapeSegments = [];
   List<gtfs.Stop> busStops = [];
+  List<gtfs.Stop> ferryStops = [];
   Map<String, String> fareTypeMap = {};
   Map<String, int> fareDataMap = {};
   Map<String, int> stopOrderMap = {};
@@ -908,6 +910,18 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         viewPadding.bottom + fabHeight + fabGap + sheetOffset;
     final showBusStops =
         busStops.isNotEmpty && _currentZoom >= _busStopZoomThreshold;
+    final showFerryStops =
+        ferryStops.isNotEmpty && _currentZoom >= _busStopZoomThreshold;
+
+    final routeStopIds = <String>{};
+    for (final seg in activeSegments) {
+      if (seg.intermediateStops != null) {
+        routeStopIds.addAll(seg.intermediateStops!.map((s) => s.stopId));
+      }
+      if (seg.start.stopId != null) routeStopIds.add(seg.start.stopId!);
+      if (seg.end.stopId != null) routeStopIds.add(seg.end.stopId!);
+    }
+
     return Stack(
       children: [
         FlutterMap(
@@ -930,14 +944,16 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
               userAgentPackageName: 'com.example.route',
             ),
-            if (shapeSegments.isNotEmpty && activeSegments.isEmpty)
+            if (shapeSegments.isNotEmpty)
               PolylineLayer(
                 polylines: shapeSegments
                     .map(
                       (s) => Polyline(
                         points: s.points,
-                        color: s.color,
-                        strokeWidth: 6.0,
+                        color: activeSegments.isNotEmpty
+                            ? Colors.grey.withValues(alpha: 0.5)
+                            : s.color,
+                        strokeWidth: activeSegments.isNotEmpty ? 4.0 : 6.0,
                       ),
                     )
                     .toList(),
@@ -956,9 +972,17 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                             message: stop.name,
                             child: Container(
                               decoration: BoxDecoration(
-                                color: Colors.orange.shade600,
+                                color:
+                                    (activeSegments.isNotEmpty &&
+                                        !routeStopIds.contains(stop.stopId))
+                                    ? Colors.grey.shade400
+                                    : Colors.orange.shade600,
                                 border: Border.all(
-                                  color: Colors.black.withValues(alpha: 0.18),
+                                  color:
+                                      (activeSegments.isNotEmpty &&
+                                          !routeStopIds.contains(stop.stopId))
+                                      ? Colors.grey.shade600
+                                      : Colors.black.withValues(alpha: 0.18),
                                   width: 1,
                                 ),
                                 borderRadius: const BorderRadius.only(
@@ -969,6 +993,50 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                               child: const Center(
                                 child: Icon(
                                   Icons.directions_bus,
+                                  color: Colors.white,
+                                  size: 12,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+            if (showFerryStops)
+              MarkerLayer(
+                markers: ferryStops
+                    .map(
+                      (stop) => Marker(
+                        point: LatLng(stop.lat, stop.lon),
+                        width: 18,
+                        height: 22,
+                        child: GestureDetector(
+                          onTap: () => _showStopDetails(context, stop),
+                          child: Tooltip(
+                            message: stop.name,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: (activeSegments.isNotEmpty &&
+                                        !routeStopIds.contains(stop.stopId))
+                                    ? Colors.grey.shade400
+                                    : Colors.cyan.shade600,
+                                border: Border.all(
+                                  color: (activeSegments.isNotEmpty &&
+                                          !routeStopIds.contains(stop.stopId))
+                                      ? Colors.grey.shade600
+                                      : Colors.black.withValues(alpha: 0.18),
+                                  width: 1,
+                                ),
+                                borderRadius: const BorderRadius.only(
+                                  topLeft: Radius.circular(6),
+                                  topRight: Radius.circular(6),
+                                ),
+                              ),
+                              child: const Center(
+                                child: Icon(
+                                  Icons.directions_boat,
                                   color: Colors.white,
                                   size: 12,
                                 ),
@@ -1003,10 +1071,19 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                                     ? Colors.greenAccent.withValues(alpha: 0.85)
                                     : (stop.stopId == destId)
                                     ? Colors.redAccent.withValues(alpha: 0.85)
+                                    : (activeSegments.isNotEmpty &&
+                                          !routeStopIds.contains(stop.stopId))
+                                    ? Colors.grey.shade300
                                     : Colors.white,
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                  color: _getLineColor(stop.stopId),
+                                  color:
+                                      (activeSegments.isNotEmpty &&
+                                          !routeStopIds.contains(stop.stopId) &&
+                                          stop.stopId != startId &&
+                                          stop.stopId != destId)
+                                      ? Colors.grey.shade500
+                                      : _getLineColor(stop.stopId),
                                   width:
                                       (stop.stopId == startId ||
                                           stop.stopId == destId)
@@ -1866,9 +1943,22 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
   Future<void> _loadRoutesAndStops() async {
     final routes = await _parseRoutesFromAsset('assets/gtfs_data/routes.txt');
+    final busRoutes = await RouteAssetLoader.loadRoutes(
+      'assets/gtfs_data/bus_route.txt',
+    );
+    final ferryRoutes = await RouteAssetLoader.loadRoutes(
+      'assets/gtfs_data/ferry_route.txt',
+    );
+    routes.addAll(busRoutes);
+    routes.addAll(ferryRoutes);
+
     final thaiNames = await _loadThaiStopNames();
     final stops = await _parseStopsFromAsset(
       'assets/gtfs_data/stops.txt',
+      thaiNames: thaiNames,
+    );
+    final ferryStops = await RouteAssetLoader.loadStops(
+      'assets/gtfs_data/ferry_stop.txt',
       thaiNames: thaiNames,
     );
     final busStopList = await _parseBusStopsFromAsset(
@@ -1885,7 +1975,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         colorMap[route.longName] = Color(int.parse('0xFF${route.color!}'));
       }
     }
-    final combinedStops = <gtfs.Stop>[...stops, ...busStopList];
+    final combinedStops = <gtfs.Stop>[...stops, ...busStopList, ...ferryStops];
     final stopMap = {for (final stop in combinedStops) stop.stopId: stop};
     _directionService.updateData(
       allStops: combinedStops,
@@ -1916,6 +2006,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       railStops = stops;
       allStops = combinedStops;
       busStops = busStopList;
+      this.ferryStops = ferryStops;
       linePrefixes = prefixMap;
       lineColors = colorMap;
       stopLookup = stopMap;

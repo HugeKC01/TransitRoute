@@ -114,6 +114,7 @@ class DirectionService {
   static const List<String> _stopTimeAssets = [
     'assets/gtfs_data/stop_times.txt',
     'assets/gtfs_data/bus_stop_times.txt',
+    'assets/gtfs_data/ferry_stop_times.txt',
   ];
 
   final LineNameResolver lineNameResolver;
@@ -126,6 +127,7 @@ class DirectionService {
   static const List<List<String>> _transferHubs = [
     ['CEN'],
     ['S7', 'G1'],
+    ['S6', 'F_CEN'],
     ['BL01'],
     ['BL13', 'N8'],
     ['BL14', 'N9'],
@@ -1267,9 +1269,7 @@ class DirectionService {
         for (final pref in route.linePrefixes) {
           if (stopId.startsWith(pref)) {
             lines.add(
-              route.longName.isNotEmpty
-                  ? route.longName
-                  : route.routeId,
+              route.longName.isNotEmpty ? route.longName : route.routeId,
             );
             break;
           }

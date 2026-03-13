@@ -56,9 +56,7 @@ class _TransitUpdatePageState extends State<TransitUpdatePage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Report transit update'),
-      ),
+      appBar: AppBar(title: const Text('Report transit update')),
       body: SafeArea(
         child: Form(
           key: _formKey,
@@ -112,8 +110,8 @@ class _TransitUpdatePageState extends State<TransitUpdatePage> {
                 maxLines: 4,
                 validator: (value) =>
                     (value == null || value.trim().length < 10)
-                        ? 'Please provide at least 10 characters'
-                        : null,
+                    ? 'Please provide at least 10 characters'
+                    : null,
               ),
               const SizedBox(height: 16),
               TextFormField(
@@ -148,7 +146,9 @@ class _TransitUpdatePageState extends State<TransitUpdatePage> {
                 value: _shareContact,
                 onChanged: (value) => setState(() => _shareContact = value),
                 title: const Text('Share contact info'),
-                subtitle: const Text('Allow staff to reach out if more info needed'),
+                subtitle: const Text(
+                  'Allow staff to reach out if more info needed',
+                ),
               ),
               const SizedBox(height: 16),
               FilledButton.icon(
@@ -161,7 +161,9 @@ class _TransitUpdatePageState extends State<TransitUpdatePage> {
                 onPressed: () {
                   // Future: integrate with Firebase Storage for photo uploads.
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Photo attachments coming soon.')),
+                    const SnackBar(
+                      content: Text('Photo attachments coming soon.'),
+                    ),
                   );
                 },
                 icon: const Icon(Icons.photo_camera_outlined),

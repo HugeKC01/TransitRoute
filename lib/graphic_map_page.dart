@@ -17,7 +17,8 @@ class GraphicMapPage extends StatefulWidget {
 }
 
 class _GraphicMapPageState extends State<GraphicMapPage> {
-  final TransformationController _transformationController = TransformationController();
+  final TransformationController _transformationController =
+      TransformationController();
 
   @override
   void initState() {
@@ -139,7 +140,7 @@ class _TransitGraphicPainter extends CustomPainter {
     final stationPaint = Paint()
       ..color = Colors.white
       ..style = PaintingStyle.fill;
-    
+
     final stationBorderPaint = Paint()
       ..color = Colors.black87
       ..style = PaintingStyle.stroke
@@ -168,7 +169,7 @@ class _TransitGraphicPainter extends CustomPainter {
       );
 
       foregroundPainter.layout();
-      
+
       final textSpanShadow = TextSpan(
         text: _extractStationName(stop.name),
         style: TextStyle(
@@ -180,25 +181,19 @@ class _TransitGraphicPainter extends CustomPainter {
             ..color = Colors.white,
         ),
       );
-      
+
       final shadowPainter = TextPainter(
-          text: textSpanShadow,
-          textDirection: TextDirection.ltr
+        text: textSpanShadow,
+        textDirection: TextDirection.ltr,
       );
       shadowPainter.layout();
 
       const offsetX = 10.0;
       const offsetY = -8.0;
 
-      shadowPainter.paint(
-        canvas,
-        Offset(x + offsetX, y + offsetY),
-      );
-      
-      foregroundPainter.paint(
-        canvas,
-        Offset(x + offsetX, y + offsetY),
-      );
+      shadowPainter.paint(canvas, Offset(x + offsetX, y + offsetY));
+
+      foregroundPainter.paint(canvas, Offset(x + offsetX, y + offsetY));
     }
   }
 

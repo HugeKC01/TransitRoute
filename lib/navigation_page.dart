@@ -112,10 +112,7 @@ class _NavigationPageState extends State<NavigationPage> {
     }
   }
 
-  ({int index, double distance})? _nearestUpcomingStop(
-    double lat,
-    double lon,
-  ) {
+  ({int index, double distance})? _nearestUpcomingStop(double lat, double lon) {
     if (_stops.isEmpty) return null;
     double? bestDistance;
     int? bestIndex;
@@ -192,18 +189,34 @@ class _NavigationPageState extends State<NavigationPage> {
       markers.add(
         Marker(
           point: LatLng(_lastLocation!.latitude!, _lastLocation!.longitude!),
-          width: 26,
-          height: 26,
+          width: 40,
+          height: 40,
           child: Container(
             decoration: BoxDecoration(
-              color: Colors.blue,
+              color: Colors.blueAccent.withValues(alpha: 0.3),
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 3),
+            ),
+            child: Center(
+              child: Container(
+                width: 20,
+                height: 20,
+                decoration: BoxDecoration(
+                  color: Colors.blue,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 3),
+                ),
+              ),
             ),
           ),
         ),
       );
     }
+
+    final travelledPath = polylines.sublist(
+      0,
+      math.min(_currentIndex + 1, polylines.length),
+    );
+    final upcomingPath = polylines.sublist(_currentIndex, polylines.length);
 
     return FlutterMap(
       mapController: _mapController,
@@ -211,7 +224,7 @@ class _NavigationPageState extends State<NavigationPage> {
         initialCenter: polylines.isNotEmpty
             ? polylines.first
             : const LatLng(13.7463, 100.5347),
-        initialZoom: 13,
+        initialZoom: 15,
         interactionOptions: const InteractionOptions(
           enableMultiFingerGestureRace: true,
         ),
@@ -221,20 +234,107 @@ class _NavigationPageState extends State<NavigationPage> {
           urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
           userAgentPackageName: 'com.example.route',
         ),
-        if (polylines.length > 1)
+        if (travelledPath.length > 1)
           PolylineLayer(
             polylines: [
               Polyline(
-                points: polylines,
-                strokeWidth: 6,
-                color: widget.lineColorResolver(
-                  _stops[_currentIndex].stopId,
-                ),
+                points: travelledPath,
+                strokeWidth: 5,
+                color: Colors.grey.withValues(alpha: 0.6),
+              ),
+            ],
+          ),
+        if (upcomingPath.length > 1)
+          PolylineLayer(
+            polylines: [
+              Polyline(
+                points: upcomingPath,
+                strokeWidth: 7,
+                color: widget.lineColorResolver(_stops[_currentIndex].stopId),
+                borderStrokeWidth: 2,
+                borderColor: widget
+                    .lineColorResolver(_stops[_currentIndex].stopId)
+                    .withBlue(50)
+                    .withGreen(50),
               ),
             ],
           ),
         if (markers.isNotEmpty) MarkerLayer(markers: markers),
       ],
+    );
+  }
+
+  Widget _buildTopInstructionsCard(ThemeData theme) {
+    final isLast = _currentIndex >= _stops.length - 1;
+    final nextStop = isLast ? _stops.last : _stops[_currentIndex + 1];
+    final nextColor = widget.lineColorResolver(nextStop.stopId);
+
+    String distanceStr = '';
+    if (_lastLocation?.latitude != null && _lastLocation?.longitude != null) {
+      final m = _distanceToStop(
+        nextStop,
+        _lastLocation!.latitude!,
+        _lastLocation!.longitude!,
+      );
+      distanceStr = m > 1000
+          ? '${(m / 1000).toStringAsFixed(1)} km'
+          : '${m.toStringAsFixed(0)} m';
+    }
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      elevation: 6,
+      color: theme.colorScheme.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(16)),
+        child: Row(
+          children: [
+            Column(
+              children: [
+                Icon(
+                  isLast ? Icons.flag : Icons.turn_slight_right,
+                  color: isLast ? Colors.green : nextColor,
+                  size: 36,
+                ),
+                if (distanceStr.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    distanceStr,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: isLast ? Colors.green : nextColor,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    isLast ? 'Arrive at destination' : 'Next: ${nextStop.name}',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Towards ${_stops.last.name}',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -255,112 +355,63 @@ class _NavigationPageState extends State<NavigationPage> {
   }
 
   Widget _buildDrawerHeader(ThemeData theme) {
-    final stopsLeftLine = _stopsLeftOnCurrentLine();
     final remainingMinutes = _remainingMinutes();
+    final arrivalTime = TimeOfDay.fromDateTime(
+      DateTime.now().add(Duration(minutes: remainingMinutes)),
+    );
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  _currentLineName,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '$remainingMinutes',
+                      style: theme.textTheme.displaySmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green.shade700,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Text(
+                        'min',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green.shade700,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '$stopsLeftLine stops left on this line • ~$remainingMinutes min',
-                  style: theme.textTheme.bodySmall,
+                  '${arrivalTime.format(context)} • ${_stopsLeftOnCurrentLine()} stops left',
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
           ),
-          IconButton(
-            tooltip: 'Recenter',
-            icon: Icon(_followUser ? Icons.my_location : Icons.location_searching),
-            onPressed: () {
-              setState(() => _followUser = !_followUser);
-              if (_followUser &&
-                  _lastLocation?.latitude != null &&
-                  _lastLocation?.longitude != null) {
-                _mapController.move(
-                  LatLng(_lastLocation!.latitude!, _lastLocation!.longitude!),
-                  _mapController.camera.zoom,
-                );
-              }
-            },
-          ),
-          TextButton.icon(
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red.shade600,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
             onPressed: () => Navigator.of(context).maybePop(),
             icon: const Icon(Icons.close),
-            label: const Text('End'),
+            label: const Text('Exit'),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildNextStepCard(ThemeData theme) {
-    final isLast = _currentIndex >= _stops.length - 1;
-    final nextStop = isLast ? _stops.last : _stops[_currentIndex + 1];
-    final nextLine = widget.lineNameResolver(nextStop.stopId) ?? _currentLineName;
-    final nextColor = widget.lineColorResolver(nextStop.stopId);
-    final distance = (_lastLocation?.latitude != null &&
-            _lastLocation?.longitude != null)
-        ? _distanceToStop(
-                nextStop, _lastLocation!.latitude!, _lastLocation!.longitude!)
-            .toStringAsFixed(0)
-        : null;
-    return Card(
-      elevation: 0,
-      color: theme.colorScheme.surfaceContainerHighest,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: nextColor,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(Icons.navigation, color: Colors.white),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    isLast ? 'Arrive at destination' : 'Next stop',
-                    style: theme.textTheme.labelLarge,
-                  ),
-                  Text(
-                    nextStop.name,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  Text(
-                    'Line $nextLine${distance != null ? ' • ${distance}m away' : ''}',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ),
-            if (!isLast)
-              FilledButton.icon(
-                onPressed: () => _jumpTo(index: _currentIndex + 1),
-                icon: const Icon(Icons.arrow_forward),
-                label: const Text('Advance'),
-              ),
-          ],
-        ),
       ),
     );
   }
@@ -378,32 +429,33 @@ class _NavigationPageState extends State<NavigationPage> {
         final isCurrent = index == _currentIndex;
         final isPassed = index < _currentIndex;
         final isLast = index == _stops.length - 1;
-        final distance = (_lastLocation?.latitude != null &&
-                _lastLocation?.longitude != null)
-            ? '${_distanceToStop(stop, _lastLocation!.latitude!, _lastLocation!.longitude!).toStringAsFixed(0)} m'
-            : null;
         return ListTile(
           onTap: () => _jumpTo(index: index),
-          leading: CircleAvatar(
-            backgroundColor:
-                isCurrent ? color : color.withValues(alpha: 0.18),
-            child: Icon(
-              isLast
-                  ? Icons.flag
-                  : index == 0
-                      ? Icons.trip_origin
-                      : Icons.stop_circle,
-              color: Colors.white,
-              size: 18,
+          contentPadding: EdgeInsets.zero,
+          leading: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                isLast
+                    ? Icons.flag
+                    : index == 0
+                    ? Icons.trip_origin
+                    : Icons.circle,
+                color: isPassed ? Colors.grey : color,
+                size: isCurrent ? 24 : 16,
+              ),
+            ],
+          ),
+          title: Text(
+            stop.name,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+              color: isPassed
+                  ? theme.colorScheme.onSurfaceVariant
+                  : theme.colorScheme.onSurface,
             ),
           ),
-          title: Text(stop.name),
-          subtitle: Text('Line $line${distance != null ? ' • $distance' : ''}'),
-          trailing: isPassed
-              ? const Icon(Icons.check_circle, color: Colors.green)
-              : isCurrent
-                  ? const Icon(Icons.my_location)
-                  : null,
+          subtitle: Text('Line $line'),
         );
       },
     );
@@ -420,19 +472,21 @@ class _NavigationPageState extends State<NavigationPage> {
     }
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: Text(
-          widget.option.label.isNotEmpty
-              ? widget.option.label
-              : 'Navigation',
-        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading:
+            const SizedBox.shrink(), // hide default back button as we have custom ones
+        flexibleSpace: SafeArea(child: _buildTopInstructionsCard(theme)),
+        toolbarHeight: 120, // ample space for the floating card
       ),
       body: Stack(
         children: [
           Positioned.fill(child: _buildMap()),
           if (_locationError != null)
             Positioned(
-              top: 16,
+              top: 140,
               left: 16,
               right: 16,
               child: Material(
@@ -456,11 +510,58 @@ class _NavigationPageState extends State<NavigationPage> {
                 ),
               ),
             ),
+
+          // Floating action buttons
+          Positioned(
+            right: 16,
+            bottom: MediaQuery.of(context).size.height * 0.28,
+            child: Column(
+              children: [
+                FloatingActionButton.small(
+                  heroTag: 'recenter',
+                  backgroundColor: theme.colorScheme.surface,
+                  foregroundColor: _followUser
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.onSurface,
+                  child: Icon(
+                    _followUser ? Icons.my_location : Icons.location_searching,
+                  ),
+                  onPressed: () {
+                    setState(() => _followUser = !_followUser);
+                    if (_followUser &&
+                        _lastLocation?.latitude != null &&
+                        _lastLocation?.longitude != null) {
+                      _mapController.move(
+                        LatLng(
+                          _lastLocation!.latitude!,
+                          _lastLocation!.longitude!,
+                        ),
+                        _mapController.camera.zoom,
+                      );
+                    }
+                  },
+                ),
+                const SizedBox(height: 8),
+                FloatingActionButton.small(
+                  heroTag: 'advance',
+                  backgroundColor: theme.colorScheme.surface,
+                  foregroundColor: theme.colorScheme.onSurface,
+                  child: const Icon(Icons.arrow_forward),
+                  onPressed: () {
+                    if (_currentIndex < _stops.length - 1) {
+                      _jumpTo(index: _currentIndex + 1);
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+
           Positioned.fill(
             child: DraggableScrollableSheet(
               controller: _sheetController,
-              initialChildSize: 0.24,
-              minChildSize: 0.18,
+              initialChildSize: 0.22,
+              minChildSize: 0.22,
               maxChildSize: 0.9,
               builder: (context, controller) {
                 return Material(
@@ -474,35 +575,9 @@ class _NavigationPageState extends State<NavigationPage> {
                     children: [
                       _buildDrawerHandle(theme.colorScheme.outlineVariant),
                       _buildDrawerHeader(theme),
-                      if (_isExpanded)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                          ),
-                          child: _buildNextStepCard(theme),
-                        )
-                      else
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              'Next: ${_currentIndex >= _stops.length - 1 ? 'Arrive at destination' : _stops[_currentIndex + 1].name}',
-                              style: theme.textTheme.bodyMedium,
-                            ),
-                          ),
-                        ),
+                      const Divider(height: 1),
                       Expanded(
-                        child: _isExpanded
-                            ? _buildInstructionsList(theme, controller)
-                            : ListView(
-                                controller: controller,
-                                padding:
-                                    const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                                children: [
-                                  _buildNextStepCard(theme),
-                                ],
-                              ),
+                        child: _buildInstructionsList(theme, controller),
                       ),
                     ],
                   ),

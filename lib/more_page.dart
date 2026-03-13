@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-
 class Profile {
   final String username;
   final String name;
@@ -40,7 +39,9 @@ class MorePage extends StatelessWidget {
       children: [
         // Dynamic profile card
         Card(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           elevation: 2,
           margin: const EdgeInsets.only(bottom: 24),
           child: Padding(
@@ -73,7 +74,11 @@ class MorePage extends StatelessWidget {
                       const SizedBox(height: 6),
                       Row(
                         children: [
-                          Icon(Icons.calendar_today, size: 16, color: theme.colorScheme.outline),
+                          Icon(
+                            Icons.calendar_today,
+                            size: 16,
+                            color: theme.colorScheme.outline,
+                          ),
                           const SizedBox(width: 4),
                           Text(
                             'Joined ${profile.joinedDate}',

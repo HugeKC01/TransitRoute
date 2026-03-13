@@ -56,7 +56,8 @@ class GtfsShapesService {
       final points = seqPoints.map((sp) => sp.point).toList();
       final pointNames = seqPoints.map((sp) => sp.name).toList();
       final routeId = shapeToRoute[shapeId];
-      final color = shapeToColor[shapeId] ??
+      final color =
+          shapeToColor[shapeId] ??
           ((routeId != null && routeColors.containsKey(routeId))
               ? routeColors[routeId]!
               : _pickFallbackColor(shapeId, routeColors));
@@ -83,19 +84,25 @@ class GtfsShapesService {
         .toList();
     if (lines.isEmpty) return <String, List<_SeqPoint>>{};
 
-    final header = _splitCsvLine(lines.first)
-        .map((s) => s.trim().toLowerCase())
-        .toList();
+    final header = _splitCsvLine(
+      lines.first,
+    ).map((s) => s.trim().toLowerCase()).toList();
     final idxShapeId = header.indexOf('shape_id');
     final idxLat = header.indexOf('shape_pt_lat');
     final idxLon = header.indexOf('shape_pt_lon');
     final idxSeq = header.indexOf('shape_pt_sequence');
-    final idxName = header.indexWhere((h) => h == 'shape_pt_name' || h == 'shape_name' || h == 'shape_pt_label');
-    if (idxShapeId < 0 || idxLat < 0 || idxLon < 0) return <String, List<_SeqPoint>>{};
+    final idxName = header.indexWhere(
+      (h) => h == 'shape_pt_name' || h == 'shape_name' || h == 'shape_pt_label',
+    );
+    if (idxShapeId < 0 || idxLat < 0 || idxLon < 0) {
+      return <String, List<_SeqPoint>>{};
+    }
     final byShape = <String, List<_SeqPoint>>{};
     for (int i = 1; i < lines.length; i++) {
       final row = _splitCsvLine(lines[i]);
-      if (row.length <= idxLon) continue;
+      if (row.length <= idxLon) {
+        continue;
+      }
       final id = row[idxShapeId].trim();
       final lat = double.tryParse(row[idxLat].trim());
       final lon = double.tryParse(row[idxLon].trim());
@@ -111,9 +118,9 @@ class GtfsShapesService {
         name = n.isEmpty ? null : n;
       }
       if (id.isEmpty || lat == null || lon == null) continue;
-      byShape.putIfAbsent(id, () => <_SeqPoint>[]).add(
-            _SeqPoint(seq: seq, point: LatLng(lat, lon), name: name),
-          );
+      byShape
+          .putIfAbsent(id, () => <_SeqPoint>[])
+          .add(_SeqPoint(seq: seq, point: LatLng(lat, lon), name: name));
     }
 
     final result = <String, List<_SeqPoint>>{};
@@ -126,17 +133,21 @@ class GtfsShapesService {
 
   Future<_ShapeTripMeta> _parseShapeTripMeta(String assetPath) async {
     final text = await rootBundle.loadString(assetPath);
-    if (text.trim().isEmpty) return const _ShapeTripMeta(shapeToRoute: {}, shapeToColor: {});
+    if (text.trim().isEmpty) {
+      return const _ShapeTripMeta(shapeToRoute: {}, shapeToColor: {});
+    }
     final lines = const LineSplitter()
         .convert(text)
         .map((l) => l.trimRight())
         .where((l) => l.isNotEmpty)
         .toList();
-    if (lines.isEmpty) return const _ShapeTripMeta(shapeToRoute: {}, shapeToColor: {});
+    if (lines.isEmpty) {
+      return const _ShapeTripMeta(shapeToRoute: {}, shapeToColor: {});
+    }
 
-    final header = _splitCsvLine(lines.first)
-        .map((s) => s.trim().toLowerCase())
-        .toList();
+    final header = _splitCsvLine(
+      lines.first,
+    ).map((s) => s.trim().toLowerCase()).toList();
     final idxRouteId = header.indexOf('route_id');
     final idxShapeId = header.indexOf('shape_id');
     final idxShapeColor = header.indexWhere(
@@ -228,5 +239,8 @@ class _SeqPoint {
 class _ShapeTripMeta {
   final Map<String, String> shapeToRoute;
   final Map<String, Color> shapeToColor;
-  const _ShapeTripMeta({required this.shapeToRoute, required this.shapeToColor});
+  const _ShapeTripMeta({
+    required this.shapeToRoute,
+    required this.shapeToColor,
+  });
 }

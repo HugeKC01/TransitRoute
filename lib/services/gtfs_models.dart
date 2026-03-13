@@ -2,6 +2,7 @@
 // Covers BTS, MRT, Train, Bus, Ferry
 
 import 'package:flutter/material.dart';
+
 class Agency {
   final String agencyId;
   final String name;
@@ -102,9 +103,6 @@ class StopTime {
   });
 }
 
-
-
-
 class Calendar {
   final String serviceId;
   final bool monday;
@@ -131,27 +129,19 @@ class Calendar {
   });
 }
 
-class Faretype{
+class Faretype {
   final String fareId;
   final String agencystatus;
 
-  Faretype({
-    required this.fareId,
-    required this.agencystatus,
-   
-  });
+  Faretype({required this.fareId, required this.agencystatus});
 }
 
- class FareData{
+class FareData {
   final String fareDataId;
   final String price;
 
-
-  FareData({
-    required this.fareDataId,
-    required this.price,
-  });
- }
+  FareData({required this.fareDataId, required this.price});
+}
 
 /// ตารางค่าโดยสารสำหรับสายที่ไม่ใช่ BTS (MRT Blue, Purple, Pink, Yellow, SRT Red)
 /// rowKey เช่น "BL10" = เดินทางถอยหลัง (ปลายทางมีลำดับน้อยกว่าต้นทาง)

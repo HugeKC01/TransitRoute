@@ -30,10 +30,7 @@ class _CardsPageState extends State<CardsPage> {
       type: 'BTS / BRT / Yellow / Pink',
       color: Colors.orange,
       iconInfo: Icons.directions_transit,
-      promotions: [
-        'Monthly Trip Pass',
-        'One Day Pass',
-      ],
+      promotions: ['Monthly Trip Pass', 'One Day Pass'],
     ),
     const TransitCard(
       name: 'MRT Card',
@@ -101,10 +98,7 @@ class _CardsPageState extends State<CardsPage> {
                   padding: EdgeInsets.all(16.0),
                   child: Text(
                     'Add a Transit Card',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                 ),
                 Expanded(
@@ -168,10 +162,7 @@ class _CardsPageState extends State<CardsPage> {
                   const SizedBox(height: 16),
                   Text(
                     'No cards added yet.',
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: Colors.grey.shade600,
-                    ),
+                    style: TextStyle(fontSize: 18, color: Colors.grey.shade600),
                   ),
                   const SizedBox(height: 24),
                   ElevatedButton.icon(
@@ -232,14 +223,16 @@ class _CardsPageState extends State<CardsPage> {
                                 (promo) => Padding(
                                   padding: const EdgeInsets.only(bottom: 4.0),
                                   child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      const Icon(Icons.local_offer,
-                                          size: 16, color: Colors.green),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(promo),
+                                      const Icon(
+                                        Icons.local_offer,
+                                        size: 16,
+                                        color: Colors.green,
                                       ),
+                                      const SizedBox(width: 8),
+                                      Expanded(child: Text(promo)),
                                     ],
                                   ),
                                 ),

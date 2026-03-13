@@ -66,7 +66,10 @@ class RouteOptionsPanel extends StatelessWidget {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: theme.colorScheme.primaryContainer,
                   borderRadius: BorderRadius.circular(12),
@@ -183,7 +186,7 @@ class _RouteOptionCard extends StatelessWidget {
       _ => null,
     };
     final applyHighlight = highlightColor != null && !isSelected;
-    
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Material(
@@ -250,14 +253,16 @@ class _RouteOptionCard extends StatelessWidget {
                                 spacing: 6,
                                 runSpacing: 6,
                                 children: [
-                                  ...headlineTags.map((tag) => _TagPill(
-                                        label: tag,
-                                        color: tag == 'Fastest'
-                                            ? const Color(0xFF2E7D32)
-                                            : tag == 'Cheapest'
-                                            ? const Color(0xFFF9A825)
-                                            : theme.colorScheme.primary,
-                                      )),
+                                  ...headlineTags.map(
+                                    (tag) => _TagPill(
+                                      label: tag,
+                                      color: tag == 'Fastest'
+                                          ? const Color(0xFF2E7D32)
+                                          : tag == 'Cheapest'
+                                          ? const Color(0xFFF9A825)
+                                          : theme.colorScheme.primary,
+                                    ),
+                                  ),
                                   if (remainingTags > 0)
                                     _TagPill(
                                       label: '+$remainingTags',
@@ -308,13 +313,14 @@ class _RouteOptionCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Transit Line Visualizer
                   if (lineSegments.isNotEmpty) ...[
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                        color: theme.colorScheme.surfaceContainerHighest
+                            .withValues(alpha: 0.3),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: SingleChildScrollView(
@@ -324,25 +330,49 @@ class _RouteOptionCard extends StatelessWidget {
                             for (int i = 0; i < lineSegments.length; i++) ...[
                               if (i > 0)
                                 Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                                  child: Icon(Icons.arrow_right_alt, size: 20, color: theme.colorScheme.onSurfaceVariant),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                  ),
+                                  child: Icon(
+                                    Icons.arrow_right_alt,
+                                    size: 20,
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
                                 ),
                               Builder(
                                 builder: (context) {
-                                  final lineName = resolveSegmentLineName(lineSegments[i], lineNameResolver);
-                                  final color = lineColors[lineName] ?? theme.colorScheme.primary;
-                                  final textColor = color.computeLuminance() > 0.5 ? Colors.black87 : Colors.white;
-                                  
+                                  final lineName = resolveSegmentLineName(
+                                    lineSegments[i],
+                                    lineNameResolver,
+                                  );
+                                  final color =
+                                      lineColors[lineName] ??
+                                      theme.colorScheme.primary;
+                                  final textColor =
+                                      color.computeLuminance() > 0.5
+                                      ? Colors.black87
+                                      : Colors.white;
+
                                   IconData getTransportIcon(String name) {
                                     final lower = name.toLowerCase();
-                                    if (lower.contains('walk')) return Icons.directions_walk;
-                                    if (lower.contains('bus')) return Icons.directions_bus;
-                                    if (lower.contains('boat') || lower.contains('ferry')) return Icons.directions_boat;
+                                    if (lower.contains('walk')) {
+                                      return Icons.directions_walk;
+                                    }
+                                    if (lower.contains('bus')) {
+                                      return Icons.directions_bus;
+                                    }
+                                    if (lower.contains('boat') ||
+                                        lower.contains('ferry')) {
+                                      return Icons.directions_boat;
+                                    }
                                     return Icons.directions_transit;
                                   }
 
                                   return Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 6,
+                                    ),
                                     decoration: BoxDecoration(
                                       color: color,
                                       borderRadius: BorderRadius.circular(8),
@@ -390,19 +420,33 @@ class _RouteOptionCard extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.route, size: 16, color: theme.colorScheme.onSurfaceVariant),
-                          const SizedBox(width: 4),
-                          Text(distanceText, style: theme.textTheme.bodyMedium?.copyWith(
+                          Icon(
+                            Icons.route,
+                            size: 16,
                             color: theme.colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w500,
-                          )),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            distanceText,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                           const SizedBox(width: 12),
-                          Icon(Icons.signpost, size: 16, color: theme.colorScheme.onSurfaceVariant),
-                          const SizedBox(width: 4),
-                          Text('${stops.length} stops', style: theme.textTheme.bodyMedium?.copyWith(
+                          Icon(
+                            Icons.signpost,
+                            size: 16,
                             color: theme.colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w500,
-                          )),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${stops.length} stops',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                         ],
                       ),
                       if (isSelected)
@@ -411,7 +455,10 @@ class _RouteOptionCard extends StatelessWidget {
                             IconButton.filledTonal(
                               onPressed: onViewDetails,
                               icon: const Icon(Icons.info_outline, size: 20),
-                              constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+                              constraints: const BoxConstraints.tightFor(
+                                width: 40,
+                                height: 40,
+                              ),
                               padding: EdgeInsets.zero,
                               tooltip: 'Details',
                             ),
@@ -421,7 +468,9 @@ class _RouteOptionCard extends StatelessWidget {
                               icon: const Icon(Icons.navigation, size: 18),
                               label: const Text('Go'),
                               style: FilledButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
                                 minimumSize: const Size(0, 40),
                               ),
                             ),

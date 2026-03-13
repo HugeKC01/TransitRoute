@@ -212,8 +212,7 @@ class _TransitUpdatesListPageState extends State<TransitUpdatesListPage> {
                 onPressed: () {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content:
-                          Text('Realtime Firebase feed coming soon.'),
+                      content: Text('Realtime Firebase feed coming soon.'),
                     ),
                   );
                 },
@@ -246,7 +245,9 @@ class _TransitUpdatesListPageState extends State<TransitUpdatesListPage> {
           ),
           const SizedBox(height: 20),
           if (reports.isEmpty)
-            _EmptyState(onClearFilter: () => setState(() => _selectedType = null))
+            _EmptyState(
+              onClearFilter: () => setState(() => _selectedType = null),
+            )
           else
             for (final report in reports)
               _ReportCard(
@@ -357,8 +358,10 @@ class _ReportCard extends StatelessWidget {
             Row(
               children: [
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: scheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(20),
@@ -387,7 +390,10 @@ class _ReportCard extends StatelessWidget {
                       ),
                     );
                   },
-                  icon: const Icon(Icons.notifications_active_outlined, size: 18),
+                  icon: const Icon(
+                    Icons.notifications_active_outlined,
+                    size: 18,
+                  ),
                   label: const Text('Follow'),
                 ),
               ],
@@ -412,10 +418,7 @@ class _EmptyState extends StatelessWidget {
         const SizedBox(height: 60),
         Icon(Icons.inbox_outlined, size: 72, color: theme.colorScheme.outline),
         const SizedBox(height: 16),
-        Text(
-          'No reports for this filter',
-          style: theme.textTheme.titleMedium,
-        ),
+        Text('No reports for this filter', style: theme.textTheme.titleMedium),
         const SizedBox(height: 8),
         Text(
           'Great news! Switch back to all to monitor the network.',

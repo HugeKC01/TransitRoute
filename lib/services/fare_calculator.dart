@@ -1,10 +1,12 @@
 import 'package:route/services/gtfs_models.dart' as gtfs;
 
 class FareCalculator {
-  Map<String, String> _fareTypeMap = const {};      // BTS: stopId → 'm'/'s'
-  Map<String, int> _fareDataMap = const {};          // BTS: 'm0','m1'... → ราคา
-  Map<String, int> _stopOrderMap = const {};         // MRT/SRT/Gold/ARL: stopId → ลำดับสถานี
-  Map<String, List<int>> _fareTableMap = const {};   // non-BTS: "BL10"/"BL10-" → รายการราคา
+  Map<String, String> _fareTypeMap = const {}; // BTS: stopId → 'm'/'s'
+  Map<String, int> _fareDataMap = const {}; // BTS: 'm0','m1'... → ราคา
+  Map<String, int> _stopOrderMap =
+      const {}; // MRT/SRT/Gold/ARL: stopId → ลำดับสถานี
+  Map<String, List<int>> _fareTableMap =
+      const {}; // non-BTS: "BL10"/"BL10-" → รายการราคา
 
   void updateData({
     Map<String, String>? fareTypeMap,
@@ -52,7 +54,7 @@ class FareCalculator {
     if (prefix == 'PK' || prefix == 'MT') {
       return 'PK_MT';
     }
-    
+
     return prefix;
   }
 
@@ -167,7 +169,7 @@ class FareCalculator {
     final fareList = _fareTableMap[rowKey];
     if (fareList == null || fareList.isEmpty) return 0;
 
-    // ตำแหน่งคือ absDiff  → index = absDiff 
+    // ตำแหน่งคือ absDiff  → index = absDiff
     final idx = absDiff;
     if (idx >= fareList.length) return fareList.last;
     return fareList[idx];
@@ -179,13 +181,7 @@ class FareCalculator {
   // ─────────────────────────────────────────────
   Map<String, int> calculateFare(List<gtfs.Stop> routeStops) {
     if (routeStops.length <= 1) {
-      return {
-        'mCount': 0,
-        'sCount': 0,
-        'mPrice': 0,
-        'sPrice': 0,
-        'total': 0,
-      };
+      return {'mCount': 0, 'sCount': 0, 'mPrice': 0, 'sPrice': 0, 'total': 0};
     }
 
     final segments = _splitByLineGroup(routeStops);
@@ -237,9 +233,15 @@ class FareCalculator {
     // กฎส่วนลด: ระบุลำดับสถานี (sequence) ที่ต้องเดินทางผ่านให้ครบตามลำดับ
     final discountRules = [
       // กรณี 1: PP15 -> PP16 -> BL10
-      {'sequence': ['PP15', 'PP16', 'BL10'], 'amount': 14},
+      {
+        'sequence': ['PP15', 'PP16', 'BL10'],
+        'amount': 14,
+      },
       // กรณี 2: BL10 -> PP16 -> PP15
-      {'sequence': ['BL10', 'PP16', 'PP15'], 'amount': 14},
+      {
+        'sequence': ['BL10', 'PP16', 'PP15'],
+        'amount': 14,
+      },
     ];
 
     int totalDiscount = 0;
@@ -248,7 +250,7 @@ class FareCalculator {
     for (var rule in discountRules) {
       final sequence = rule['sequence'] as List<String>;
       final amount = rule['amount'] as int;
-      
+
       if (sequence.isEmpty || sequence.length > routeStops.length) continue;
 
       // วนลูปตรวจสอบว่ามี pattern นี้เกิดขึ้นใน routeStops หรือไม่
