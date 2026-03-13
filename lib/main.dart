@@ -11,14 +11,14 @@ import 'package:route/services/gtfs_models.dart' as gtfs;
 import 'package:route/services/gtfs_shapes.dart';
 import 'package:route/services/route_asset_loader.dart';
 
-import 'more_page.dart';
-import 'cards_page.dart';
-import 'station_details_page.dart';
-import 'transit_update_page.dart';
-import 'transit_updates_list_page.dart';
-import 'transport_lines_page.dart';
-import 'navigation_page.dart';
-import 'graphic_map_page.dart';
+import 'pages/more_page.dart';
+import 'pages/cards_page.dart';
+import 'pages/station_details_page.dart';
+import 'pages/transit_update_page.dart';
+import 'pages/transit_updates_list_page.dart';
+import 'pages/transport_lines_page.dart';
+import 'pages/navigation_page.dart';
+import 'pages/graphic_map_page.dart';
 import 'widgets/route_details_sheet.dart';
 import 'widgets/route_options_panel.dart';
 
