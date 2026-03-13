@@ -280,21 +280,72 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       } else {
         final route = segment.intermediateStops;
         if (route == null || route.length < 2) continue;
-        String? previousLine = _getLineName(route[0].stopId);
+
+        final lineName =
+            segment.routeShortName ??
+            _getLineName(route[0].stopId) ??
+            _getLineName(route.last.stopId) ??
+            '';
+        final lineColor = _getPolylineColor(lineName);
+
         for (int i = 1; i < route.length; i++) {
-          final currentLine = _getLineName(route[i].stopId);
-          final from = LatLng(route[i - 1].lat, route[i - 1].lon);
-          final to = LatLng(route[i].lat, route[i].lon);
-          if (currentLine == previousLine) {
+          final stopA = route[i - 1].stopId;
+          final stopB = route[i].stopId;
+
+          bool foundShape = false;
+          // Look for a shape that connects stopA and stopB
+          for (final shape in shapeSegments) {
+            final aLocs = <int>[];
+            final bLocs = <int>[];
+            for (int k = 0; k < shape.pointNames.length; k++) {
+              if (shape.pointNames[k] == stopA) aLocs.add(k);
+              if (shape.pointNames[k] == stopB) bLocs.add(k);
+            }
+
+            if (aLocs.isNotEmpty && bLocs.isNotEmpty) {
+              int bestGap = 999999;
+              int bestA = -1;
+              int bestB = -1;
+              for (final a in aLocs) {
+                for (final b in bLocs) {
+                  final gap = (a - b).abs();
+                  if (gap < bestGap) {
+                    bestGap = gap;
+                    bestA = a;
+                    bestB = b;
+                  }
+                }
+              }
+
+              final isReversed = bestA > bestB;
+              final startIdx = isReversed ? bestB : bestA;
+              final endIdx = isReversed ? bestA : bestB;
+
+              var shapePoints = shape.points.sublist(startIdx, endIdx + 1);
+              if (isReversed) {
+                shapePoints = shapePoints.reversed.toList();
+              }
+              polylines.add(
+                Polyline(
+                  points: shapePoints,
+                  color: lineColor,
+                  strokeWidth: 6.0,
+                ),
+              );
+              foundShape = true;
+              break;
+            }
+          }
+
+          if (!foundShape) {
             polylines.add(
               _linePolyline(
-                from,
-                to,
-                _getPolylineColor(currentLine ?? previousLine ?? ''),
+                LatLng(route[i - 1].lat, route[i - 1].lon),
+                LatLng(route[i].lat, route[i].lon),
+                lineColor,
               ),
             );
           }
-          previousLine = currentLine;
         }
       }
     }
@@ -879,7 +930,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
               userAgentPackageName: 'com.example.route',
             ),
-            if (shapeSegments.isNotEmpty)
+            if (shapeSegments.isNotEmpty && activeSegments.isEmpty)
               PolylineLayer(
                 polylines: shapeSegments
                     .map(
@@ -1254,7 +1305,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   Widget _buildSearchSuggestionTile(gtfs.Stop stop, VoidCallback onTap) {
     final theme = Theme.of(context);
     final lineColor = _getLineColor(stop.stopId);
-    
+
     return ListTile(
       leading: Container(
         width: 40,
@@ -1268,17 +1319,19 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         child: Text(
           stop.code ?? stop.stopId,
           style: TextStyle(
-            color: (lineColor.computeLuminance() > 0.5) ? Colors.black : Colors.white, 
-            fontWeight: FontWeight.bold, 
-            fontSize: 10
+            color: (lineColor.computeLuminance() > 0.5)
+                ? Colors.black
+                : Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 10,
           ),
           overflow: TextOverflow.ellipsis,
         ),
       ),
       title: Text(stop.name),
       subtitle: Text(
-        (stop.thaiName != null && stop.thaiName!.isNotEmpty) 
-            ? stop.thaiName! 
+        (stop.thaiName != null && stop.thaiName!.isNotEmpty)
+            ? stop.thaiName!
             : 'Thai Station provide later',
         style: theme.textTheme.bodySmall,
       ),
@@ -1352,13 +1405,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                 ];
               }
               return results.map(
-                (stop) => _buildSearchSuggestionTile(
-                  stop,
-                  () {
-                    controller.closeView(stop.name);
-                    _handleCollapsedStopSelection(stop);
-                  },
-                ),
+                (stop) => _buildSearchSuggestionTile(stop, () {
+                  controller.closeView(stop.name);
+                  _handleCollapsedStopSelection(stop);
+                }),
               );
             },
           ),
@@ -1695,13 +1745,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               ];
             }
             return results.map(
-              (stop) => _buildSearchSuggestionTile(
-                stop,
-                () {
-                  ctrl.closeView(stop.name);
-                  _selectStopFromSearch(stop, asStart: asStart);
-                },
-              ),
+              (stop) => _buildSearchSuggestionTile(stop, () {
+                ctrl.closeView(stop.name);
+                _selectStopFromSearch(stop, asStart: asStart);
+              }),
             );
           },
         ),
