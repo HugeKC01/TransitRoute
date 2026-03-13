@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-
 class Profile {
   final String username;
   final String name;
@@ -20,11 +19,15 @@ class MorePage extends StatelessWidget {
     super.key,
     required this.onOpenTransportLines,
     required this.onOpenTransitUpdates,
+    required this.onOpenGraphicMap,
+    required this.onOpenCards,
     required this.profile,
   });
 
   final VoidCallback onOpenTransportLines;
   final VoidCallback onOpenTransitUpdates;
+  final VoidCallback onOpenGraphicMap;
+  final VoidCallback onOpenCards;
   final Profile profile;
 
   @override
@@ -36,7 +39,9 @@ class MorePage extends StatelessWidget {
       children: [
         // Dynamic profile card
         Card(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           elevation: 2,
           margin: const EdgeInsets.only(bottom: 24),
           child: Padding(
@@ -69,7 +74,11 @@ class MorePage extends StatelessWidget {
                       const SizedBox(height: 6),
                       Row(
                         children: [
-                          Icon(Icons.calendar_today, size: 16, color: theme.colorScheme.outline),
+                          Icon(
+                            Icons.calendar_today,
+                            size: 16,
+                            color: theme.colorScheme.outline,
+                          ),
                           const SizedBox(width: 4),
                           Text(
                             'Joined ${profile.joinedDate}',
@@ -111,6 +120,22 @@ class MorePage extends StatelessWidget {
                 subtitle: const Text('Share outages or disruptions'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: onOpenTransitUpdates,
+              ),
+              Divider(height: 1, color: theme.colorScheme.outlineVariant),
+              ListTile(
+                leading: const Icon(Icons.map_outlined),
+                title: const Text('Transit System Map'),
+                subtitle: const Text('View graphic BTS/MRT connection map'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: onOpenGraphicMap,
+              ),
+              Divider(height: 1, color: theme.colorScheme.outlineVariant),
+              ListTile(
+                leading: const Icon(Icons.credit_card_outlined),
+                title: const Text('My Transit Cards'),
+                subtitle: const Text('Manage cards and view promotions'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: onOpenCards,
               ),
             ],
           ),

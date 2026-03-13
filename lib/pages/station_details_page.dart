@@ -39,9 +39,7 @@ class StationDetailsPage extends StatelessWidget {
         _InfoChip(label: 'Code', value: stop.code!),
     ];
     return Scaffold(
-      appBar: AppBar(
-        title: Text(stop.name),
-      ),
+      appBar: AppBar(title: Text(stop.name)),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
@@ -54,11 +52,7 @@ class StationDetailsPage extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             const _SectionHeader('Station facts'),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: infoChips,
-            ),
+            Wrap(spacing: 12, runSpacing: 12, children: infoChips),
             if (stop.desc != null && stop.desc!.isNotEmpty) ...[
               const SizedBox(height: 24),
               _InfoCard(
@@ -104,9 +98,7 @@ class _SectionHeader extends StatelessWidget {
     final theme = Theme.of(context);
     return Text(
       label,
-      style: theme.textTheme.titleMedium?.copyWith(
-        fontWeight: FontWeight.w700,
-      ),
+      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
     );
   }
 }
@@ -197,10 +189,7 @@ class _InfoCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 6),
-                Text(
-                  subtitle,
-                  style: theme.textTheme.bodyMedium,
-                ),
+                Text(subtitle, style: theme.textTheme.bodyMedium),
               ],
             ),
           ),
@@ -260,10 +249,7 @@ class _StationHeroCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final gradient = LinearGradient(
-      colors: [
-        lineColor,
-        lineColor.withValues(alpha: 0.75),
-      ],
+      colors: [lineColor, lineColor.withValues(alpha: 0.75)],
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
     );
@@ -310,10 +296,7 @@ class _StationHeroCard extends StatelessWidget {
                   color: Colors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: const Icon(
-                  Icons.train,
-                  color: Colors.white,
-                ),
+                child: const Icon(Icons.train, color: Colors.white),
               ),
             ],
           ),
@@ -321,8 +304,10 @@ class _StationHeroCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 16),
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(999),
