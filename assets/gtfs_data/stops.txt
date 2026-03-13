@@ -2,7 +2,7 @@ stop_id,stop_name,stop_lat,stop_lon,stop_code,stop_desc,zone_id
 CEN,Siam,13.7456236,100.5342199,CEN,,
 W1,National Stadium,13.7465100,100.5290855,W1,,
 S1,Ratchadamri,13.7394708,100.5394496,S1,,
-S2,Sala Daeng,13.7285677,100.5343416,S2,,
+S2,Sala Daeng,13.7285677,100.5343416,S2,,sap
 S3,Chong Nonsi,13.7237969,100.5293250,S3,,
 S4,Saint Louis,13.7208160,100.5266863,S4,,
 S5,Surasak,13.7192683,100.5214619,S5,,

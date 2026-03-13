@@ -1,0 +1,4 @@
+route_id,agency_id,route_short_name,route_long_name,route_type,route_color,route_text_color,line_prefixes
+75,BMTA,75,Wat Phuttha Bucha - Hua Lamphong,3,0000FF,FFFFFF,
+21,BMTA,21,Wat Khusang - Chulalongkorn University,3,FF0000,FFFFFF,
+21E,BMTA,21E,Wat Khusang - Chulalongkorn University (Expressway),3,FF0080,FFFFFF,
