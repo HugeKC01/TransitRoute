@@ -1260,6 +1260,9 @@ class DirectionService {
     int currentSegmentStartIndex = 0;
 
     List<String> getLinesForStop(String stopId) {
+      if (stopId.startsWith('ST_') || stopId.startsWith('STOP_')) {
+        return ['BMTA Bus'];
+      }
       if (_routes.isEmpty) {
         final r = lineNameResolver(stopId);
         return r != null ? [r] : [];
