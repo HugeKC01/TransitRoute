@@ -1256,15 +1256,53 @@ class DirectionService {
 
     final segments = <RouteSegment>[];
     int currentSegmentStartIndex = 0;
-    String? currentLineName = lineNameResolver(stops[0].stopId);
+
+    List<String> getLinesForStop(String stopId) {
+      if (_routes.isEmpty) {
+        final r = lineNameResolver(stopId);
+        return r != null ? [r] : [];
+      }
+      final lines = <String>[];
+      for (final route in _routes) {
+        for (final pref in route.linePrefixes) {
+          if (stopId.startsWith(pref)) {
+            lines.add(
+              route.longName.isNotEmpty
+                  ? route.longName
+                  : route.routeId,
+            );
+            break;
+          }
+        }
+      }
+      return lines;
+    }
+
+    String? currentLineName;
+    if (stops.length > 1) {
+      final a = getLinesForStop(stops[0].stopId);
+      final b = getLinesForStop(stops[1].stopId);
+      final shared = a.where((x) => b.contains(x)).toList();
+      currentLineName = shared.isNotEmpty
+          ? shared.first
+          : (a.isNotEmpty ? a.first : lineNameResolver(stops[0].stopId));
+    } else {
+      final a = getLinesForStop(stops[0].stopId);
+      currentLineName = a.isNotEmpty
+          ? a.first
+          : lineNameResolver(stops[0].stopId);
+    }
 
     for (int i = 1; i < stops.length; i++) {
       final stop = stops[i];
-      final lineName = lineNameResolver(stop.stopId);
+      final prev = stops[i - 1];
 
-      // If we switch lines or we hit an intentional hub/transfer point, break a segment out
-      if (lineName != currentLineName || lineName == null) {
-        // Build transit segment up to here
+      final a = getLinesForStop(prev.stopId);
+      final b = getLinesForStop(stop.stopId);
+      final shared = a.where((x) => b.contains(x)).toList();
+
+      if (shared.isEmpty) {
+        // WALK TRANSFER! No common line.
         final subStops = stops.sublist(currentSegmentStartIndex, i);
         if (subStops.isNotEmpty) {
           segments.add(
@@ -1284,35 +1322,62 @@ class DirectionService {
           );
         }
 
-        // Add a walk/transfer segment between the disjoint stops if needed, or just pivot to a new group
-        // If they are physically different stops in a transfer hub
-        if (subStops.isNotEmpty && subStops.last.stopId != stop.stopId) {
-          double dx = geo.haversine(
-            subStops.last.lat,
-            subStops.last.lon,
-            stop.lat,
-            stop.lon,
-          );
-          segments.add(
-            RouteSegment(
-              mode: TravelMode.walk, // Explicit transfer
-              start: LocationPoint.fromStop(subStops.last),
-              end: LocationPoint.fromStop(stop),
-              distanceMeters: dx,
-              durationMinutes: (dx / 80.0).ceil(), // 80m per min
-              instruction: 'Walk to transfer',
-            ),
-          );
-          currentSegmentStartIndex =
-              i; // The new starting transit node is the current one
+        double dx = geo.haversine(prev.lat, prev.lon, stop.lat, stop.lon);
+        segments.add(
+          RouteSegment(
+            mode: TravelMode.walk,
+            start: LocationPoint.fromStop(prev),
+            end: LocationPoint.fromStop(stop),
+            distanceMeters: dx,
+            durationMinutes: (dx / 80.0).ceil(),
+            instruction: 'Walk to transfer',
+          ),
+        );
+        currentSegmentStartIndex = i;
+        if (i + 1 < stops.length) {
+          final na = getLinesForStop(stop.stopId);
+          final nb = getLinesForStop(stops[i + 1].stopId);
+          final ns = na.where((x) => nb.contains(x)).toList();
+          currentLineName = ns.isNotEmpty
+              ? ns.first
+              : (na.isNotEmpty ? na.first : lineNameResolver(stop.stopId));
         } else {
-          currentSegmentStartIndex = i - 1; // overlapping node
+          final na = getLinesForStop(stop.stopId);
+          currentLineName = na.isNotEmpty
+              ? na.first
+              : lineNameResolver(stop.stopId);
         }
-        currentLineName = lineName;
+      } else {
+        final edgeLine = shared.contains(currentLineName)
+            ? currentLineName
+            : shared.first;
+        if (edgeLine != currentLineName) {
+          final subStops = stops.sublist(currentSegmentStartIndex, i);
+          if (subStops.isNotEmpty) {
+            segments.add(
+              RouteSegment(
+                mode: subStops.length > 1
+                    ? TravelMode.transit
+                    : TravelMode.walk,
+                start: LocationPoint.fromStop(subStops.first),
+                end: LocationPoint.fromStop(subStops.last),
+                distanceMeters: subStops.length > 1
+                    ? geo.routeDistanceMeters(subStops)
+                    : 0.0,
+                durationMinutes: subStops.length > 1
+                    ? _estimateRouteMinutes(subStops)
+                    : 0,
+                intermediateStops: subStops,
+                routeShortName: currentLineName,
+              ),
+            );
+          }
+          currentSegmentStartIndex = i - 1;
+          currentLineName = edgeLine;
+        }
       }
     }
 
-    // Append final segment
     if (currentSegmentStartIndex < stops.length) {
       final remainingStops = stops.sublist(currentSegmentStartIndex);
       if (remainingStops.length > 1) {
@@ -1323,6 +1388,19 @@ class DirectionService {
             end: LocationPoint.fromStop(remainingStops.last),
             distanceMeters: geo.routeDistanceMeters(remainingStops),
             durationMinutes: _estimateRouteMinutes(remainingStops),
+            intermediateStops: remainingStops,
+            routeShortName: currentLineName,
+          ),
+        );
+      } else if (remainingStops.length == 1 && segments.isEmpty) {
+        // Edge case: entire route is a single stop
+        segments.add(
+          RouteSegment(
+            mode: TravelMode.walk,
+            start: LocationPoint.fromStop(remainingStops.first),
+            end: LocationPoint.fromStop(remainingStops.last),
+            distanceMeters: 0,
+            durationMinutes: 0,
             intermediateStops: remainingStops,
             routeShortName: currentLineName,
           ),
