@@ -94,6 +94,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   static const double _busStopZoomThreshold = 15.0;
 
   String? _getLineName(String stopId) {
+    if (stopId.startsWith('ST_') || stopId.startsWith('STOP_')) {
+      return 'BMTA Bus';
+    }
     for (final entry in linePrefixes.entries) {
       for (final prefix in entry.value) {
         if (stopId.startsWith(prefix)) return entry.key;
@@ -976,7 +979,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                                     (activeSegments.isNotEmpty &&
                                         !routeStopIds.contains(stop.stopId))
                                     ? Colors.grey.shade400
-                                    : Colors.orange.shade600,
+                                    : const Color.fromARGB(255, 38, 62, 199),
                                 border: Border.all(
                                   color:
                                       (activeSegments.isNotEmpty &&
@@ -1975,7 +1978,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         colorMap[route.longName] = Color(int.parse('0xFF${route.color!}'));
       }
     }
-    final combinedStops = <gtfs.Stop>[...stops, ...busStopList, ...ferryStops];
+    colorMap['BMTA Bus'] = Colors.blueAccent;
+      final combinedStops = <gtfs.Stop>[...stops, ...busStopList, ...ferryStops];
     final stopMap = {for (final stop in combinedStops) stop.stopId: stop};
     _directionService.updateData(
       allStops: combinedStops,

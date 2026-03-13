@@ -413,12 +413,12 @@ class DirectionService {
 
     int transitRank(_RouteMetrics metric) {
       final hasBus = metric.route.stops.any(
-        (s) => s.stopId.toUpperCase().startsWith('ST_'),
+        (s) => s.stopId.toUpperCase().startsWith('ST_') || s.stopId.toUpperCase().startsWith('STOP_'),
       );
       final hasRail =
           metric.route.stops.length !=
           metric.route.stops
-              .where((s) => s.stopId.toUpperCase().startsWith('ST_'))
+              .where((s) => s.stopId.toUpperCase().startsWith('ST_') || s.stopId.toUpperCase().startsWith('STOP_'))
               .length;
       switch (preferredTransit) {
         case 'Prefer Bus':

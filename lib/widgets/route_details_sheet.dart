@@ -80,7 +80,7 @@ class RouteDetailsSheet extends StatelessWidget {
       iconColor = Colors.deepOrange;
       title = segment.instruction ?? 'Motorcycle Taxi';
     } else {
-      icon = Icons.train; // Default transit icon
+      if (segment.routeShortName != null && segment.routeShortName!.toLowerCase().contains("bus")) { icon = Icons.directions_bus; } else { icon = Icons.train; }
       iconColor =
           lineColors[segment.routeShortName] ?? theme.colorScheme.primary;
       title = segment.routeShortName ?? 'Transit';
