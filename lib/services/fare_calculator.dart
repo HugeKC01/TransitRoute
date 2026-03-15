@@ -7,12 +7,18 @@ class FareCalculator {
       const {}; // MRT/SRT/Gold/ARL: stopId → ลำดับสถานี
   Map<String, List<int>> _fareTableMap =
       const {}; // non-BTS: "BL10"/"BL10-" → รายการราคา
+  Map<String, int> _ferryFlatFares = const {};
+  Map<String, int> _ferryZoneMatrix = const {};
+  Map<String, String> _ferryZones = const {};
 
   void updateData({
     Map<String, String>? fareTypeMap,
     Map<String, int>? fareDataMap,
     Map<String, int>? stopOrderMap,
     Map<String, List<int>>? fareTableMap,
+    Map<String, int>? ferryFlatFares,
+    Map<String, int>? ferryZoneMatrix,
+    Map<String, String>? ferryZones,
   }) {
     if (fareTypeMap != null) {
       _fareTypeMap = Map<String, String>.from(fareTypeMap);
@@ -25,6 +31,15 @@ class FareCalculator {
     }
     if (fareTableMap != null) {
       _fareTableMap = Map<String, List<int>>.from(fareTableMap);
+    }
+    if (ferryFlatFares != null) {
+      _ferryFlatFares = Map<String, int>.from(ferryFlatFares);
+    }
+    if (ferryZoneMatrix != null) {
+      _ferryZoneMatrix = Map<String, int>.from(ferryZoneMatrix);
+    }
+    if (ferryZones != null) {
+      _ferryZones = Map<String, String>.from(ferryZones);
     }
   }
 
@@ -42,6 +57,10 @@ class FareCalculator {
   String _lineGroup(String stopId) {
     final id = stopId.trim();
     if (_isBtsStop(id)) return 'BTS';
+    if (id.startsWith('F_')) {
+      final prefix = id.split('_').sublist(0, 2).join('_');
+      return prefix;
+    }
     final match = RegExp(r'^([A-Za-z]+)').firstMatch(id);
     final prefix = match?.group(1)?.toUpperCase() ?? 'UNKNOWN';
 
@@ -179,6 +198,49 @@ class FareCalculator {
   // calculateFare: entry point หลัก
   // แบ่ง route เป็น segment ตามสาย แล้วคิดค่าโดยสารสายอิสระ
   // ─────────────────────────────────────────────
+
+  // ─────────────────────────────────────────────
+  // คำนวณค่าเรือ Ferry
+  // ─────────────────────────────────────────────
+  int _calculateFerryFare(List<gtfs.Stop> segment) {
+    if (segment.length <= 1) return 0;
+
+    final originId = segment.first.stopId.trim();
+    final destId = segment.last.stopId.trim();
+
+    // Determine the route by checking the stops visited
+    // Since Green flag extends to N31-N33 (Zone 1), if any stop is in Zone 1,
+    // we must be on the Green flag.
+    bool hasZone1 = false;
+    String originZone = '2'; // Default to zone 2
+    String destZone = '2';
+
+    final originZ = _ferryZones['F_CPX_G_$originId'];
+    if (originZ != null) originZone = originZ;
+    final destZ = _ferryZones['F_CPX_G_$destId'];
+    if (destZ != null) destZone = destZ;
+
+    for (var stop in segment) {
+      final z = _ferryZones['F_CPX_G_${stop.stopId.trim()}'];
+      if (z == '1') {
+        hasZone1 = true;
+        break;
+      }
+    }
+
+    if (hasZone1) {
+      // It's the Green Flag
+      final key = 'F_CPX_G_${originZone}_to_$destZone';
+      final fare = _ferryZoneMatrix[key];
+      if (fare != null) return fare;
+      // Fallback
+      return 33; 
+    }
+
+    // Otherwise, default to Orange Flag (most common)
+    return _ferryFlatFares['F_CPX_O'] ?? 16;
+  }
+
   Map<String, int> calculateFare(List<gtfs.Stop> routeStops) {
     if (routeStops.length <= 1) {
       return {'mCount': 0, 'sCount': 0, 'mPrice': 0, 'sPrice': 0, 'total': 0};
@@ -203,6 +265,9 @@ class FareCalculator {
         totalMPrice += result['mPrice'] ?? 0;
         totalSPrice += result['sPrice'] ?? 0;
         total += result['total'] ?? 0;
+      } else if (group == 'F_CPX' || group.startsWith('F_')) { 
+        final fare = _calculateFerryFare(segment);
+        total += fare;
       } else {
         final fare = _calculateNonBtsFare(segment);
         total += fare;

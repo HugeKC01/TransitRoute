@@ -169,6 +169,9 @@ class DirectionService {
     Map<String, int>? fareDataMap,
     Map<String, int>? stopOrderMap,
     Map<String, List<int>>? fareTableMap,
+    Map<String, int>? ferryFlatFares,
+    Map<String, int>? ferryZoneMatrix,
+    Map<String, String>? ferryZones,
   }) {
     bool resetGraphs = false;
     if (allStops != null) {
@@ -185,12 +188,18 @@ class DirectionService {
     if (fareTypeMap != null ||
         fareDataMap != null ||
         stopOrderMap != null ||
-        fareTableMap != null) {
+        fareTableMap != null ||
+        ferryFlatFares != null ||
+        ferryZoneMatrix != null ||
+        ferryZones != null) {
       _fareCalculator.updateData(
         fareTypeMap: fareTypeMap,
         fareDataMap: fareDataMap,
         stopOrderMap: stopOrderMap,
         fareTableMap: fareTableMap,
+        ferryFlatFares: ferryFlatFares,
+        ferryZoneMatrix: ferryZoneMatrix,
+        ferryZones: ferryZones,
       );
     }
     if (resetGraphs) {
@@ -517,7 +526,9 @@ class DirectionService {
         if (seg.mode == TravelMode.transit && seg.routeShortName != null) {
           final reports = transitService.getReportsForLine(seg.routeShortName!);
           if (reports.isNotEmpty) {
-            final highestSeverity = reports.reduce((r1, r2) => r1.severity > r2.severity ? r1 : r2);
+            final highestSeverity = reports.reduce(
+              (r1, r2) => r1.severity > r2.severity ? r1 : r2,
+            );
             segments[i] = RouteSegment(
               mode: seg.mode,
               start: seg.start,
@@ -1357,12 +1368,15 @@ class DirectionService {
       }
       if (_routes.isEmpty) {
         final r = lineNameResolver(stopId);
-        return r != null ? [r] : [];
+        // r could be multiple lines joined by comma, so let's split it just in case
+        return r != null ? r.split(', ') : [];
       }
       final lines = <String>[];
       for (final route in _routes) {
         for (final pref in route.linePrefixes) {
-          if (stopId.startsWith(pref)) {
+          if (pref == stopId ||
+              (stopId.startsWith(pref) &&
+                  (pref == 'F_' || !pref.startsWith('F_')))) {
             lines.add(
               route.longName.isNotEmpty ? route.longName : route.routeId,
             );
@@ -1380,12 +1394,14 @@ class DirectionService {
       final shared = a.where((x) => b.contains(x)).toList();
       currentLineName = shared.isNotEmpty
           ? shared.first
-          : (a.isNotEmpty ? a.first : lineNameResolver(stops[0].stopId));
+          : (a.isNotEmpty
+                ? a.first
+                : lineNameResolver(stops[0].stopId)?.split(', ').first);
     } else {
       final a = getLinesForStop(stops[0].stopId);
       currentLineName = a.isNotEmpty
           ? a.first
-          : lineNameResolver(stops[0].stopId);
+          : lineNameResolver(stops[0].stopId)?.split(', ').first;
     }
 
     for (int i = 1; i < stops.length; i++) {
@@ -1435,12 +1451,14 @@ class DirectionService {
           final ns = na.where((x) => nb.contains(x)).toList();
           currentLineName = ns.isNotEmpty
               ? ns.first
-              : (na.isNotEmpty ? na.first : lineNameResolver(stop.stopId));
+              : (na.isNotEmpty
+                    ? na.first
+                    : lineNameResolver(stop.stopId)?.split(', ').first);
         } else {
           final na = getLinesForStop(stop.stopId);
           currentLineName = na.isNotEmpty
               ? na.first
-              : lineNameResolver(stop.stopId);
+              : lineNameResolver(stop.stopId)?.split(', ').first;
         }
       } else {
         final edgeLine = shared.contains(currentLineName)

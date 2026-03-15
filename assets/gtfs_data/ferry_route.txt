@@ -1,6 +1,6 @@
 route_id,agency_id,route_short_name,route_long_name,route_type,route_color,route_text_color,line_prefixes
-F_CPX,CPX,Boat,Chao Phraya Express Boat,4,FFA500,FFFFFF,F_
-F_CPX_G,CPX,Green,Chao Phraya Express Green Flag,4,008000,FFFFFF,F_
-F_CPX_O,CPX,Orange,Chao Phraya Express Orange Flag,4,FFA500,FFFFFF,F_
-F_CPX_Y,CPX,Yellow,Chao Phraya Express Yellow Flag,4,FFFF00,000000,F_
-F_CPX_B,CPX,Blue,Chao Phraya Tourist Blue Flag,4,0000FF,FFFFFF,F_
+F_CPX_R,CPX,Red,Chao Phraya Express Red Flag,4,FFA500,FFFFFF,F_CEN,F_N10,F_N12,F_N15,F_N2,F_N21,F_N22,F_N24,F_N30,F_N5,F_N7
+F_CPX_G,CPX,Green,Chao Phraya Express Green Flag,4,008000,FFFFFF,F_CEN,F_N10,F_N11,F_N12,F_N15,F_N18,F_N21,F_N22,F_N24,F_N3,F_N30,F_N31,F_N32,F_N33,F_N5,F_N9
+F_CPX_O,CPX,Orange,Chao Phraya Express Orange Flag,4,FFA500,FFFFFF,F_CEN,F_N1,F_N10,F_N11,F_N12,F_N13,F_N14,F_N15,F_N16,F_N18,F_N19,F_N20,F_N21,F_N22,F_N24,F_N26,F_N28,F_N29,F_N3,F_N30,F_N4,F_N5,F_N6,F_N7,F_N8,F_N9,F_S1,F_S2,F_S3
+F_CPX_Y,CPX,Yellow,Chao Phraya Express Yellow Flag,4,FFFF00,000000,F_CEN,F_N10,F_N11,F_N12,F_N15,F_N21,F_N22,F_N24,F_N3,F_N30,F_N5
+F_CPX_B,CPX,Blue,Chao Phraya Tourist Blue Flag,4,0000FF,FFFFFF,F_CEN,F_N10,F_N11,F_N13,F_N3,F_N5,F_N6_1,F_N7,F_N8,F_N9,F_S2

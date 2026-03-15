@@ -83,6 +83,9 @@ flutter:
     - assets/gtfs_data/ferry_stop.txt
     - assets/gtfs_data/ferry_route.txt
     - assets/gtfs_data/ferry_stop_times.txt
+    - assets/gtfs_data/ferry_flat_fares.txt
+    - assets/gtfs_data/ferry_zone_matrix.txt
+    - assets/gtfs_data/ferry_zones.txt
   # To add assets to your application, add an assets section, like this:
 
     

@@ -261,6 +261,72 @@ class RouteAssetLoader {
     return result;
   }
 
+  static Future<Map<String, int>> loadFerryFlatFares(String assetPath) async {
+    final result = <String, int>{};
+    try {
+      final content = await rootBundle.loadString(assetPath);
+      final lines = const LineSplitter().convert(content);
+      if (lines.length <= 1) return result;
+      for (int i = 1; i < lines.length; i++) {
+        final line = lines[i].trimRight();
+        if (line.isEmpty) continue;
+        final row = parseCsvLine(line);
+        if (row.length < 2) continue;
+        final routeId = row[0].trim();
+        final fare = int.tryParse(row[1].trim());
+        if (routeId.isNotEmpty && fare != null) {
+          result[routeId] = fare;
+        }
+      }
+    } catch (_) {}
+    return result;
+  }
+
+  static Future<Map<String, int>> loadFerryZoneMatrix(String assetPath) async {
+    final result = <String, int>{};
+    try {
+      final content = await rootBundle.loadString(assetPath);
+      final lines = const LineSplitter().convert(content);
+      if (lines.length <= 1) return result;
+      for (int i = 1; i < lines.length; i++) {
+        final line = lines[i].trimRight();
+        if (line.isEmpty) continue;
+        final row = parseCsvLine(line);
+        if (row.length < 4) continue;
+        final routeId = row[0].trim();
+        final fromZ = row[1].trim();
+        final toZ = row[2].trim();
+        final fare = int.tryParse(row[3].trim());
+        if (routeId.isNotEmpty && fare != null) {
+          result['${routeId}_${fromZ}_to_$toZ'] = fare;
+        }
+      }
+    } catch (_) {}
+    return result;
+  }
+
+  static Future<Map<String, String>> loadFerryZones(String assetPath) async {
+    final result = <String, String>{};
+    try {
+      final content = await rootBundle.loadString(assetPath);
+      final lines = const LineSplitter().convert(content);
+      if (lines.length <= 1) return result;
+      for (int i = 1; i < lines.length; i++) {
+        final line = lines[i].trimRight();
+        if (line.isEmpty) continue;
+        final row = parseCsvLine(line);
+        if (row.length < 3) continue;
+        final routeId = row[0].trim();
+        final stopId = row[1].trim();
+        final zone = row[2].trim();
+        if (routeId.isNotEmpty && stopId.isNotEmpty && zone.isNotEmpty) {
+          result['${routeId}_$stopId'] = zone;
+        }
+      }
+    } catch (_) {}
+    return result;
+  }
+
   static String? _cleanHex(String? hex) {
     if (hex == null) return null;
     final value = hex.trim().replaceAll('\r', '').replaceAll('#', '');

@@ -1,0 +1,5 @@
+route_id,fare
+F_CPX_R,30
+F_CPX_O,16
+F_CPX_Y,21
+F_CPX_B,60

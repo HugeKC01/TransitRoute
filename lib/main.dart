@@ -112,6 +112,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   Map<String, int> fareDataMap = {};
   Map<String, int> stopOrderMap = {};
   Map<String, List<int>> fareTableMap = {};
+  Map<String, int> ferryFlatFares = {};
+  Map<String, int> ferryZoneMatrix = {};
+  Map<String, String> ferryZones = {};
 
   String routingMode = 'Shortest';
   String transitPreference = 'Auto';
@@ -129,12 +132,18 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     if (stopId.startsWith('ST_') || stopId.startsWith('STOP_')) {
       return 'BMTA Bus';
     }
+    final lines = <String>[];
     for (final entry in linePrefixes.entries) {
       for (final prefix in entry.value) {
-        if (stopId.startsWith(prefix)) return entry.key;
+        if (prefix == stopId ||
+            (stopId.startsWith(prefix) &&
+                (prefix == 'F_' || !prefix.startsWith('F_')))) {
+          lines.add(entry.key);
+          break;
+        }
       }
     }
-    return null;
+    return lines.isNotEmpty ? lines.join(', ') : null;
   }
 
   String _stopDisplayLabel(gtfs.Stop stop) {
@@ -154,7 +163,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   void _adjustMapZoom(double delta) {
     final camera = _mapController.camera;
     final newZoom = (camera.zoom + delta).clamp(3.0, 19.0);
-    _animatedMapMove(camera.center, newZoom, durationMs: 250, curve: Curves.easeOutCubic);
+    _animatedMapMove(
+      camera.center,
+      newZoom,
+      durationMs: 250,
+      curve: Curves.easeOutCubic,
+    );
   }
 
   // _zoomButton removed (no longer used)
@@ -263,8 +277,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
   Color _getLineColor(String stopId) {
     final lineName = _getLineName(stopId);
-    if (lineName != null && lineColors.containsKey(lineName)) {
-      return lineColors[lineName]!;
+    if (lineName != null) {
+      if (lineColors.containsKey(lineName)) {
+        return lineColors[lineName]!;
+      }
+      final firstLine = lineName.split(', ').first;
+      if (lineColors.containsKey(firstLine)) {
+        return lineColors[firstLine]!;
+      }
     }
     return Colors.purple;
   }
@@ -272,6 +292,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   Color _getPolylineColor(String lineName) {
     if (lineColors.containsKey(lineName)) {
       return lineColors[lineName]!;
+    }
+    final firstLine = lineName.split(', ').first;
+    if (lineColors.containsKey(firstLine)) {
+      return lineColors[firstLine]!;
     }
     return Colors.purple;
   }
@@ -1027,10 +1051,16 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     }
 
     // Dynamic marker sizing based on zoom
-    final double railBaseSize = math.max(6.0, (_currentZoom - 10.0) * 3.0 + 8.0);
+    final double railBaseSize = math.max(
+      6.0,
+      (_currentZoom - 10.0) * 3.0 + 8.0,
+    );
     final double railSelectedSize = railBaseSize * 1.375;
     final double railBorderWidth = math.max(1.0, railBaseSize / 5.0);
-    final double railSelectedBorderWidth = math.max(2.0, railSelectedSize / 5.0);
+    final double railSelectedBorderWidth = math.max(
+      2.0,
+      railSelectedSize / 5.0,
+    );
 
     return Stack(
       children: [
@@ -1247,11 +1277,15 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   ),
                 ],
               ),
-            if (_userLocation?.latitude != null && _userLocation?.longitude != null)
+            if (_userLocation?.latitude != null &&
+                _userLocation?.longitude != null)
               MarkerLayer(
                 markers: [
                   Marker(
-                    point: LatLng(_userLocation!.latitude!, _userLocation!.longitude!),
+                    point: LatLng(
+                      _userLocation!.latitude!,
+                      _userLocation!.longitude!,
+                    ),
                     width: 40,
                     height: 40,
                     child: Container(
@@ -2092,7 +2126,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         permissionGranted != PermissionStatus.grantedLimited) {
       return;
     }
-    _locationSub = location.onLocationChanged.listen((LocationData currentLocation) {
+    _locationSub = location.onLocationChanged.listen((
+      LocationData currentLocation,
+    ) {
       if (mounted) {
         setState(() {
           _userLocation = currentLocation;
@@ -2155,6 +2191,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       fareDataMap: fareDataMap,
       stopOrderMap: stopOrderMap,
       fareTableMap: fareTableMap,
+      ferryFlatFares: ferryFlatFares,
+      ferryZoneMatrix: ferryZoneMatrix,
+      ferryZones: ferryZones,
     );
     // Load GTFS shapes (preferred) — use tripMap loaded from DirectionService to avoid re-parsing
     List<ShapeSegment> shapes = const <ShapeSegment>[];
@@ -2481,6 +2520,22 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         fareTableMap[rowKey] = fares;
       }
     } catch (_) {}
+
+    try {
+      ferryFlatFares = await RouteAssetLoader.loadFerryFlatFares(
+        'assets/gtfs_data/ferry_flat_fares.txt',
+      );
+    } catch (_) {}
+    try {
+      ferryZoneMatrix = await RouteAssetLoader.loadFerryZoneMatrix(
+        'assets/gtfs_data/ferry_zone_matrix.txt',
+      );
+    } catch (_) {}
+    try {
+      ferryZones = await RouteAssetLoader.loadFerryZones(
+        'assets/gtfs_data/ferry_zones.txt',
+      );
+    } catch (_) {}
   }
 
   List<String> _parseCsvLine(String line) {
@@ -2515,37 +2570,51 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     return s.toUpperCase();
   }
 
-  void _animatedMapMove(LatLng destLocation, double destZoom, {
+  void _animatedMapMove(
+    LatLng destLocation,
+    double destZoom, {
     int durationMs = 500,
     Curve curve = Curves.fastOutSlowIn,
   }) {
     // Create some tweens. These serve to split up the transition from one location to another.
     // In our case, we want to split the transition be<tween> our current map center and the destination.
     final latTween = Tween<double>(
-        begin: _mapController.camera.center.latitude, end: destLocation.latitude);
+      begin: _mapController.camera.center.latitude,
+      end: destLocation.latitude,
+    );
     final lngTween = Tween<double>(
-        begin: _mapController.camera.center.longitude, end: destLocation.longitude);
+      begin: _mapController.camera.center.longitude,
+      end: destLocation.longitude,
+    );
     final zoomTween = Tween<double>(
-        begin: _mapController.camera.zoom, end: destZoom);
+      begin: _mapController.camera.zoom,
+      end: destZoom,
+    );
 
     // Create a animation controller that has a duration and a TickerProvider.
     final controller = AnimationController(
-        duration: Duration(milliseconds: durationMs), vsync: this);
+      duration: Duration(milliseconds: durationMs),
+      vsync: this,
+    );
     // The animation determines what path the animation will take. You can try different Curves values, although I found
     // fastOutSlowIn to be my favorite.
-    final Animation<double> animation =
-        CurvedAnimation(parent: controller, curve: curve);
+    final Animation<double> animation = CurvedAnimation(
+      parent: controller,
+      curve: curve,
+    );
 
     // Note this method of encoding the target destination is a workaround.
     // When proper gradients are available we can directly use a generic Vector2.
     controller.addListener(() {
       _mapController.move(
-          LatLng(latTween.evaluate(animation), lngTween.evaluate(animation)),
-          zoomTween.evaluate(animation));
+        LatLng(latTween.evaluate(animation), lngTween.evaluate(animation)),
+        zoomTween.evaluate(animation),
+      );
     });
 
     animation.addStatusListener((status) {
-      if (status == AnimationStatus.completed || status == AnimationStatus.dismissed) {
+      if (status == AnimationStatus.completed ||
+          status == AnimationStatus.dismissed) {
         controller.dispose();
       }
     });
@@ -2575,8 +2644,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       permissionGranted = await location.requestPermission();
       if (permissionGranted != PermissionStatus.granted) return;
     }
-    
-    _locationSub ??= location.onLocationChanged.listen((LocationData currentLocation) {
+
+    _locationSub ??= location.onLocationChanged.listen((
+      LocationData currentLocation,
+    ) {
       if (mounted) {
         setState(() {
           _userLocation = currentLocation;
@@ -2652,7 +2723,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     final mediaQuery = MediaQuery.of(context);
     final width = mediaQuery.size.width;
     final height = mediaQuery.size.height;
-    
+
     // Breakpoint for foldables, tablets, and landscape phones
     final isWideLayout = width >= 600 || (width > height && height < 500);
 
@@ -2718,7 +2789,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             )
           : bodyContent,
       floatingActionButton: showHome ? _buildLocationFab(context) : null,
-      bottomNavigationBar: (!isWideLayout && showNav) ? _buildNavigationBar() : null,
+      bottomNavigationBar: (!isWideLayout && showNav)
+          ? _buildNavigationBar()
+          : null,
     );
   }
 
