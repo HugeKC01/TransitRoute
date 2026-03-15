@@ -9,6 +9,10 @@ class StationDetailsPage extends StatelessWidget {
     this.lineName,
     required this.onSelectAsStart,
     required this.onSelectAsDestination,
+    this.transferStops = const [],
+    this.lineNameResolver,
+    this.lineColorResolver,
+    this.onTransferStationSelected,
   });
 
   final gtfs.Stop stop;
@@ -16,6 +20,10 @@ class StationDetailsPage extends StatelessWidget {
   final String? lineName;
   final VoidCallback onSelectAsStart;
   final VoidCallback onSelectAsDestination;
+  final List<gtfs.Stop> transferStops;
+  final String? Function(String stopId)? lineNameResolver;
+  final Color Function(String stopId)? lineColorResolver;
+  final void Function(gtfs.Stop stop)? onTransferStationSelected;
 
   bool get _hasThaiName =>
       stop.thaiName != null && stop.thaiName!.trim().isNotEmpty;
@@ -39,7 +47,7 @@ class StationDetailsPage extends StatelessWidget {
         _InfoChip(label: 'Code', value: stop.code!),
     ];
     return Scaffold(
-      appBar: AppBar(title: Text(stop.name)),
+      appBar: AppBar(title: Text(_hasThaiName ? stop.thaiName! : stop.name)),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
@@ -68,6 +76,56 @@ class StationDetailsPage extends StatelessWidget {
               subtitle:
                   'Lat ${stop.lat.toStringAsFixed(5)}, Lon ${stop.lon.toStringAsFixed(5)}',
             ),
+            if (transferStops.isNotEmpty) ...[
+              const SizedBox(height: 28),
+              const _SectionHeader('Transfers'),
+              const SizedBox(height: 12),
+              ...transferStops.map((tStop) {
+                final tLineName =
+                    lineNameResolver?.call(tStop.stopId) ?? 'Unknown Line';
+                final tLineColor =
+                    lineColorResolver?.call(tStop.stopId) ?? Colors.grey;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                    tileColor: scheme.surfaceContainerHighest.withValues(
+                      alpha: 0.5,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(color: scheme.outlineVariant),
+                    ),
+                    leading: Container(
+                      width: 16,
+                      height: 16,
+                      decoration: BoxDecoration(
+                        color: tLineColor,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    title: Text(
+                      (tStop.thaiName != null &&
+                              tStop.thaiName!.trim().isNotEmpty)
+                          ? tStop.thaiName!
+                          : tStop.name,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      tLineName,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: tLineColor,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => onTransferStationSelected?.call(tStop),
+                  ),
+                );
+              }),
+            ],
             const SizedBox(height: 28),
             const _SectionHeader('Trip planning'),
             _QuickActionButtons(
@@ -271,7 +329,7 @@ class _StationHeroCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      stop.name,
+                      hasThaiName ? stop.thaiName! : stop.name,
                       style: theme.textTheme.headlineSmall?.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w800,
@@ -281,7 +339,7 @@ class _StationHeroCard extends StatelessWidget {
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
                         child: Text(
-                          stop.thaiName!,
+                          stop.name,
                           style: theme.textTheme.titleMedium?.copyWith(
                             color: Colors.white70,
                           ),

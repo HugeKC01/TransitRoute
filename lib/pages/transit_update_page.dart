@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../services/transit_update_service.dart';
+import 'transit_updates_list_page.dart';
 
 class TransitUpdatePage extends StatefulWidget {
   const TransitUpdatePage({super.key});
@@ -36,6 +38,20 @@ class _TransitUpdatePageState extends State<TransitUpdatePage> {
 
   Future<void> _submitReport() async {
     if (!_formKey.currentState!.validate()) return;
+    
+    final report = TransitReport(
+      id: 'rep_${DateTime.now().millisecondsSinceEpoch}',
+      type: _selectedIssue,
+      title: _titleController.text.trim(),
+      description: _detailsController.text.trim(),
+      line: _lineController.text.trim(),
+      station: _locationController.text.trim(),
+      reportedAt: DateTime.now(),
+      severity: _severity.round(),
+      status: 'Reported by user',
+    );
+    TransitUpdateService().addReport(report);
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Report submitted. Thank you!')),
     );

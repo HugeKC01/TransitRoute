@@ -360,58 +360,181 @@ class _NavigationPageState extends State<NavigationPage> {
       DateTime.now().add(Duration(minutes: remainingMinutes)),
     );
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      '$remainingMinutes',
-                      style: theme.textTheme.displaySmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.green.shade700,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: Text(
-                        'min',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green.shade700,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          '$remainingMinutes',
+                          style: theme.textTheme.displaySmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green.shade700,
+                          ),
                         ),
+                        const SizedBox(width: 4),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Text(
+                            'min',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green.shade700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${arrivalTime.format(context)} • ${_stopsLeftOnCurrentLine()} stops left',
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  '${arrivalTime.format(context)} • ${_stopsLeftOnCurrentLine()} stops left',
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+              ),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.red.shade600,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                ),
+                onPressed: () => Navigator.of(context).maybePop(),
+                icon: const Icon(Icons.close),
+                label: const Text('Exit'),
+              ),
+            ],
+          ),
+        ),
+        _buildHorizontalTimeline(theme),
+      ],
+    );
+  }
+
+  Widget _buildHorizontalTimeline(ThemeData theme) {
+    if (_stops.isEmpty) return const SizedBox.shrink();
+    final currentLine = _currentLineName;
+    final currentColor = widget.lineColorResolver(_stops[_currentIndex].stopId);
+
+    // Find start index (up to 1 previous stop on the same line for context)
+    int startIndex = _currentIndex;
+    if (startIndex > 0 && widget.lineNameResolver(_stops[startIndex - 1].stopId) == currentLine) {
+      startIndex--;
+    }
+
+    // Find end index (all remaining stops on this line)
+    int endIndex = _currentIndex;
+    while (endIndex < _stops.length - 1 && widget.lineNameResolver(_stops[endIndex + 1].stopId) == currentLine) {
+      endIndex++;
+    }
+
+    final lineStops = _stops.sublist(startIndex, endIndex + 1);
+    final localCurrentIndex = _currentIndex - startIndex;
+
+    return Container(
+      height: 100,
+      margin: const EdgeInsets.only(top: 16, bottom: 8),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: lineStops.length,
+        itemBuilder: (context, index) {
+          final stop = lineStops[index];
+          final isPassed = index < localCurrentIndex;
+          final isCurrent = index == localCurrentIndex;
+          final isLast = index == lineStops.length - 1;
+          final isFirst = index == 0;
+
+          final color = isPassed ? Colors.grey.withValues(alpha: 0.5) : currentColor;
+          final rightLineColor = (isPassed && !isCurrent) ? Colors.grey.withValues(alpha: 0.5) : currentColor;
+
+          return SizedBox(
+            width: 80, // Fixed width per stop
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                // Stop Name
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                      child: Text(
+                        stop.name,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: isPassed
+                              ? theme.colorScheme.onSurfaceVariant
+                              : theme.colorScheme.onSurface,
+                          fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                          fontSize: 11,
+                        ),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                   ),
                 ),
+                const SizedBox(height: 8),
+                // Timeline Graphics
+                SizedBox(
+                  height: 24,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // Left line
+                      if (!isFirst)
+                        Positioned(
+                          left: 0,
+                          right: 40,
+                          child: Container(
+                            height: 6,
+                            color: color,
+                          ),
+                        ),
+                      // Right line
+                      if (!isLast)
+                        Positioned(
+                          left: 40,
+                          right: 0,
+                          child: Container(
+                            height: 6,
+                            color: rightLineColor,
+                          ),
+                        ),
+                      // Dot
+                      Container(
+                        width: isCurrent ? 20 : 12,
+                        height: isCurrent ? 20 : 12,
+                        decoration: BoxDecoration(
+                          color: isPassed ? Colors.grey : (isCurrent ? Colors.white : currentColor),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isPassed ? Colors.transparent : currentColor,
+                            width: isCurrent ? 5 : 0,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
               ],
             ),
-          ),
-          FilledButton.icon(
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.red.shade600,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            ),
-            onPressed: () => Navigator.of(context).maybePop(),
-            icon: const Icon(Icons.close),
-            label: const Text('Exit'),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -560,8 +683,8 @@ class _NavigationPageState extends State<NavigationPage> {
           Positioned.fill(
             child: DraggableScrollableSheet(
               controller: _sheetController,
-              initialChildSize: 0.22,
-              minChildSize: 0.22,
+              initialChildSize: 0.35,
+              minChildSize: 0.35,
               maxChildSize: 0.9,
               builder: (context, controller) {
                 return Material(

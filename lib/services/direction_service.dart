@@ -8,6 +8,7 @@ import 'package:route/services/csv_utils.dart';
 import 'package:route/services/fare_calculator.dart';
 import 'package:route/services/geo_utils.dart' as geo;
 import 'package:route/services/gtfs_models.dart' as gtfs;
+import 'package:route/services/transit_update_service.dart';
 import 'package:flutter/material.dart';
 
 typedef LineNameResolver = String? Function(String stopId);
@@ -56,6 +57,8 @@ class RouteSegment {
   String? instruction; // e.g., "Walk to BTS Siam" or "Take Sukhumvit Line"
   final List<gtfs.Stop>? intermediateStops;
   List<LocationPoint>? roadPolyline;
+  final bool hasIssue;
+  final String? issueNotice;
 
   RouteSegment({
     required this.mode,
@@ -69,6 +72,8 @@ class RouteSegment {
     this.instruction,
     this.intermediateStops,
     this.roadPolyline,
+    this.hasIssue = false,
+    this.issueNotice,
   });
 }
 
@@ -80,6 +85,8 @@ class DirectionOption {
     required this.distanceMeters,
     required this.minutes,
     required this.fareBreakdown,
+    this.hasIssue = false,
+    this.issueNotice,
   });
 
   final List<RouteSegment> segments;
@@ -88,6 +95,8 @@ class DirectionOption {
   final double distanceMeters;
   final int minutes;
   final Map<String, int> fareBreakdown;
+  final bool hasIssue;
+  final String? issueNotice;
 
   // Helper to retrieve all transit stops involved across all segments
   List<gtfs.Stop> get allStops {
@@ -189,6 +198,43 @@ class DirectionService {
       _distanceGraph.clear();
       _timeGraph.clear();
     }
+  }
+
+  List<gtfs.Stop> getTransferStations(String stopId) {
+    final Set<String> connectedStopIds = {};
+    for (final hubGroup in _transferHubs) {
+      if (hubGroup.contains(stopId)) {
+        for (final s in hubGroup) {
+          if (s != stopId) {
+            connectedStopIds.add(s);
+          }
+        }
+      }
+    }
+    final currentStop = _stopLookup[stopId];
+    if (currentStop != null) {
+      for (final stop in _allStops) {
+        if (stop.stopId != stopId && !connectedStopIds.contains(stop.stopId)) {
+          final dist = geo.haversine(
+            currentStop.lat,
+            currentStop.lon,
+            stop.lat,
+            stop.lon,
+          );
+          if (dist <= 300.0) {
+            connectedStopIds.add(stop.stopId);
+          }
+        }
+      }
+    }
+    final List<gtfs.Stop> transfers = [];
+    for (final id in connectedStopIds) {
+      final s = _stopLookup[id];
+      if (s != null) {
+        transfers.add(s);
+      }
+    }
+    return transfers;
   }
 
   String? _findClosestStop(LocationPoint point) {
@@ -413,12 +459,18 @@ class DirectionService {
 
     int transitRank(_RouteMetrics metric) {
       final hasBus = metric.route.stops.any(
-        (s) => s.stopId.toUpperCase().startsWith('ST_') || s.stopId.toUpperCase().startsWith('STOP_'),
+        (s) =>
+            s.stopId.toUpperCase().startsWith('ST_') ||
+            s.stopId.toUpperCase().startsWith('STOP_'),
       );
       final hasRail =
           metric.route.stops.length !=
           metric.route.stops
-              .where((s) => s.stopId.toUpperCase().startsWith('ST_') || s.stopId.toUpperCase().startsWith('STOP_'))
+              .where(
+                (s) =>
+                    s.stopId.toUpperCase().startsWith('ST_') ||
+                    s.stopId.toUpperCase().startsWith('STOP_'),
+              )
               .length;
       switch (preferredTransit) {
         case 'Prefer Bus':
@@ -451,20 +503,60 @@ class DirectionService {
       return a.distanceMeters.compareTo(b.distanceMeters);
     });
 
-    final options = metrics
-        .map(
-          (metric) => DirectionOption(
-            segments:
-                metric.route.segments ??
-                _buildSegmentsFromStops(metric.route.stops),
-            tags: Set<String>.from(metric.route.tags),
-            label: _optionLabelText(metric.route.tags),
-            distanceMeters: metric.distanceMeters,
-            minutes: metric.minutes,
-            fareBreakdown: Map<String, int>.from(metric.fareBreakdown),
-          ),
-        )
-        .toList();
+    final transitService = TransitUpdateService();
+
+    final options = metrics.map((metric) {
+      final segments =
+          metric.route.segments ?? _buildSegmentsFromStops(metric.route.stops);
+
+      bool optionHasIssue = false;
+      String? optionIssueNotice;
+
+      for (int i = 0; i < segments.length; i++) {
+        final seg = segments[i];
+        if (seg.mode == TravelMode.transit && seg.routeShortName != null) {
+          final reports = transitService.getReportsForLine(seg.routeShortName!);
+          if (reports.isNotEmpty) {
+            final highestSeverity = reports.reduce((r1, r2) => r1.severity > r2.severity ? r1 : r2);
+            segments[i] = RouteSegment(
+              mode: seg.mode,
+              start: seg.start,
+              end: seg.end,
+              distanceMeters: seg.distanceMeters,
+              durationMinutes: seg.durationMinutes,
+              fare: seg.fare,
+              routeId: seg.routeId,
+              routeShortName: seg.routeShortName,
+              instruction: seg.instruction,
+              intermediateStops: seg.intermediateStops,
+              roadPolyline: seg.roadPolyline,
+              hasIssue: true,
+              issueNotice: highestSeverity.title,
+            );
+            optionHasIssue = true;
+            optionIssueNotice ??= highestSeverity.title;
+          }
+        }
+      }
+
+      return DirectionOption(
+        segments: segments,
+        tags: Set<String>.from(metric.route.tags),
+        label: _optionLabelText(metric.route.tags),
+        distanceMeters: metric.distanceMeters,
+        minutes: metric.minutes,
+        fareBreakdown: Map<String, int>.from(metric.fareBreakdown),
+        hasIssue: optionHasIssue,
+        issueNotice: optionIssueNotice,
+      );
+    }).toList();
+
+    // Re-sort options to penalize ones with issues
+    options.sort((a, b) {
+      if (a.hasIssue && !b.hasIssue) return 1;
+      if (!a.hasIssue && b.hasIssue) return -1;
+      return 0; // Maintain previous relative order for ties in issue status
+    });
 
     if (options.isEmpty) {
       return DirectionResult.empty();

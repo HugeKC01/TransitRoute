@@ -41,6 +41,7 @@ dependencies:
   firebase_core: ^4.2.0
   cloud_firestore: ^6.0.3
   location: ^8.0.1
+  google_fonts: ^8.0.2
   
 
 dev_dependencies:

@@ -22,6 +22,8 @@ class MorePage extends StatelessWidget {
     required this.onOpenGraphicMap,
     required this.onOpenCards,
     required this.profile,
+    required this.currentAccentColor,
+    required this.onAccentColorChanged,
   });
 
   final VoidCallback onOpenTransportLines;
@@ -29,6 +31,9 @@ class MorePage extends StatelessWidget {
   final VoidCallback onOpenGraphicMap;
   final VoidCallback onOpenCards;
   final Profile profile;
+  
+  final Color currentAccentColor;
+  final ValueChanged<Color> onAccentColorChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -172,6 +177,117 @@ class MorePage extends StatelessWidget {
                 secondary: const Icon(Icons.notifications_active_outlined),
                 title: const Text('Notifications'),
                 subtitle: const Text('Receive disruption and fare alerts'),
+              ),
+              Divider(height: 1, color: theme.colorScheme.outlineVariant),
+              ListTile(
+                leading: const Icon(Icons.palette_outlined),
+                title: const Text('Theme Color'),
+                subtitle: Padding(
+                  padding: const EdgeInsets.only(top: 8.0),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      ...[
+                        Colors.blue,
+                        Colors.red,
+                        Colors.green,
+                        Colors.purple,
+                        Colors.orange,
+                        Colors.teal,
+                        Colors.pink,
+                        Colors.indigo,
+                        Colors.cyan,
+                        Colors.brown,
+                        Colors.amber,
+                        Colors.deepOrange,
+                      ].map((color) => GestureDetector(
+                            onTap: () => onAccentColorChanged(color),
+                            child: Container(
+                              width: 24,
+                              height: 24,
+                              decoration: BoxDecoration(
+                                color: color,
+                                shape: BoxShape.circle,
+                                border: currentAccentColor.value == color.value
+                                    ? Border.all(color: theme.colorScheme.onSurface, width: 2)
+                                    : null,
+                              ),
+                            ),
+                          )),
+                      GestureDetector(
+                        onTap: () {
+                          Color tempColor = currentAccentColor;
+                          showDialog(
+                            context: context,
+                            builder: (context) => StatefulBuilder(
+                              builder: (context, setState) => AlertDialog(
+                                title: const Text('Custom Color'),
+                                content: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      width: double.infinity,
+                                      height: 50,
+                                      decoration: BoxDecoration(
+                                        color: tempColor,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Slider(
+                                      value: tempColor.red.toDouble(),
+                                      min: 0,
+                                      max: 255,
+                                      activeColor: Colors.red,
+                                      onChanged: (v) => setState(() => tempColor = tempColor.withRed(v.toInt())),
+                                    ),
+                                    Slider(
+                                      value: tempColor.green.toDouble(),
+                                      min: 0,
+                                      max: 255,
+                                      activeColor: Colors.green,
+                                      onChanged: (v) => setState(() => tempColor = tempColor.withGreen(v.toInt())),
+                                    ),
+                                    Slider(
+                                      value: tempColor.blue.toDouble(),
+                                      min: 0,
+                                      max: 255,
+                                      activeColor: Colors.blue,
+                                      onChanged: (v) => setState(() => tempColor = tempColor.withBlue(v.toInt())),
+                                    ),
+                                  ],
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context),
+                                    child: const Text('Cancel'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () {
+                                      onAccentColorChanged(tempColor);
+                                      Navigator.pop(context);
+                                    },
+                                    child: const Text('Save'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                        child: Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: theme.colorScheme.onSurface, width: 2),
+                          ),
+                          child: const Icon(Icons.add, size: 16),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
