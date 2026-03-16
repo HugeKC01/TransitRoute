@@ -12,6 +12,7 @@ class StationDetailsPage extends StatelessWidget {
     this.transferStops = const [],
     this.lineNameResolver,
     this.lineColorResolver,
+    this.lineColorByName,
     this.onTransferStationSelected,
   });
 
@@ -23,6 +24,7 @@ class StationDetailsPage extends StatelessWidget {
   final List<gtfs.Stop> transferStops;
   final String? Function(String stopId)? lineNameResolver;
   final Color Function(String stopId)? lineColorResolver;
+  final Color Function(String lineName)? lineColorByName;
   final void Function(gtfs.Stop stop)? onTransferStationSelected;
 
   bool get _hasThaiName =>
@@ -57,6 +59,7 @@ class StationDetailsPage extends StatelessWidget {
               lineColor: lineColor,
               lineName: lineName,
               hasThaiName: _hasThaiName,
+              lineColorByName: lineColorByName,
             ),
             const SizedBox(height: 24),
             const _SectionHeader('Station facts'),
@@ -113,11 +116,32 @@ class StationDetailsPage extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    subtitle: Text(
-                      tLineName,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: tLineColor,
-                        fontWeight: FontWeight.w600,
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
+                        children: tLineName.split(', ').map((sl) {
+                          final slColor =
+                              lineColorByName?.call(sl) ?? tLineColor;
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: slColor.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              sl,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: slColor,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          );
+                        }).toList(),
                       ),
                     ),
                     trailing: const Icon(Icons.chevron_right),
@@ -296,12 +320,14 @@ class _StationHeroCard extends StatelessWidget {
     required this.lineColor,
     required this.lineName,
     required this.hasThaiName,
+    this.lineColorByName,
   });
 
   final gtfs.Stop stop;
   final Color lineColor;
   final String? lineName;
   final bool hasThaiName;
+  final Color Function(String lineName)? lineColorByName;
 
   @override
   Widget build(BuildContext context) {
@@ -361,22 +387,38 @@ class _StationHeroCard extends StatelessWidget {
           if (lineName != null && lineName!.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 16),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  lineName!,
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: lineName!.split(', ').map((singleLine) {
+                  final specificColor =
+                      lineColorByName?.call(singleLine) ??
+                      Colors.white.withValues(alpha: 0.15);
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: specificColor,
+                      borderRadius: BorderRadius.circular(999),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.1),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      singleLine,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  );
+                }).toList(),
               ),
             ),
         ],

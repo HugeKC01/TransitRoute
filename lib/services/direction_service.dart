@@ -1366,11 +1366,12 @@ class DirectionService {
       if (stopId.startsWith('ST_') || stopId.startsWith('STOP_')) {
         return ['BMTA Bus'];
       }
-      if (_routes.isEmpty) {
-        final r = lineNameResolver(stopId);
-        // r could be multiple lines joined by comma, so let's split it just in case
-        return r != null ? r.split(', ') : [];
+      final r = lineNameResolver(stopId);
+      if (r != null && r.isNotEmpty) {
+        return r.split(', ');
       }
+      
+      // Fallback
       final lines = <String>[];
       for (final route in _routes) {
         for (final pref in route.linePrefixes) {

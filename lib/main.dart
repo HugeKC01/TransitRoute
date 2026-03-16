@@ -102,6 +102,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   late DirectionService _directionService;
 
   Map<String, List<String>> linePrefixes = {};
+  final Map<String, Set<String>> _stopToLinesMap = {};
   Map<String, Color> lineColors = {};
   List<gtfs.Route> allRoutes = [];
   bool _didFitRails = false;
@@ -132,18 +133,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     if (stopId.startsWith('ST_') || stopId.startsWith('STOP_')) {
       return 'BMTA Bus';
     }
-    final lines = <String>[];
-    for (final entry in linePrefixes.entries) {
-      for (final prefix in entry.value) {
-        if (prefix == stopId ||
-            (stopId.startsWith(prefix) &&
-                (prefix == 'F_' || !prefix.startsWith('F_')))) {
-          lines.add(entry.key);
-          break;
-        }
-      }
+    if (_stopToLinesMap.containsKey(stopId) &&
+        _stopToLinesMap[stopId]!.isNotEmpty) {
+      final lines = _stopToLinesMap[stopId]!.toList()..sort();
+      return lines.join(', ');
     }
-    return lines.isNotEmpty ? lines.join(', ') : null;
+    return null;
   }
 
   String _stopDisplayLabel(gtfs.Stop stop) {
@@ -594,23 +589,38 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                             if (lineName != null && lineName.isNotEmpty)
                               Padding(
                                 padding: const EdgeInsets.only(top: 8),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: lineColor.withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                  child: Text(
-                                    lineName,
-                                    style: theme.textTheme.labelMedium
-                                        ?.copyWith(
-                                          color: lineColor,
-                                          fontWeight: FontWeight.w700,
+                                child: Wrap(
+                                  spacing: 6,
+                                  runSpacing: 6,
+                                  children: lineName.split(', ').map((
+                                    singleLine,
+                                  ) {
+                                    final specificColor = _getPolylineColor(
+                                      singleLine,
+                                    );
+                                    return Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: specificColor.withValues(
+                                          alpha: 0.15,
                                         ),
-                                  ),
+                                        borderRadius: BorderRadius.circular(
+                                          999,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        singleLine,
+                                        style: theme.textTheme.labelMedium
+                                            ?.copyWith(
+                                              color: specificColor,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                      ),
+                                    );
+                                  }).toList(),
                                 ),
                               ),
                           ],
@@ -677,11 +687,31 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        subtitle: Text(
-                          tLineName,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: tLineColor,
-                            fontWeight: FontWeight.w600,
+                        subtitle: Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Wrap(
+                            spacing: 4,
+                            runSpacing: 4,
+                            children: tLineName.split(', ').map((sl) {
+                              final slColor = _getPolylineColor(sl);
+                              return Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: slColor.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  sl,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: slColor,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              );
+                            }).toList(),
                           ),
                         ),
                         trailing: const Icon(Icons.chevron_right),
@@ -2183,6 +2213,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     colorMap['BMTA Bus'] = Colors.blueAccent;
     final combinedStops = <gtfs.Stop>[...stops, ...busStopList, ...ferryStops];
     final stopMap = {for (final stop in combinedStops) stop.stopId: stop};
+
+    await _buildStopToLinesMap(routes);
+
     _directionService.updateData(
       allStops: combinedStops,
       stopLookup: stopMap,
@@ -2561,6 +2594,80 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     }
     result.add(buffer.toString().trim());
     return result;
+  }
+
+  Future<void> _buildStopToLinesMap(List<gtfs.Route> routes) async {
+    final routeMap = {for (final r in routes) r.routeId: r};
+    final tripToLine = <String, String>{};
+    try {
+      final tripContent = await rootBundle.loadString(
+        'assets/gtfs_data/trips.txt',
+      );
+      final lines = const LineSplitter().convert(tripContent);
+      if (lines.length > 1) {
+        final header = _parseCsvLine(lines[0]);
+        final routeIdx = header.indexOf('route_id');
+        final tripIdx = header.indexOf('trip_id');
+        if (routeIdx != -1 && tripIdx != -1) {
+          for (int i = 1; i < lines.length; i++) {
+            if (lines[i].trim().isEmpty) continue;
+            final row = _parseCsvLine(lines[i]);
+            if (row.length > math.max(routeIdx, tripIdx)) {
+              final rId = row[routeIdx].trim();
+              final tId = row[tripIdx].trim();
+              final route = routeMap[rId];
+              if (route != null) {
+                final lineName = route.longName.isNotEmpty
+                    ? route.longName
+                    : route.routeId;
+                tripToLine[tId] = lineName;
+              }
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    final stopTimesFiles = [
+      'assets/gtfs_data/stop_times.txt',
+      'assets/gtfs_data/bus_stop_times.txt',
+      'assets/gtfs_data/ferry_stop_times.txt',
+    ];
+
+    for (final file in stopTimesFiles) {
+      try {
+        final stContent = await rootBundle.loadString(file);
+        final lines = const LineSplitter().convert(stContent);
+        if (lines.length <= 1) continue;
+        final header = _parseCsvLine(lines[0]);
+        final tripIdx = header.indexOf('trip_id');
+        final stopIdx = header.indexOf('stop_id');
+        if (tripIdx == -1 || stopIdx == -1) continue;
+
+        for (int i = 1; i < lines.length; i++) {
+          if (lines[i].trim().isEmpty) continue;
+          final row = _parseCsvLine(lines[i]);
+          if (row.length > math.max(tripIdx, stopIdx)) {
+            final tId = row[tripIdx].trim();
+            final sId = row[stopIdx].trim();
+            final lineName = tripToLine[tId];
+            if (lineName != null) {
+              _stopToLinesMap.putIfAbsent(sId, () => {}).add(lineName);
+            } else if (file.contains('ferry_stop_times') &&
+                tId.startsWith('F_')) {
+              final routeId = tId.split('_TRIP')[0];
+              final route = routeMap[routeId];
+              if (route != null) {
+                final lName = route.longName.isNotEmpty
+                    ? route.longName
+                    : route.routeId;
+                _stopToLinesMap.putIfAbsent(sId, () => {}).add(lName);
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    }
   }
 
   String? _cleanHex(String? hex) {
