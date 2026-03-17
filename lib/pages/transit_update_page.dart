@@ -38,7 +38,7 @@ class _TransitUpdatePageState extends State<TransitUpdatePage> {
 
   Future<void> _submitReport() async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     final report = TransitReport(
       id: 'rep_${DateTime.now().millisecondsSinceEpoch}',
       type: _selectedIssue,

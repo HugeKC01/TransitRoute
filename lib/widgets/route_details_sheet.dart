@@ -80,7 +80,12 @@ class RouteDetailsSheet extends StatelessWidget {
       iconColor = Colors.deepOrange;
       title = segment.instruction ?? 'Motorcycle Taxi';
     } else {
-      if (segment.routeShortName != null && segment.routeShortName!.toLowerCase().contains("bus")) { icon = Icons.directions_bus; } else { icon = Icons.train; }
+      if (segment.routeShortName != null &&
+          segment.routeShortName!.toLowerCase().contains("bus")) {
+        icon = Icons.directions_bus;
+      } else {
+        icon = Icons.train;
+      }
       iconColor =
           lineColors[segment.routeShortName] ?? theme.colorScheme.primary;
       title = segment.routeShortName ?? 'Transit';
@@ -125,6 +130,19 @@ class RouteDetailsSheet extends StatelessWidget {
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
+                if (segment.nextDepartureTime != null ||
+                    segment.frequencyInfo != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4.0),
+                    child: Text(
+                      segment.frequencyInfo ??
+                          'Next departure: ${segment.nextDepartureTime}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -296,18 +314,26 @@ class RouteDetailsSheet extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.only(left: 32, bottom: 8),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: theme.colorScheme.errorContainer,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.warning_amber_rounded, color: theme.colorScheme.error, size: 20),
+                          Icon(
+                            Icons.warning_amber_rounded,
+                            color: theme.colorScheme.error,
+                            size: 20,
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              segment.issueNotice ?? 'Issue reported on this line',
+                              segment.issueNotice ??
+                                  'Issue reported on this line',
                               style: theme.textTheme.bodyMedium?.copyWith(
                                 color: theme.colorScheme.error,
                                 fontWeight: FontWeight.w600,

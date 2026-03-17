@@ -23,6 +23,7 @@ import 'pages/navigation_page.dart';
 import 'pages/graphic_map_page.dart';
 import 'widgets/route_details_sheet.dart';
 import 'widgets/route_options_panel.dart';
+import 'widgets/upcoming_departures.dart';
 
 import 'widgets/search_tabs.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -645,6 +646,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                       infoChip('Code', stop.code!),
                   ],
                 ),
+                UpcomingDeparturesWidget(stopId: stop.stopId),
                 if (transferStops.isNotEmpty) ...[
                   const SizedBox(height: 16),
                   Text(

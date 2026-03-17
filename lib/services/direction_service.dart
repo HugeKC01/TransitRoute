@@ -9,6 +9,7 @@ import 'package:route/services/fare_calculator.dart';
 import 'package:route/services/geo_utils.dart' as geo;
 import 'package:route/services/gtfs_models.dart' as gtfs;
 import 'package:route/services/transit_update_service.dart';
+import 'package:route/services/timetable_service.dart';
 import 'package:flutter/material.dart';
 
 typedef LineNameResolver = String? Function(String stopId);
@@ -59,6 +60,10 @@ class RouteSegment {
   List<LocationPoint>? roadPolyline;
   final bool hasIssue;
   final String? issueNotice;
+
+  // Timetable
+  String? nextDepartureTime;
+  String? frequencyInfo;
 
   RouteSegment({
     required this.mode,
@@ -582,6 +587,7 @@ class DirectionService {
     }
 
     await _enrichSegmentsWithRoadRouting(options);
+    await _enrichSegmentsWithTimetable(options);
 
     return DirectionResult(options: options, selectionIndex: selectionIndex);
   }
@@ -1370,7 +1376,7 @@ class DirectionService {
       if (r != null && r.isNotEmpty) {
         return r.split(', ');
       }
-      
+
       // Fallback
       final lines = <String>[];
       for (final route in _routes) {
@@ -1533,6 +1539,70 @@ class DirectionService {
       }
     }
     return false;
+  }
+
+  Future<void> _enrichSegmentsWithTimetable(
+    List<DirectionOption> options,
+  ) async {
+    for (final option in options) {
+      for (final segment in option.segments) {
+        if (segment.mode == TravelMode.transit && segment.start.name != null) {
+          final stopMatch = _allStops
+              .where(
+                (s) =>
+                    s.name == segment.start.name || s.lat == segment.start.lat,
+              )
+              .toList();
+
+          if (stopMatch.isNotEmpty) {
+            final stopId = stopMatch.first.stopId;
+            try {
+              final entries = await TimetableService.getTimetableForStop(
+                stopId,
+              );
+              if (entries.isNotEmpty) {
+                final now = DateTime.now();
+                final currentTimeString =
+                    '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
+
+                TimetableEntry? nextMatch;
+                for (var e in entries) {
+                  if (e.isFrequency) {
+                    if (e.startTime != null &&
+                        e.endTime != null &&
+                        currentTimeString.compareTo(e.startTime!) >= 0 &&
+                        currentTimeString.compareTo(e.endTime!) <= 0) {
+                      nextMatch = e;
+                      break;
+                    }
+                  } else {
+                    if (e.departureTime.isNotEmpty &&
+                        e.departureTime.compareTo(currentTimeString) >= 0) {
+                      if (nextMatch == null ||
+                          e.departureTime.compareTo(nextMatch.departureTime) <
+                              0) {
+                        nextMatch = e;
+                      }
+                    }
+                  }
+                }
+
+                if (nextMatch != null) {
+                  if (nextMatch.isFrequency) {
+                    segment.frequencyInfo =
+                        'Every ${nextMatch.headwaySecs != null ? nextMatch.headwaySecs! ~/ 60 : "?"} mins';
+                  } else {
+                    final parts = nextMatch.departureTime.split(':');
+                    segment.nextDepartureTime =
+                        '${parts[0].padLeft(2, '0')}:${parts[1].padLeft(2, '0')}';
+                  }
+                }
+              }
+            } catch (_) {}
+          }
+        }
+      }
+    }
   }
 }
 

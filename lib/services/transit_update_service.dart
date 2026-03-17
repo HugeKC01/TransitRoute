@@ -2,7 +2,8 @@ import 'package:flutter/foundation.dart';
 import '../pages/transit_updates_list_page.dart';
 
 class TransitUpdateService extends ChangeNotifier {
-  static final TransitUpdateService _instance = TransitUpdateService._internal();
+  static final TransitUpdateService _instance =
+      TransitUpdateService._internal();
 
   factory TransitUpdateService() => _instance;
 

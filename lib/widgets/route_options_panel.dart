@@ -316,7 +316,10 @@ class _RouteOptionCard extends StatelessWidget {
 
                   if (option.hasIssue) ...[
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       margin: const EdgeInsets.only(bottom: 12),
                       decoration: BoxDecoration(
                         color: theme.colorScheme.errorContainer,
@@ -324,7 +327,11 @@ class _RouteOptionCard extends StatelessWidget {
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.warning_amber_rounded, color: theme.colorScheme.error, size: 20),
+                          Icon(
+                            Icons.warning_amber_rounded,
+                            color: theme.colorScheme.error,
+                            size: 20,
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(

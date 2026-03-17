@@ -234,7 +234,7 @@ class FareCalculator {
       final fare = _ferryZoneMatrix[key];
       if (fare != null) return fare;
       // Fallback
-      return 33; 
+      return 33;
     }
 
     // Otherwise, default to Orange Flag (most common)
@@ -265,7 +265,7 @@ class FareCalculator {
         totalMPrice += result['mPrice'] ?? 0;
         totalSPrice += result['sPrice'] ?? 0;
         total += result['total'] ?? 0;
-      } else if (group == 'F_CPX' || group.startsWith('F_')) { 
+      } else if (group == 'F_CPX' || group.startsWith('F_')) {
         final fare = _calculateFerryFare(segment);
         total += fare;
       } else {

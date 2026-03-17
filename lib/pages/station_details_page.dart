@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:route/services/gtfs_models.dart' as gtfs;
+import 'package:route/widgets/station_timetable.dart';
 
 class StationDetailsPage extends StatelessWidget {
   const StationDetailsPage({
@@ -163,6 +164,10 @@ class StationDetailsPage extends StatelessWidget {
                 color: scheme.onSurfaceVariant,
               ),
             ),
+            const SizedBox(height: 28),
+            const _SectionHeader('Timetable & Departures'),
+            const SizedBox(height: 12),
+            StationTimetableSection(stopId: stop.stopId),
           ],
         ),
       ),

@@ -409,7 +409,10 @@ class _NavigationPageState extends State<NavigationPage> {
               FilledButton.icon(
                 style: FilledButton.styleFrom(
                   backgroundColor: Colors.red.shade600,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
                 ),
                 onPressed: () => Navigator.of(context).maybePop(),
                 icon: const Icon(Icons.close),
@@ -430,13 +433,15 @@ class _NavigationPageState extends State<NavigationPage> {
 
     // Find start index (up to 1 previous stop on the same line for context)
     int startIndex = _currentIndex;
-    if (startIndex > 0 && widget.lineNameResolver(_stops[startIndex - 1].stopId) == currentLine) {
+    if (startIndex > 0 &&
+        widget.lineNameResolver(_stops[startIndex - 1].stopId) == currentLine) {
       startIndex--;
     }
 
     // Find end index (all remaining stops on this line)
     int endIndex = _currentIndex;
-    while (endIndex < _stops.length - 1 && widget.lineNameResolver(_stops[endIndex + 1].stopId) == currentLine) {
+    while (endIndex < _stops.length - 1 &&
+        widget.lineNameResolver(_stops[endIndex + 1].stopId) == currentLine) {
       endIndex++;
     }
 
@@ -457,8 +462,12 @@ class _NavigationPageState extends State<NavigationPage> {
           final isLast = index == lineStops.length - 1;
           final isFirst = index == 0;
 
-          final color = isPassed ? Colors.grey.withValues(alpha: 0.5) : currentColor;
-          final rightLineColor = (isPassed && !isCurrent) ? Colors.grey.withValues(alpha: 0.5) : currentColor;
+          final color = isPassed
+              ? Colors.grey.withValues(alpha: 0.5)
+              : currentColor;
+          final rightLineColor = (isPassed && !isCurrent)
+              ? Colors.grey.withValues(alpha: 0.5)
+              : currentColor;
 
           return SizedBox(
             width: 80, // Fixed width per stop
@@ -478,7 +487,9 @@ class _NavigationPageState extends State<NavigationPage> {
                           color: isPassed
                               ? theme.colorScheme.onSurfaceVariant
                               : theme.colorScheme.onSurface,
-                          fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                          fontWeight: isCurrent
+                              ? FontWeight.bold
+                              : FontWeight.normal,
                           fontSize: 11,
                         ),
                         maxLines: 3,
@@ -499,27 +510,23 @@ class _NavigationPageState extends State<NavigationPage> {
                         Positioned(
                           left: 0,
                           right: 40,
-                          child: Container(
-                            height: 6,
-                            color: color,
-                          ),
+                          child: Container(height: 6, color: color),
                         ),
                       // Right line
                       if (!isLast)
                         Positioned(
                           left: 40,
                           right: 0,
-                          child: Container(
-                            height: 6,
-                            color: rightLineColor,
-                          ),
+                          child: Container(height: 6, color: rightLineColor),
                         ),
                       // Dot
                       Container(
                         width: isCurrent ? 20 : 12,
                         height: isCurrent ? 20 : 12,
                         decoration: BoxDecoration(
-                          color: isPassed ? Colors.grey : (isCurrent ? Colors.white : currentColor),
+                          color: isPassed
+                              ? Colors.grey
+                              : (isCurrent ? Colors.white : currentColor),
                           shape: BoxShape.circle,
                           border: Border.all(
                             color: isPassed ? Colors.transparent : currentColor,

@@ -31,7 +31,7 @@ class MorePage extends StatelessWidget {
   final VoidCallback onOpenGraphicMap;
   final VoidCallback onOpenCards;
   final Profile profile;
-  
+
   final Color currentAccentColor;
   final ValueChanged<Color> onAccentColorChanged;
 
@@ -201,20 +201,25 @@ class MorePage extends StatelessWidget {
                         Colors.brown,
                         Colors.amber,
                         Colors.deepOrange,
-                      ].map((color) => GestureDetector(
-                            onTap: () => onAccentColorChanged(color),
-                            child: Container(
-                              width: 24,
-                              height: 24,
-                              decoration: BoxDecoration(
-                                color: color,
-                                shape: BoxShape.circle,
-                                border: currentAccentColor.value == color.value
-                                    ? Border.all(color: theme.colorScheme.onSurface, width: 2)
-                                    : null,
-                              ),
+                      ].map(
+                        (color) => GestureDetector(
+                          onTap: () => onAccentColorChanged(color),
+                          child: Container(
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              color: color,
+                              shape: BoxShape.circle,
+                              border: currentAccentColor.value == color.value
+                                  ? Border.all(
+                                      color: theme.colorScheme.onSurface,
+                                      width: 2,
+                                    )
+                                  : null,
                             ),
-                          )),
+                          ),
+                        ),
+                      ),
                       GestureDetector(
                         onTap: () {
                           Color tempColor = currentAccentColor;
@@ -240,21 +245,33 @@ class MorePage extends StatelessWidget {
                                       min: 0,
                                       max: 255,
                                       activeColor: Colors.red,
-                                      onChanged: (v) => setState(() => tempColor = tempColor.withRed(v.toInt())),
+                                      onChanged: (v) => setState(
+                                        () => tempColor = tempColor.withRed(
+                                          v.toInt(),
+                                        ),
+                                      ),
                                     ),
                                     Slider(
                                       value: tempColor.green.toDouble(),
                                       min: 0,
                                       max: 255,
                                       activeColor: Colors.green,
-                                      onChanged: (v) => setState(() => tempColor = tempColor.withGreen(v.toInt())),
+                                      onChanged: (v) => setState(
+                                        () => tempColor = tempColor.withGreen(
+                                          v.toInt(),
+                                        ),
+                                      ),
                                     ),
                                     Slider(
                                       value: tempColor.blue.toDouble(),
                                       min: 0,
                                       max: 255,
                                       activeColor: Colors.blue,
-                                      onChanged: (v) => setState(() => tempColor = tempColor.withBlue(v.toInt())),
+                                      onChanged: (v) => setState(
+                                        () => tempColor = tempColor.withBlue(
+                                          v.toInt(),
+                                        ),
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -280,7 +297,10 @@ class MorePage extends StatelessWidget {
                           height: 24,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            border: Border.all(color: theme.colorScheme.onSurface, width: 2),
+                            border: Border.all(
+                              color: theme.colorScheme.onSurface,
+                              width: 2,
+                            ),
                           ),
                           child: const Icon(Icons.add, size: 16),
                         ),
