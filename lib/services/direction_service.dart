@@ -1546,7 +1546,7 @@ class DirectionService {
   ) async {
     for (final option in options) {
       for (final segment in option.segments) {
-        if (segment.mode == TravelMode.transit && segment.start.name != null) {
+        if (segment.mode == TravelMode.transit) {
           final stopMatch = _allStops
               .where(
                 (s) =>

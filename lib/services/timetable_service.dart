@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 class TimetableEntry {
@@ -54,8 +55,7 @@ class TimetableService {
     final isSat = now.weekday == DateTime.saturday;
     final isSun = now.weekday == DateTime.sunday;
     final isWkd = !isSat && !isSun;
-    final currentServiceId = serviceId ?? (isSat ? 'SAT' : (isSun ? 'SUN' : 'WKD'));
-
+    
     // Read trips to map tripId -> routeId, headsign, and serviceId
     final tripMap = <String, Map<String, String>>{};
     try {
@@ -96,7 +96,7 @@ class TimetableService {
         }
       }
     } catch (e) {
-      print("Error: $e");
+      debugPrint("Error: $e");
     }
 
     // 1. Read fixed_timetables.txt
@@ -165,7 +165,7 @@ class TimetableService {
         }
       }
     } catch (e) {
-      print("Error: $e");
+      debugPrint("Error: $e");
     }
 
     // Read frequencies
@@ -195,7 +195,7 @@ class TimetableService {
         }
       }
     } catch (e) {
-      print("Error: $e");
+      debugPrint("Error: $e");
     }
 
     // Helper to read stop times from a specific file
@@ -264,7 +264,7 @@ class TimetableService {
           }
         }
       } catch (e) {
-        print("Error: $e");
+        debugPrint("Error: $e");
       }
     }
 

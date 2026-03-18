@@ -210,7 +210,7 @@ class MorePage extends StatelessWidget {
                             decoration: BoxDecoration(
                               color: color,
                               shape: BoxShape.circle,
-                              border: currentAccentColor.value == color.value
+                              border: currentAccentColor == color
                                   ? Border.all(
                                       color: theme.colorScheme.onSurface,
                                       width: 2,
@@ -241,34 +241,43 @@ class MorePage extends StatelessWidget {
                                     ),
                                     const SizedBox(height: 16),
                                     Slider(
-                                      value: tempColor.red.toDouble(),
+                                      value: (tempColor.r * 255.0).round().toDouble(),
                                       min: 0,
                                       max: 255,
                                       activeColor: Colors.red,
                                       onChanged: (v) => setState(
-                                        () => tempColor = tempColor.withRed(
+                                        () => tempColor = Color.fromARGB(
+                                          (tempColor.a * 255).round(),
                                           v.toInt(),
+                                          (tempColor.g * 255).round(),
+                                          (tempColor.b * 255).round(),
                                         ),
                                       ),
                                     ),
                                     Slider(
-                                      value: tempColor.green.toDouble(),
+                                      value: (tempColor.g * 255.0).round().toDouble(),
                                       min: 0,
                                       max: 255,
                                       activeColor: Colors.green,
                                       onChanged: (v) => setState(
-                                        () => tempColor = tempColor.withGreen(
+                                        () => tempColor = Color.fromARGB(
+                                          (tempColor.a * 255).round(),
+                                          (tempColor.r * 255).round(),
                                           v.toInt(),
+                                          (tempColor.b * 255).round(),
                                         ),
                                       ),
                                     ),
                                     Slider(
-                                      value: tempColor.blue.toDouble(),
+                                      value: (tempColor.b * 255.0).round().toDouble(),
                                       min: 0,
                                       max: 255,
                                       activeColor: Colors.blue,
                                       onChanged: (v) => setState(
-                                        () => tempColor = tempColor.withBlue(
+                                        () => tempColor = Color.fromARGB(
+                                          (tempColor.a * 255).round(),
+                                          (tempColor.r * 255).round(),
+                                          (tempColor.g * 255).round(),
                                           v.toInt(),
                                         ),
                                       ),
