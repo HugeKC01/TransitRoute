@@ -55,7 +55,7 @@ class TimetableService {
     final isSat = now.weekday == DateTime.saturday;
     final isSun = now.weekday == DateTime.sunday;
     final isWkd = !isSat && !isSun;
-    
+
     // Read trips to map tripId -> routeId, headsign, and serviceId
     final tripMap = <String, Map<String, String>>{};
     try {
@@ -221,7 +221,9 @@ class TimetableService {
                 dTime = row[depIdx].trim();
               }
 
-              final tInfo = tripMap[tId] ?? {'route_id': '', 'headsign': '', 'service_id': ''};
+              final tInfo =
+                  tripMap[tId] ??
+                  {'route_id': '', 'headsign': '', 'service_id': ''};
 
               // Check calendar service logic for frequencies
               final tSvc = tInfo['service_id']!;

@@ -241,7 +241,9 @@ class MorePage extends StatelessWidget {
                                     ),
                                     const SizedBox(height: 16),
                                     Slider(
-                                      value: (tempColor.r * 255.0).round().toDouble(),
+                                      value: (tempColor.r * 255.0)
+                                          .round()
+                                          .toDouble(),
                                       min: 0,
                                       max: 255,
                                       activeColor: Colors.red,
@@ -255,7 +257,9 @@ class MorePage extends StatelessWidget {
                                       ),
                                     ),
                                     Slider(
-                                      value: (tempColor.g * 255.0).round().toDouble(),
+                                      value: (tempColor.g * 255.0)
+                                          .round()
+                                          .toDouble(),
                                       min: 0,
                                       max: 255,
                                       activeColor: Colors.green,
@@ -269,7 +273,9 @@ class MorePage extends StatelessWidget {
                                       ),
                                     ),
                                     Slider(
-                                      value: (tempColor.b * 255.0).round().toDouble(),
+                                      value: (tempColor.b * 255.0)
+                                          .round()
+                                          .toDouble(),
                                       min: 0,
                                       max: 255,
                                       activeColor: Colors.blue,
