@@ -25,8 +25,6 @@ F_CPX_Y,WKD,F_CPX_Y_TRIP1,Sathorn,0,,
 F_CPX_Y,WKD,F_CPX_Y_TRIP2,Nonthaburi,0,,
 F_CPX_G,WKD,F_CPX_G_TRIP1,Sathorn,0,,
 F_CPX_G,WKD,F_CPX_G_TRIP2,Pakkret,0,,
-F_CPX_B,WKD,F_CPX_B_TRIP1,Asiatique,0,,
-F_CPX_B,WKD,F_CPX_B_TRIP2,Phra Arthit,0,,
 75,WKD,75_0,Hua Lamphong,0,75_MAIN,
 75,WKD,75_1,Wat Phuttha Bucha,1,75_MAIN,
 21,WKD,21_0,Chulalongkorn University,0,21_MAIN,
@@ -39,3 +37,12 @@ F_CPX_YM,SAT,F_CPX_YM_TRIP1_SAT,Wat Rajsingkorn,0,,
 F_CPX_YM,SAT,F_CPX_YM_TRIP2_SAT,Nonthaburi,1,,
 F_CPX_YM,SUN,F_CPX_YM_TRIP1_SUN,Wat Rajsingkorn,0,,
 F_CPX_YM,SUN,F_CPX_YM_TRIP2_SUN,Nonthaburi,1,,
+F_CPX_B,WKD,F_CPX_B_TRIP1,Blue Flag Upstream,0
+F_CPX_B,SAT,F_CPX_B_TRIP1_SAT,Blue Flag Upstream,0
+F_CPX_B,SUN,F_CPX_B_TRIP1_SUN,Blue Flag Upstream,0
+F_CPX_B,WKD,F_CPX_B_TRIP2,Blue Flag Downstream,1
+F_CPX_B,SAT,F_CPX_B_TRIP2_SAT,Blue Flag Downstream,1
+F_CPX_B,SUN,F_CPX_B_TRIP2_SUN,Blue Flag Downstream,1
+F_CPX_B,WKD,F_CPX_B_TRIP3,Blue Flag Downstream (to Asiatique),1
+F_CPX_B,SAT,F_CPX_B_TRIP3_SAT,Blue Flag Downstream (to Asiatique),1
+F_CPX_B,SUN,F_CPX_B_TRIP3_SUN,Blue Flag Downstream (to Asiatique),1
