@@ -46,3 +46,19 @@ F_CPX_B,SUN,F_CPX_B_TRIP2_SUN,Blue Flag Downstream,1
 F_CPX_B,WKD,F_CPX_B_TRIP3,Blue Flag Downstream (to Asiatique),1
 F_CPX_B,SAT,F_CPX_B_TRIP3_SAT,Blue Flag Downstream (to Asiatique),1
 F_CPX_B,SUN,F_CPX_B_TRIP3_SUN,Blue Flag Downstream (to Asiatique),1
+F_TSB_U,WKD,F_TSB_U_TRIP1,Sathorn,1,,
+F_TSB_U,WKD,F_TSB_U_TRIP2,Phra Nang Klao,0,,
+F_TSB_U,SAT,F_TSB_U_TRIP1_SAT,Sathorn,1,,
+F_TSB_U,SAT,F_TSB_U_TRIP2_SAT,Phra Nang Klao,0,,
+F_TSB_U,SUN,F_TSB_U_TRIP1_SUN,Sathorn,1,,
+F_TSB_U,SUN,F_TSB_U_TRIP2_SUN,Phra Nang Klao,0,,
+F_TSB_C,WKD,F_TSB_C_TRIP1,Siam Charoennakhon,1,,
+F_TSB_C,WKD,F_TSB_C_TRIP2,Phra Pinklao,0,,
+F_TSB_C,SAT,F_TSB_C_TRIP1_SAT,Siam Charoennakhon,1,,
+F_TSB_C,SAT,F_TSB_C_TRIP2_SAT,Phra Pinklao,0,,
+F_TSB_C,SUN,F_TSB_C_TRIP1_SUN,Siam Charoennakhon,1,,
+F_TSB_C,SUN,F_TSB_C_TRIP2_SUN,Phra Pinklao,0,,
+F_TSB_C,SAT,F_TSB_C_TRIP3_SAT,Phra Pinklao (Shuttle),0,,
+F_TSB_C,SUN,F_TSB_C_TRIP3_SUN,Phra Pinklao (Shuttle),0,,
+F_TSB_C,SAT,F_TSB_C_TRIP4_SAT,Sathorn (Shuttle),1,,
+F_TSB_C,SUN,F_TSB_C_TRIP4_SUN,Sathorn (Shuttle),1,,
