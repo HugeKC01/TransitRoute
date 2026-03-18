@@ -265,17 +265,8 @@ class FareCalculator {
         totalMPrice += result['mPrice'] ?? 0;
         totalSPrice += result['sPrice'] ?? 0;
         total += result['total'] ?? 0;
-      } else if (group == 'F_CPX' || group.startsWith('F_')) {
-        final fare = _calculateFerryFare(segment);
-        total += fare;
-      } else {
-        final fare = _calculateNonBtsFare(segment);
-        total += fare;
-      }
-    }
-
-    // คำนวณส่วนลด
-    final discount = _calculateDiscount(routeStops);
+        } else if (group == 'BRT') {
+          total += 15; // Flat fare for BRT
     total -= discount;
     if (total < 0) total = 0;
 
