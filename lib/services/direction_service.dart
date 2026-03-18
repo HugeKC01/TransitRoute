@@ -685,10 +685,8 @@ class DirectionService {
             stopB.lon,
           );
           _distanceGraph.putIfAbsent(a, () => {})[b] = dist;
-          _distanceGraph.putIfAbsent(b, () => {})[a] = dist;
           final estMinutes = (dist / 800.0 * 2).clamp(1, 6).toInt();
           _timeGraph.putIfAbsent(a, () => {})[b] = estMinutes;
-          _timeGraph.putIfAbsent(b, () => {})[a] = estMinutes;
         }
       }
       _addTransferEdges();
@@ -944,8 +942,8 @@ class DirectionService {
       final tripStops = entry.value;
       final startIdx = tripStops.indexWhere((s) => s['stopId'] == startStopId);
       final destIdx = tripStops.indexWhere((s) => s['stopId'] == destStopId);
-      if (startIdx != -1 && destIdx != -1) {
-        final span = (destIdx - startIdx).abs();
+      if (startIdx != -1 && destIdx > startIdx) {
+        final span = destIdx - startIdx;
         if (span > bestSpan) {
           bestSpan = span;
           selectedTripId = tripId;
@@ -960,8 +958,8 @@ class DirectionService {
           (s) => s['stopId'] == startStopId,
         );
         final destIdx = tripStops.indexWhere((s) => s['stopId'] == destStopId);
-        if (startIdx != -1 && destIdx != -1) {
-          final span = (destIdx - startIdx).abs();
+        if (startIdx != -1 && destIdx > startIdx) {
+          final span = destIdx - startIdx;
           if (span > bestSpan) {
             bestSpan = span;
             selectedTripId = entry.key;
@@ -976,10 +974,8 @@ class DirectionService {
     if (tripStops == null) return null;
     final startIdx = tripStops.indexWhere((s) => s['stopId'] == startStopId);
     final destIdx = tripStops.indexWhere((s) => s['stopId'] == destStopId);
-    if (startIdx == -1 || destIdx == -1) return null;
-    final segment = startIdx <= destIdx
-        ? tripStops.sublist(startIdx, destIdx + 1)
-        : tripStops.sublist(destIdx, startIdx + 1).reversed.toList();
+    if (startIdx == -1 || destIdx <= startIdx) return null;
+    final segment = tripStops.sublist(startIdx, destIdx + 1);
     final stopsList = segment.map((step) {
       final id = step['stopId'] as String;
       return _stopLookup[id] ??
@@ -1106,14 +1102,11 @@ class DirectionService {
         final tripStops = entry.value;
         final ia = tripStops.indexWhere((s) => s['stopId'] == a);
         final ib = tripStops.indexWhere((s) => s['stopId'] == b);
-        if (ia == -1 || ib == -1) continue;
-        final lo = ia < ib ? ia : ib;
-        final hi = ia < ib ? ib : ia;
-        final span = hi - lo;
+        if (ia == -1 || ib <= ia) continue;
+        final span = ib - ia;
         if (span < bestSpan) {
           bestSpan = span;
-          final seg = tripStops.sublist(lo, hi + 1);
-          bestSegment = ia <= ib ? seg : seg.reversed.toList();
+          bestSegment = tripStops.sublist(ia, ib + 1);
         }
       }
       return bestSegment;
