@@ -51,9 +51,10 @@ class TimetableService {
 
     // Determine today's service ID if not provided
     final now = DateTime.now();
-    final isWeekend =
-        now.weekday == DateTime.saturday || now.weekday == DateTime.sunday;
-    final currentServiceId = serviceId ?? (isWeekend ? 'SUN_SAT' : 'WKD');
+    final isSat = now.weekday == DateTime.saturday;
+    final isSun = now.weekday == DateTime.sunday;
+    final isWkd = !isSat && !isSun;
+    final currentServiceId = serviceId ?? (isSat ? 'SAT' : (isSun ? 'SUN' : 'WKD'));
 
     // Read trips to map tripId -> routeId, headsign, and serviceId
     final tripMap = <String, Map<String, String>>{};
@@ -124,7 +125,22 @@ class TimetableService {
 
                 // Check calendar service logic
                 final tSvc = tInfo['service_id']!;
-                if (tSvc.isNotEmpty && tSvc != currentServiceId) {
+                bool isValid = false;
+                if (tSvc.isEmpty || tSvc == 'ALL' || tSvc == 'EVERYDAY') {
+                  isValid = true;
+                } else if (tSvc == 'WKD' && isWkd) {
+                  isValid = true;
+                } else if (tSvc == 'SAT' && isSat) {
+                  isValid = true;
+                } else if (tSvc == 'SUN' && isSun) {
+                  isValid = true;
+                } else if (tSvc == 'SUN_SAT' && (isSat || isSun)) {
+                  isValid = true;
+                } else if (serviceId != null && tSvc == serviceId) {
+                  isValid = true;
+                }
+
+                if (!isValid) {
                   continue;
                 }
 
@@ -205,7 +221,28 @@ class TimetableService {
                 dTime = row[depIdx].trim();
               }
 
-              final tInfo = tripMap[tId] ?? {'route_id': '', 'headsign': ''};
+              final tInfo = tripMap[tId] ?? {'route_id': '', 'headsign': '', 'service_id': ''};
+
+              // Check calendar service logic for frequencies
+              final tSvc = tInfo['service_id']!;
+              bool isValid = false;
+              if (tSvc.isEmpty || tSvc == 'ALL' || tSvc == 'EVERYDAY') {
+                isValid = true;
+              } else if (tSvc == 'WKD' && isWkd) {
+                isValid = true;
+              } else if (tSvc == 'SAT' && isSat) {
+                isValid = true;
+              } else if (tSvc == 'SUN' && isSun) {
+                isValid = true;
+              } else if (tSvc == 'SUN_SAT' && (isSat || isSun)) {
+                isValid = true;
+              } else if (serviceId != null && tSvc == serviceId) {
+                isValid = true;
+              }
+
+              if (!isValid) {
+                continue;
+              }
 
               if (frequencies.containsKey(tId)) {
                 for (var freq in frequencies[tId]!) {
