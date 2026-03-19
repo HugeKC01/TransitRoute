@@ -65,33 +65,29 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
       final tripsContent = await tripsFuture;
       final tripsLines = const LineSplitter().convert(tripsContent);
 
-      String targetTripId = '';
+      final targetTripIds = <String>{};
       if (tripsLines.length > 1) {
         final headerRow = _parseCsvLine(tripsLines.first);
         final routeIdIdx = headerRow.indexOf('route_id');
         final tripIdIdx = headerRow.indexOf('trip_id');
-
         for (int i = 1; i < tripsLines.length; i++) {
           final row = _parseCsvLine(tripsLines[i]);
           if (row.isEmpty) continue;
-
           if (routeIdIdx >= 0 &&
               row.length > routeIdIdx &&
               row[routeIdIdx] == widget.route.routeId) {
-            targetTripId = row[tripIdIdx];
-            break; // take the first matched trip
+            targetTripIds.add(row[tripIdIdx]);
           }
         }
       }
 
-      if (targetTripId.isEmpty) {
+      if (targetTripIds.isEmpty) {
         setState(() {
           _loading = false;
         });
         return;
       }
 
-      // 2. Load stop_times to find stop_ids in sequence for this trip
       final stopTimesContent = await stopTimesFuture;
       final stopTimesLines = const LineSplitter().convert(stopTimesContent);
 
@@ -102,26 +98,45 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
         final stopIdIdx = headerRow.indexOf('stop_id');
         final seqIdx = headerRow.indexOf('stop_sequence');
 
-        final tripStops = <Map<String, dynamic>>[];
+        final tripStopsMap = <String, List<Map<String, dynamic>>>{};
 
         for (int i = 1; i < stopTimesLines.length; i++) {
           final row = _parseCsvLine(stopTimesLines[i]);
           if (row.isEmpty) continue;
-
           if (tripIdIdx >= 0 &&
               row.length > tripIdIdx &&
-              row[tripIdIdx] == targetTripId) {
-            tripStops.add({
+              targetTripIds.contains(row[tripIdIdx])) {
+            tripStopsMap.putIfAbsent(row[tripIdIdx], () => []).add({
               'stop_id': row[stopIdIdx],
               'sequence': int.tryParse(row[seqIdx]) ?? 0,
             });
           }
         }
 
-        tripStops.sort(
-          (a, b) => (a['sequence'] as int).compareTo(b['sequence'] as int),
-        );
-        orderedStopIds.addAll(tripStops.map((e) => e['stop_id'] as String));
+        if (tripStopsMap.isNotEmpty) {
+          final sortedTrips = tripStopsMap.values.toList()
+            ..sort((a, b) => b.length.compareTo(a.length));
+          final longestTrip = sortedTrips.first;
+          longestTrip.sort(
+            (a, b) => (a['sequence'] as int).compareTo(b['sequence'] as int),
+          );
+
+          final seen = <String>{};
+          for (final st in longestTrip) {
+            final sid = st['stop_id'] as String;
+            if (seen.add(sid)) orderedStopIds.add(sid);
+          }
+
+          for (final tripStops in sortedTrips.skip(1)) {
+            tripStops.sort(
+              (a, b) => (a['sequence'] as int).compareTo(b['sequence'] as int),
+            );
+            for (final st in tripStops) {
+              final sid = st['stop_id'] as String;
+              if (seen.add(sid)) orderedStopIds.add(sid);
+            }
+          }
+        }
       }
 
       // 3. Load stops to get details matching those stop_ids
