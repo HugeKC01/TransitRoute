@@ -124,11 +124,27 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   double _currentZoom = 12.0;
   static const double _busStopZoomThreshold = 15.0;
 
+  bool _showTrainPins = true;
+  bool _showMetroPins = true;
+  bool _showBusPins = true;
+  bool _showFerryPins = true;
+
   LocationData? _userLocation;
   StreamSubscription<LocationData>? _locationSub;
 
   final GlobalKey _mapKey = GlobalKey();
   LatLng _currentCenter = const LatLng(13.7463, 100.5347);
+
+  List<String> _getLineNames(String stopId) {
+    if (stopId.startsWith('ST_') || stopId.startsWith('STOP_')) {
+      return ['BMTA Bus'];
+    }
+    if (_stopToLinesMap.containsKey(stopId) &&
+        _stopToLinesMap[stopId]!.isNotEmpty) {
+      return _stopToLinesMap[stopId]!.toList()..sort();
+    }
+    return [];
+  }
 
   String? _getLineName(String stopId) {
     if (stopId.startsWith('ST_') || stopId.startsWith('STOP_')) {
@@ -543,6 +559,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           );
         }
 
+        final priority = _getServicePriority(stop);
+        IconData typeIcon = Icons.subway;
+        if (priority == 2) typeIcon = Icons.train;
+        if (priority == 3) typeIcon = Icons.directions_bus;
+        if (priority == 4) typeIcon = Icons.directions_boat;
+
         return SafeArea(
           top: false,
           child: SingleChildScrollView(
@@ -567,7 +589,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                           color: lineColor,
                           borderRadius: BorderRadius.circular(14),
                         ),
-                        child: const Icon(Icons.train, color: Colors.white),
+                        child: Icon(typeIcon, color: Colors.white),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
@@ -635,7 +657,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   spacing: 12,
                   runSpacing: 8,
                   children: [
-                    infoChip('Stop ID', stop.stopId),
+                    if (stop.code != null && stop.code!.isNotEmpty)
+                      infoChip('Stop Code', stop.code!),
                     infoChip(
                       'Coordinates',
                       'Lat ${stop.lat.toStringAsFixed(4)}, Lon ${stop.lon.toStringAsFixed(4)}',
@@ -1069,9 +1092,26 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     final zoomBottomOffset =
         viewPadding.bottom + fabHeight + fabGap + sheetOffset;
     final showBusStops =
-        busStops.isNotEmpty && _currentZoom >= _busStopZoomThreshold;
+        _showBusPins &&
+        busStops.isNotEmpty &&
+        _currentZoom >= _busStopZoomThreshold;
     final showFerryStops =
-        ferryStops.isNotEmpty && _currentZoom >= _busStopZoomThreshold;
+        _showFerryPins &&
+        ferryStops.isNotEmpty &&
+        _currentZoom >= _busStopZoomThreshold;
+
+    final filteredRailStops = railStops.where((stop) {
+      final isTrain = _isStopTrain(stop);
+      final isMetro = _isStopMetro(stop);
+
+      if (isTrain && !_showTrainPins) return false;
+      if (isMetro && !_showMetroPins) return false;
+      if (!isTrain && !isMetro) {
+        // Fallback if type isn't correctly identified, use metro fallback as before
+        if (!_showMetroPins) return false;
+      }
+      return true;
+    }).toList();
 
     final routeStopIds = <String>{};
     for (final seg in activeSegments) {
@@ -1121,6 +1161,18 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             if (shapeSegments.isNotEmpty)
               PolylineLayer(
                 polylines: shapeSegments
+                    .where((s) {
+                      final isTrain = _isShapeTrain(s);
+                      final isMetro = _isShapeMetro(s);
+                      // If it matches a known shape type, check the toggle
+                      if (isTrain && !_showTrainPins) return false;
+                      if (isMetro && !_showMetroPins) return false;
+                      // Fallback: if it's not strictly known, still show it unless we hide all maybe?
+                      // Actually shapes in shapes.txt are just trains/metros.
+                      // If we consider them "Metro" when not train:
+                      if (!isTrain && !isMetro && !_showMetroPins) return false;
+                      return true;
+                    })
                     .map(
                       (s) => Polyline(
                         points: s.points,
@@ -1224,9 +1276,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                     )
                     .toList(),
               ),
-            if (railStops.isNotEmpty)
+            if (filteredRailStops.isNotEmpty)
               MarkerLayer(
-                markers: railStops
+                markers: filteredRailStops
                     .map(
                       (stop) => Marker(
                         point: LatLng(stop.lat, stop.lon),
@@ -1359,53 +1411,110 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         Positioned(
           right: 16,
           bottom: zoomBottomOffset,
-          child: Material(
-            elevation: 6,
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(32),
-            child: Container(
-              decoration: BoxDecoration(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              _buildFilterMenu(),
+              const SizedBox(height: 16),
+              Material(
+                elevation: 6,
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(32),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.08),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(32),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
-                ],
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.add),
+                        tooltip: 'Zoom in',
+                        onPressed: () => _adjustMapZoom(0.75),
+                        iconSize: 28,
+                        padding: const EdgeInsets.all(12),
+                        constraints: const BoxConstraints(
+                          minWidth: 56,
+                          minHeight: 48,
+                        ),
+                      ),
+                      Container(width: 36, height: 1, color: Colors.black12),
+                      IconButton(
+                        icon: const Icon(Icons.remove),
+                        tooltip: 'Zoom out',
+                        onPressed: () => _adjustMapZoom(-0.75),
+                        iconSize: 28,
+                        padding: const EdgeInsets.all(12),
+                        constraints: const BoxConstraints(
+                          minWidth: 56,
+                          minHeight: 48,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.add),
-                    tooltip: 'Zoom in',
-                    onPressed: () => _adjustMapZoom(0.75),
-                    iconSize: 28,
-                    padding: const EdgeInsets.all(12),
-                    constraints: const BoxConstraints(
-                      minWidth: 56,
-                      minHeight: 48,
-                    ),
-                  ),
-                  Container(width: 36, height: 1, color: Colors.black12),
-                  IconButton(
-                    icon: const Icon(Icons.remove),
-                    tooltip: 'Zoom out',
-                    onPressed: () => _adjustMapZoom(-0.75),
-                    iconSize: 28,
-                    padding: const EdgeInsets.all(12),
-                    constraints: const BoxConstraints(
-                      minWidth: 56,
-                      minHeight: 48,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildFilterMenu() {
+    return MenuAnchor(
+      alignmentOffset: const Offset(-80, 0),
+      menuChildren: [
+        CheckboxMenuButton(
+          value: _showTrainPins,
+          onChanged: (val) => setState(() => _showTrainPins = val ?? true),
+          child: const Text('Train'),
+        ),
+        CheckboxMenuButton(
+          value: _showMetroPins,
+          onChanged: (val) => setState(() => _showMetroPins = val ?? true),
+          child: const Text('Metro'),
+        ),
+        CheckboxMenuButton(
+          value: _showBusPins,
+          onChanged: (val) => setState(() => _showBusPins = val ?? true),
+          child: const Text('Bus'),
+        ),
+        CheckboxMenuButton(
+          value: _showFerryPins,
+          onChanged: (val) => setState(() => _showFerryPins = val ?? true),
+          child: const Text('Ferry'),
+        ),
+      ],
+      builder: (context, controller, child) {
+        return Material(
+          elevation: 6,
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(32),
+          child: IconButton(
+            icon: const Icon(Icons.layers),
+            tooltip: 'Filter Pins',
+            onPressed: () {
+              if (controller.isOpen) {
+                controller.close();
+              } else {
+                controller.open();
+              }
+            },
+            iconSize: 28,
+            padding: const EdgeInsets.all(12),
+            constraints: const BoxConstraints(minWidth: 56, minHeight: 56),
+          ),
+        );
+      },
     );
   }
 
@@ -1609,7 +1718,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         ),
         alignment: Alignment.center,
         child: Text(
-          stop.code ?? stop.stopId,
+          stop.code ?? '',
           style: TextStyle(
             color: (lineColor.computeLuminance() > 0.5)
                 ? Colors.black
@@ -1679,6 +1788,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                     linePrefixes: linePrefixes,
                     lineColors: lineColors,
                     getLineName: _getLineName,
+                    getLineNames: _getLineNames,
+                    getServicePriority: _getServicePriority,
                     onSelect: (stop) {
                       controller.closeView(stop.name);
                       _handleCollapsedStopSelection(stop);
@@ -2019,6 +2130,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   linePrefixes: linePrefixes,
                   lineColors: lineColors,
                   getLineName: _getLineName,
+                  getLineNames: _getLineNames,
+                  getServicePriority: _getServicePriority,
                   onSelect: (stop) {
                     ctrl.closeView(stop.name);
                     _selectStopFromSearch(stop, asStart: asStart);
@@ -2058,11 +2171,66 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     );
   }
 
+  bool _isStopMetro(gtfs.Stop stop) {
+    final lineNames = _stopToLinesMap[stop.stopId];
+    if (lineNames != null) {
+      for (final lName in lineNames) {
+        final route = allRoutes
+            .where(
+              (r) =>
+                  r.longName.toUpperCase() == lName.toUpperCase() ||
+                  r.routeId.toUpperCase() == lName.toUpperCase(),
+            )
+            .firstOrNull;
+        if (route?.type == '1') {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  bool _isStopTrain(gtfs.Stop stop) {
+    final lineNames = _stopToLinesMap[stop.stopId];
+    if (lineNames != null) {
+      for (final lName in lineNames) {
+        final route = allRoutes
+            .where(
+              (r) =>
+                  r.longName.toUpperCase() == lName.toUpperCase() ||
+                  r.routeId.toUpperCase() == lName.toUpperCase(),
+            )
+            .firstOrNull;
+        if (route?.type == '2') {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  bool _isShapeTrain(ShapeSegment shape) {
+    if (shape.routeId == null) return false;
+    final rId = shape.routeId!.toUpperCase();
+    final route = allRoutes
+        .where((r) => r.routeId.toUpperCase() == rId)
+        .firstOrNull;
+    return route?.type == '2';
+  }
+
+  bool _isShapeMetro(ShapeSegment shape) {
+    if (shape.routeId == null) return false;
+    final rId = shape.routeId!.toUpperCase();
+    final route = allRoutes
+        .where((r) => r.routeId.toUpperCase() == rId)
+        .firstOrNull;
+    return route?.type == '1';
+  }
+
   int _getServicePriority(gtfs.Stop stop) {
     if (stop.stopId.startsWith('F')) return 4;
     if (busStops.any((s) => s.stopId == stop.stopId)) return 3;
-    final lineName = _getLineName(stop.stopId) ?? '';
-    if (lineName.contains('SRT') || lineName.contains('Train')) return 2;
+    if (_isStopTrain(stop)) return 2;
     return 1;
   }
 

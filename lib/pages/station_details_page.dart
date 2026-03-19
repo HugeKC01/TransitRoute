@@ -36,7 +36,8 @@ class StationDetailsPage extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final infoChips = <Widget>[
-      _InfoChip(label: 'Stop ID', value: stop.stopId),
+      if (stop.code != null && stop.code!.isNotEmpty)
+        _InfoChip(label: 'Stop Code', value: stop.code!),
       if (lineName != null && lineName!.isNotEmpty)
         _InfoChip(label: 'Line', value: lineName!),
       _InfoChip(

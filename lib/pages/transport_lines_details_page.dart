@@ -457,9 +457,9 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    subtitle: stop.code != null || stop.stopId.isNotEmpty
+                    subtitle: (stop.code != null && stop.code!.isNotEmpty)
                         ? Text(
-                            stop.code ?? stop.stopId,
+                            stop.code!,
                             style: theme.textTheme.labelMedium?.copyWith(
                               color: theme.colorScheme.secondary,
                               fontWeight: FontWeight.w500,
