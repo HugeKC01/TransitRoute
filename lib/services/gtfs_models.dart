@@ -184,3 +184,16 @@ class Frequency {
     required this.headwaySecs,
   });
 }
+
+
+class BusRouteInfo {
+  final String routeShortName;
+  final String typeId;
+  final bool isExpressway;
+
+  BusRouteInfo({
+    required this.routeShortName,
+    required this.typeId,
+    required this.isExpressway,
+  });
+}

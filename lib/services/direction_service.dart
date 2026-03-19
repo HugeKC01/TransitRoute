@@ -51,7 +51,7 @@ class RouteSegment {
   final LocationPoint end;
   double distanceMeters;
   int durationMinutes;
-  final int fare; // Monetary cost for this specific segment
+  int fare; // Monetary cost for this specific segment
 
   // Transit-specific details
   final String? routeId;
@@ -215,6 +215,7 @@ class DirectionService {
     Map<String, int>? ferryFlatFares,
     Map<String, int>? ferryZoneMatrix,
     Map<String, String>? ferryZones,
+    Map<String, gtfs.BusRouteInfo>? busRouteInfoMap,
   }) {
     bool resetGraphs = false;
     if (allStops != null) {
@@ -508,10 +509,16 @@ class DirectionService {
       final fareBreakdown = _fareCalculator.calculateFare(option.stops);
 
       for (final seg in option.segments!) {
-        if (seg.fare > 0) {
+        int sFare = seg.fare;
+        if (seg.isBus && seg.routeShortName != null && seg.routeShortName != 'BRT' && seg.intermediateStops != null) {
+          sFare = _fareCalculator.getBusFare(seg.distanceMeters, seg.routeShortName!);
+          seg.fare = sFare;
+        }
+
+        if (sFare > 0) {
           String subLabel = seg.instruction ?? 'Transit';
-          fareBreakdown[subLabel] = (fareBreakdown[subLabel] ?? 0) + seg.fare;
-          fareBreakdown['total'] = (fareBreakdown['total'] ?? 0) + seg.fare;
+          fareBreakdown[subLabel] = (fareBreakdown[subLabel] ?? 0) + sFare;
+          fareBreakdown['total'] = (fareBreakdown['total'] ?? 0) + sFare;
         }
       }
 
@@ -1374,7 +1381,18 @@ class DirectionService {
     int cheapestFare = 1 << 30;
     final fares = <_TaggedRoute, int>{};
     for (final route in taggedRoutes) {
-      final fare = _fareCalculator.calculateFare(route.stops)['total'] ?? 0;
+      route.segments ??= _buildSegmentsFromStops(route.stops);
+      int fare = _fareCalculator.calculateFare(route.stops)['total'] ?? 0;
+      for (final seg in route.segments!) {
+        int sFare = seg.fare;
+        if (seg.isBus && seg.routeShortName != null && seg.routeShortName != 'BRT' && seg.intermediateStops != null) {
+          sFare = _fareCalculator.getBusFare(seg.distanceMeters, seg.routeShortName!);
+          seg.fare = sFare;
+        }
+        if (sFare > 0) {
+          fare += sFare;
+        }
+      }
       fares[route] = fare;
       if (fare < cheapestFare) {
         cheapestFare = fare;

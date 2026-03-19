@@ -120,6 +120,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   List<gtfs.Stop> busStops = [];
   List<gtfs.Stop> ferryStops = [];
   Map<String, String> fareTypeMap = {};
+  Map<String, gtfs.BusRouteInfo> busRouteInfoMap = {};
   Map<String, int> fareDataMap = {};
   Map<String, int> stopOrderMap = {};
   Map<String, List<int>> fareTableMap = {};
@@ -2304,6 +2305,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       ferryFlatFares: ferryFlatFares,
       ferryZoneMatrix: ferryZoneMatrix,
       ferryZones: ferryZones,
+      busRouteInfoMap: busRouteInfoMap,
     );
     // Load GTFS shapes (preferred) — use tripMap loaded from DirectionService to avoid re-parsing
     List<ShapeSegment> shapes = const <ShapeSegment>[];
@@ -2762,6 +2764,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           final lineName = route != null && route.longName.isNotEmpty
               ? route.longName
               : routeShortName;
+          final descriptionBus = row[2].trim();
+          final typeId = row[3].trim();
+          final isExpressway = descriptionBus.contains('ทางด่วน') || routeShortName.contains('E') || routeShortName.contains('ทางด่วน');
+          busRouteInfoMap[lineName] = gtfs.BusRouteInfo(
+            routeShortName: lineName,
+            typeId: typeId,
+            isExpressway: isExpressway,
+          );
           for (int j = 5; j < row.length; j++) {
             final sId = row[j].trim();
             if (sId.isNotEmpty) {
