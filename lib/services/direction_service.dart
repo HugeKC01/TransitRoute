@@ -656,7 +656,7 @@ class DirectionService {
 
   Future<void> _buildGraphs() async {
     try {
-      final stopTimes = await _loadStopTimesFromAssets(_stopTimeAssets);
+      final stopTimes = await _loadStopTimes();
       if (stopTimes.isEmpty) return;
       for (final entry in stopTimes.entries) {
         entry.value.sort(
@@ -751,7 +751,35 @@ class DirectionService {
   }
 
   Future<Map<String, List<Map<String, dynamic>>>> _loadStopTimes() async {
-    return _loadStopTimesFromAssets(_stopTimeAssets);
+    final stopTimes = await _loadStopTimesFromAssets(_stopTimeAssets);
+
+    try {
+      final content =
+          await rootBundle.loadString('assets/gtfs_data/bus_route_stop.txt');
+      final lines = const LineSplitter().convert(content);
+      if (lines.length > 1) {
+        for (int i = 1; i < lines.length; i++) {
+          final line = lines[i].trimRight();
+          if (line.isEmpty) continue;
+          final row = parseCsvLine(line);
+          if (row.length > 5) {
+            final busLineId = row[0].trim();
+            final tripId = 'BUS_$busLineId';
+            int sequence = 1;
+            for (int j = 5; j < row.length; j++) {
+              final stopId = row[j].trim();
+              if (stopId.isEmpty) continue;
+              stopTimes.putIfAbsent(tripId, () => []).add({
+                'stopId': stopId,
+                'stopSequence': sequence++,
+              });
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    return stopTimes;
   }
 
   Future<Map<String, List<Map<String, dynamic>>>> _loadStopTimesFromAssets(
@@ -862,6 +890,38 @@ class DirectionService {
         );
         result[tripId] = trip;
       }
+
+      // Also append trips from bus_route_stop.txt
+      try {
+        final content = await rootBundle.loadString(
+          'assets/gtfs_data/bus_route_stop.txt',
+        );
+        final busLines = const LineSplitter().convert(content);
+        if (busLines.length > 1) {
+          for (int i = 1; i < busLines.length; i++) {
+            final line = busLines[i].trimRight();
+            if (line.isEmpty) continue;
+            final row = parseCsvLine(line);
+            if (row.length > 5) {
+              final busLineId = row[0].trim();
+              final routeShortName = row[1].trim();
+              final headsign = row[2].trim();
+              final routeId = routeShortName.split(' ').first;
+              final tripId = 'BUS_$busLineId';
+              result[tripId] = gtfs.Trip(
+                tripId: tripId,
+                routeId: routeId,
+                serviceId: 'WKD',
+                headsign: headsign,
+                directionId: '0',
+                shapeId: null,
+                shapeColor: null,
+              );
+            }
+          }
+        }
+      } catch (_) {}
+
       return result;
     } catch (_) {
       return {};

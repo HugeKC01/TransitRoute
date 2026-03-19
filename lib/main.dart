@@ -2838,6 +2838,28 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         }
       } catch (_) {}
     }
+
+    // Also parse bus_route_stop.txt for _stopToLinesMap
+    try {
+      final content = await rootBundle.loadString('assets/gtfs_data/bus_route_stop.txt');
+      final lines = const LineSplitter().convert(content);
+      for (int i = 1; i < lines.length; i++) {
+        if (lines[i].trim().isEmpty) continue;
+        final row = _parseCsvLine(lines[i]);
+        if (row.length > 5) {
+          final routeShortName = row[1].trim();
+          final routeId = routeShortName.split(' ').first;
+          final route = routeMap[routeId];
+          final lineName = route != null && route.longName.isNotEmpty ? route.longName : routeShortName;
+          for (int j = 5; j < row.length; j++) {
+            final sId = row[j].trim();
+            if (sId.isNotEmpty) {
+              _stopToLinesMap.putIfAbsent(sId, () => {}).add(lineName);
+            }
+          }
+        }
+      }
+    } catch (_) {}
   }
 
   String? _cleanHex(String? hex) {
