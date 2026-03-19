@@ -1,0 +1,5 @@
+route_id,from_zone,to_zone,fare
+F_CPX_G,1,1,14
+F_CPX_G,2,2,21
+F_CPX_G,1,2,33
+F_CPX_G,2,1,33

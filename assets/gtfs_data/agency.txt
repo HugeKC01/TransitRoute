@@ -1,2 +1,7 @@
 agency_id,agency_name,agency_url,agency_timezone,agency_lang,agency_phone,agency_fare_url
-1,BTS Sukhumvit Line,https://www.bts.co.th/en/,Asia/Bangkok,th,+6626176000,https://www.bts.co.th/eng/routemap.html
+BTS,Bangkok Mass Transit System (BTS),https://www.bts.co.th,Asia/Bangkok,th,026176000,https://www.bts.co.th/eng/routemap.html
+BEM,Bangkok Expressway and Metro (BEM),https://bemplc.co.th,Asia/Bangkok,th,026245200,https://metro.bemplc.co.th/Fare-Calculation
+SRT,State Railway of Thailand (SRT),https://www.railway.co.th,Asia/Bangkok,th,1690,
+SRTET,SRT Electrified Train (SRTET),https://www.srtet.co.th,Asia/Bangkok,th,1690,https://www.srtet.co.th/th/fare-rate
+EBM,Eastern Bangkok Monorail (EBM),https://ebm.co.th,Asia/Bangkok,th,026176111,
+NBM,Northern Bangkok Monorail (NBM),https://nbm.co.th,Asia/Bangkok,th,026176111,
