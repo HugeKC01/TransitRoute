@@ -128,9 +128,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   Map<String, int> ferryZoneMatrix = {};
   Map<String, String> ferryZones = {};
 
-  String routingMode = 'Shortest';
+  String routingMode = 'Fastest';
   String transitPreference = 'Auto';
-  bool _headerCollapsed = false;
+  final ValueNotifier<bool> _headerCollapsed = ValueNotifier<bool>(false);
   double _currentZoom = 12.0;
   static const double _busStopZoomThreshold = 15.0;
 
@@ -286,13 +286,13 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       directionOptions = List<DirectionOption>.from(result.options);
       if (directionOptions.isEmpty) {
         selectedDirectionIndex = 0;
-        _headerCollapsed = false;
+        _headerCollapsed.value = false;
       } else {
         selectedDirectionIndex = result.selectionIndex.clamp(
           0,
           directionOptions.length - 1,
         );
-        _headerCollapsed = true;
+        _headerCollapsed.value = true;
       }
     });
   }
@@ -532,7 +532,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         _customDestPoint = null;
         _destSearchController.text = stop.name;
       }
-      _headerCollapsed = false;
+      _headerCollapsed.value = false;
     });
   }
 
@@ -632,7 +632,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         );
         _destSearchController.text = 'Dropped Pin';
       }
-      _headerCollapsed = false;
+      _headerCollapsed.value = false;
     });
 
     if ((selectedStartStopId != null || _customStartPoint != null) &&
@@ -826,7 +826,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           selectedDestinationStopId != null ||
           _customStartPoint != null ||
           _customDestPoint != null) {
-        _headerCollapsed = false;
+        _headerCollapsed.value = false;
       }
     });
     if ((selectedStartStopId != null || _customStartPoint != null) &&
@@ -854,7 +854,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       _destSearchController.clear();
       _collapsedSearchController.clear();
       if (!preserveHeaderState) {
-        _headerCollapsed = false;
+        _headerCollapsed.value = false;
       }
     });
   }
@@ -911,13 +911,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     final activeSegments = activeRouteSegments;
     final viewPadding = MediaQuery.of(context).padding;
     final screenWidth = MediaQuery.of(context).size.width;
-    final isCompact = screenWidth < 520;
-    const fabHeight = 56.0;
-    final fabGap = isCompact ? 24.0 : 32.0;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isWide = screenWidth > 600;
     final hasRoutes = directionOptions.isNotEmpty;
-    final sheetOffset = hasRoutes ? 320.0 : 0.0;
-    final zoomBottomOffset =
-        viewPadding.bottom + fabHeight + fabGap + sheetOffset;
+
+    // Responsive bottom offset that animates up if there are routes
+    final zoomBottomOffset = isWide
+        ? 24.0
+        : (hasRoutes ? screenHeight * 0.45 + 16.0 : viewPadding.bottom + 16.0);
     final showBusStops =
         _showBusPins &&
         busStops.isNotEmpty &&
@@ -1235,8 +1236,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             ),
           ],
         ),
-        Positioned(
-          right: 16,
+        AnimatedPositioned(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+          right: isWide ? 24 : 16,
           bottom: zoomBottomOffset,
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1246,7 +1249,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               const SizedBox(height: 16),
               Material(
                 elevation: 6,
-                color: Colors.white,
+                color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(32),
                 child: Container(
                   decoration: BoxDecoration(
@@ -1273,7 +1276,13 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                           minHeight: 48,
                         ),
                       ),
-                      Container(width: 36, height: 1, color: Colors.black12),
+                      Container(
+                        width: 36,
+                        height: 1,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.outline.withValues(alpha: 0.2),
+                      ),
                       IconButton(
                         icon: const Icon(Icons.remove),
                         tooltip: 'Zoom out',
@@ -1286,6 +1295,35 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                         ),
                       ),
                     ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Material(
+                elevation: 6,
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(32),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(32),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.my_location),
+                    tooltip: 'Current Location',
+                    onPressed: _goToMyLocation,
+                    iconSize: 28,
+                    padding: const EdgeInsets.all(12),
+                    constraints: const BoxConstraints(
+                      minWidth: 56,
+                      minHeight: 56,
+                    ),
                   ),
                 ),
               ),
@@ -1324,7 +1362,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       builder: (context, controller, child) {
         return Material(
           elevation: 6,
-          color: Colors.white,
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(32),
           child: IconButton(
             icon: const Icon(Icons.layers),
@@ -1387,9 +1425,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           ),
         ),
 
-        // Floating FAB on bottom right
-        Positioned(right: 24, bottom: 24, child: _buildLocationFab(context)),
-
         // Floating header overlay over everything
         headerOverlay,
       ],
@@ -1407,17 +1442,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       children: [
         Positioned.fill(child: _buildMap(context)),
         headerOverlay,
-
-        // Floating FAB that moves up dynamically
-        AnimatedPositioned(
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOutCubic,
-          right: 16,
-          bottom: hasRoutes
-              ? MediaQuery.of(context).size.height * 0.45 + 16
-              : 16,
-          child: _buildLocationFab(context),
-        ),
 
         // Drag sheet spanning full height but starting at initialSize
         if (hasRoutes)
@@ -1488,69 +1512,77 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     final destLabel =
         _customDestPoint?.name ??
         (dest != null ? _stopDisplayLabel(dest) : null);
-    final isCollapsed = _headerCollapsed;
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
+    return ValueListenableBuilder<bool>(
+      valueListenable: _headerCollapsed,
+      builder: (context, isCollapsed, _) {
+        return Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.1),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-          child: Container(
-            color: theme.colorScheme.surface.withValues(alpha: 0.85),
-            child: Material(
-              type: MaterialType.transparency,
-              child: AnimatedSize(
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOutCubic,
-                alignment: Alignment.topCenter,
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: AnimatedSwitcher(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+              child: Container(
+                color: theme.colorScheme.surface.withValues(alpha: 0.85),
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: AnimatedSize(
                     duration: const Duration(milliseconds: 300),
-                    switchInCurve: Curves.easeOutCubic,
-                    switchOutCurve: Curves.easeInCubic,
-                    transitionBuilder: (child, animation) {
-                      return FadeTransition(opacity: animation, child: child);
-                    },
-                    child: isCollapsed
-                        ? KeyedSubtree(
-                            key: const ValueKey('collapsed_header'),
-                            child: _buildCollapsedHeaderContent(
-                              context,
-                              startLabel,
-                              destLabel,
-                            ),
-                          )
-                        : KeyedSubtree(
-                            key: const ValueKey('expanded_header'),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                _buildSelectionSummaryCard(
+                    curve: Curves.easeOutCubic,
+                    alignment: Alignment.topCenter,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 300),
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        transitionBuilder: (child, animation) {
+                          return FadeTransition(
+                            opacity: animation,
+                            child: child,
+                          );
+                        },
+                        child: isCollapsed
+                            ? KeyedSubtree(
+                                key: const ValueKey('collapsed_header'),
+                                child: _buildCollapsedHeaderContent(
                                   context,
-                                  start,
-                                  dest,
+                                  startLabel,
+                                  destLabel,
                                 ),
-                              ],
-                            ),
-                          ),
+                              )
+                            : KeyedSubtree(
+                                key: const ValueKey('expanded_header'),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    _buildSelectionSummaryCard(
+                                      context,
+                                      start,
+                                      dest,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -1590,9 +1622,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       constraints: const BoxConstraints.tightFor(width: 40, height: 40),
       padding: EdgeInsets.zero,
       onPressed: () {
-        setState(() {
-          _headerCollapsed = true;
-        });
+        _headerCollapsed.value = true;
       },
     );
   }
@@ -1602,9 +1632,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       tooltip: 'Show planner',
       icon: const Icon(Icons.unfold_more),
       onPressed: () {
-        setState(() {
-          _headerCollapsed = false;
-        });
+        _headerCollapsed.value = false;
       },
     );
   }
@@ -1997,7 +2025,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                       }
                       directionOptions = [];
                       selectedDirectionIndex = 0;
-                      _headerCollapsed = false;
+                      _headerCollapsed.value = false;
                     });
                   },
                 ),
@@ -2186,7 +2214,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         _destSearchController.text = stop.name;
       }
       if (!preserveHeaderState) {
-        _headerCollapsed = false;
+        _headerCollapsed.value = false;
       }
     });
 
@@ -2247,6 +2275,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _headerCollapsed.dispose();
     _startSearchController.dispose();
     _destSearchController.dispose();
     _collapsedSearchController.dispose();
@@ -2766,7 +2795,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               : routeShortName;
           final descriptionBus = row[2].trim();
           final typeId = row[3].trim();
-          final isExpressway = descriptionBus.contains('ทางด่วน') || routeShortName.contains('E') || routeShortName.contains('ทางด่วน');
+          final isExpressway =
+              descriptionBus.contains('ทางด่วน') ||
+              routeShortName.contains('E') ||
+              routeShortName.contains('ทางด่วน');
           busRouteInfoMap[lineName] = gtfs.BusRouteInfo(
             routeShortName: lineName,
             typeId: typeId,
@@ -3015,17 +3047,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildLocationFab(BuildContext context) {
-    return FloatingActionButton(
-      onPressed: _goToMyLocation,
-      backgroundColor: Theme.of(
-        context,
-      ).colorScheme.surface.withValues(alpha: 0.95),
-      elevation: 6,
-      tooltip: 'Center map on my location',
-      child: const Icon(Icons.my_location),
-    );
-  }
+
 
   Widget _buildHomeContent(BuildContext context, bool isWideLayout) {
     final headerOverlay = _buildHeaderOverlay(context, isWideLayout);
