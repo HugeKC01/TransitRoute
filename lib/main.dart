@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -10,6 +11,7 @@ import 'package:route/services/direction_service.dart';
 import 'package:route/services/gtfs_models.dart' as gtfs;
 import 'package:route/services/gtfs_shapes.dart';
 import 'package:route/services/route_asset_loader.dart';
+import 'package:route/services/transit_update_service.dart';
 
 import 'pages/more_page.dart';
 import 'pages/cards_page.dart';
@@ -21,16 +23,31 @@ import 'pages/navigation_page.dart';
 import 'pages/graphic_map_page.dart';
 import 'widgets/route_details_sheet.dart';
 import 'widgets/route_options_panel.dart';
+import 'widgets/upcoming_departures.dart';
 
 import 'widgets/search_tabs.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  Color _accentColor = Colors.blue;
+
+  void _updateAccentColor(Color color) {
+    setState(() {
+      _accentColor = color;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,17 +55,29 @@ class MyApp extends StatelessWidget {
       title: 'Flutter Demo',
       theme: ThemeData(
         useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        textTheme: GoogleFonts.googleSansTextTheme(),
+        colorScheme: ColorScheme.fromSeed(seedColor: _accentColor),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: MyHomePage(
+        title: 'Flutter Demo Home Page',
+        currentAccentColor: _accentColor,
+        onAccentColorChanged: _updateAccentColor,
+      ),
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
+  const MyHomePage({
+    super.key,
+    required this.title,
+    required this.currentAccentColor,
+    required this.onAccentColorChanged,
+  });
 
   final String title;
+  final Color currentAccentColor;
+  final ValueChanged<Color> onAccentColorChanged;
 
   @override
   State<MyHomePage> createState() => _MyHomePageState();
@@ -66,8 +95,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     joinedDate: 'Jan 2024',
     profileImageUrl: 'https://randomuser.me/api/portraits/men/32.jpg',
   );
-  final List<TransitReport> _transitReports =
-      TransitUpdatesRepository.sampleReports;
   // Combined stops used for search/routing (rail + bus)
   List<gtfs.Stop> allStops = [];
   // Rail-only stops for the default rail marker layer
@@ -76,6 +103,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   late DirectionService _directionService;
 
   Map<String, List<String>> linePrefixes = {};
+  final Map<String, Set<String>> _stopToLinesMap = {};
   Map<String, Color> lineColors = {};
   List<gtfs.Route> allRoutes = [];
   bool _didFitRails = false;
@@ -86,6 +114,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   Map<String, int> fareDataMap = {};
   Map<String, int> stopOrderMap = {};
   Map<String, List<int>> fareTableMap = {};
+  Map<String, int> ferryFlatFares = {};
+  Map<String, int> ferryZoneMatrix = {};
+  Map<String, String> ferryZones = {};
 
   String routingMode = 'Shortest';
   String transitPreference = 'Auto';
@@ -93,14 +124,36 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   double _currentZoom = 12.0;
   static const double _busStopZoomThreshold = 15.0;
 
+  bool _showTrainPins = true;
+  bool _showMetroPins = true;
+  bool _showBusPins = true;
+  bool _showFerryPins = true;
+
+  LocationData? _userLocation;
+  StreamSubscription<LocationData>? _locationSub;
+
+  final GlobalKey _mapKey = GlobalKey();
+  LatLng _currentCenter = const LatLng(13.7463, 100.5347);
+
+  List<String> _getLineNames(String stopId) {
+    if (stopId.startsWith('ST_') || stopId.startsWith('STOP_')) {
+      return ['BMTA Bus'];
+    }
+    if (_stopToLinesMap.containsKey(stopId) &&
+        _stopToLinesMap[stopId]!.isNotEmpty) {
+      return _stopToLinesMap[stopId]!.toList()..sort();
+    }
+    return [];
+  }
+
   String? _getLineName(String stopId) {
     if (stopId.startsWith('ST_') || stopId.startsWith('STOP_')) {
       return 'BMTA Bus';
     }
-    for (final entry in linePrefixes.entries) {
-      for (final prefix in entry.value) {
-        if (stopId.startsWith(prefix)) return entry.key;
-      }
+    if (_stopToLinesMap.containsKey(stopId) &&
+        _stopToLinesMap[stopId]!.isNotEmpty) {
+      final lines = _stopToLinesMap[stopId]!.toList()..sort();
+      return lines.join(', ');
     }
     return null;
   }
@@ -122,7 +175,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   void _adjustMapZoom(double delta) {
     final camera = _mapController.camera;
     final newZoom = (camera.zoom + delta).clamp(3.0, 19.0);
-    _mapController.move(camera.center, newZoom);
+    _animatedMapMove(
+      camera.center,
+      newZoom,
+      durationMs: 250,
+      curve: Curves.easeOutCubic,
+    );
   }
 
   // _zoomButton removed (no longer used)
@@ -231,8 +289,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
   Color _getLineColor(String stopId) {
     final lineName = _getLineName(stopId);
-    if (lineName != null && lineColors.containsKey(lineName)) {
-      return lineColors[lineName]!;
+    if (lineName != null) {
+      if (lineColors.containsKey(lineName)) {
+        return lineColors[lineName]!;
+      }
+      final firstLine = lineName.split(', ').first;
+      if (lineColors.containsKey(firstLine)) {
+        return lineColors[firstLine]!;
+      }
     }
     return Colors.purple;
   }
@@ -240,6 +304,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   Color _getPolylineColor(String lineName) {
     if (lineColors.containsKey(lineName)) {
       return lineColors[lineName]!;
+    }
+    final firstLine = lineName.split(', ').first;
+    if (lineColors.containsKey(firstLine)) {
+      return lineColors[firstLine]!;
     }
     return Colors.purple;
   }
@@ -372,9 +440,36 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     });
   }
 
+  void _pushStationDetailsPage(BuildContext context, gtfs.Stop stop) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (pageContext) => StationDetailsPage(
+          stop: stop,
+          lineName: _getLineName(stop.stopId),
+          lineColor: _getLineColor(stop.stopId),
+          transferStops: _directionService.getTransferStations(stop.stopId),
+          lineNameResolver: _getLineName,
+          lineColorResolver: _getLineColor,
+          onTransferStationSelected: (tStop) {
+            _pushStationDetailsPage(pageContext, tStop);
+          },
+          onSelectAsStart: () {
+            Navigator.of(pageContext).popUntil((r) => r.isFirst);
+            _assignStopSelection(stop, asStart: true);
+          },
+          onSelectAsDestination: () {
+            Navigator.of(pageContext).popUntil((r) => r.isFirst);
+            _assignStopSelection(stop, asStart: false);
+          },
+        ),
+      ),
+    );
+  }
+
   void _showStopDetails(BuildContext context, gtfs.Stop stop) {
     final lineName = _getLineName(stop.stopId);
     final lineColor = _getLineColor(stop.stopId);
+    final transferStops = _directionService.getTransferStations(stop.stopId);
     final parentContext = context;
     showModalBottomSheet<void>(
       context: context,
@@ -464,6 +559,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           );
         }
 
+        final priority = _getServicePriority(stop);
+        IconData typeIcon = Icons.subway;
+        if (priority == 2) typeIcon = Icons.train;
+        if (priority == 3) typeIcon = Icons.directions_bus;
+        if (priority == 4) typeIcon = Icons.directions_boat;
+
         return SafeArea(
           top: false,
           child: SingleChildScrollView(
@@ -488,7 +589,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                           color: lineColor,
                           borderRadius: BorderRadius.circular(14),
                         ),
-                        child: const Icon(Icons.train, color: Colors.white),
+                        child: Icon(typeIcon, color: Colors.white),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
@@ -496,14 +597,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              stop.name,
+                              hasThaiName ? stop.thaiName! : stop.name,
                               style: theme.textTheme.titleLarge?.copyWith(
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
                             if (hasThaiName)
                               Text(
-                                stop.thaiName!,
+                                stop.name,
                                 style: theme.textTheme.titleMedium?.copyWith(
                                   color: colorScheme.onSurfaceVariant,
                                 ),
@@ -511,23 +612,38 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                             if (lineName != null && lineName.isNotEmpty)
                               Padding(
                                 padding: const EdgeInsets.only(top: 8),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: lineColor.withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                  child: Text(
-                                    lineName,
-                                    style: theme.textTheme.labelMedium
-                                        ?.copyWith(
-                                          color: lineColor,
-                                          fontWeight: FontWeight.w700,
+                                child: Wrap(
+                                  spacing: 6,
+                                  runSpacing: 6,
+                                  children: lineName.split(', ').map((
+                                    singleLine,
+                                  ) {
+                                    final specificColor = _getPolylineColor(
+                                      singleLine,
+                                    );
+                                    return Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: specificColor.withValues(
+                                          alpha: 0.15,
                                         ),
-                                  ),
+                                        borderRadius: BorderRadius.circular(
+                                          999,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        singleLine,
+                                        style: theme.textTheme.labelMedium
+                                            ?.copyWith(
+                                              color: specificColor,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                      ),
+                                    );
+                                  }).toList(),
                                 ),
                               ),
                           ],
@@ -541,7 +657,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   spacing: 12,
                   runSpacing: 8,
                   children: [
-                    infoChip('Stop ID', stop.stopId),
+                    if (stop.code != null && stop.code!.isNotEmpty)
+                      infoChip('Stop Code', stop.code!),
                     infoChip(
                       'Coordinates',
                       'Lat ${stop.lat.toStringAsFixed(4)}, Lon ${stop.lon.toStringAsFixed(4)}',
@@ -552,6 +669,85 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                       infoChip('Code', stop.code!),
                   ],
                 ),
+                UpcomingDeparturesWidget(stopId: stop.stopId),
+                if (transferStops.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    'Transfers',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ...transferStops.map((tStop) {
+                    final tLineName =
+                        _getLineName(tStop.stopId) ?? 'Unknown Line';
+                    final tLineColor = _getLineColor(tStop.stopId);
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                        ),
+                        tileColor: colorScheme.surfaceContainerHighest
+                            .withValues(alpha: 0.5),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: BorderSide(color: colorScheme.outlineVariant),
+                        ),
+                        leading: Container(
+                          width: 16,
+                          height: 16,
+                          decoration: BoxDecoration(
+                            color: tLineColor,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        title: Text(
+                          (tStop.thaiName != null &&
+                                  tStop.thaiName!.trim().isNotEmpty)
+                              ? tStop.thaiName!
+                              : tStop.name,
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        subtitle: Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Wrap(
+                            spacing: 4,
+                            runSpacing: 4,
+                            children: tLineName.split(', ').map((sl) {
+                              final slColor = _getPolylineColor(sl);
+                              return Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: slColor.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  sl,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: slColor,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          _showStopDetails(parentContext, tStop);
+                        },
+                      ),
+                    );
+                  }),
+                ],
                 const SizedBox(height: 20),
                 quickAction(
                   icon: Icons.trip_origin,
@@ -579,23 +775,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
                     Navigator.of(sheetContext).pop();
-                    Navigator.of(parentContext).push(
-                      MaterialPageRoute(
-                        builder: (pageContext) => StationDetailsPage(
-                          stop: stop,
-                          lineName: lineName,
-                          lineColor: lineColor,
-                          onSelectAsStart: () {
-                            Navigator.of(pageContext).pop();
-                            _assignStopSelection(stop, asStart: true);
-                          },
-                          onSelectAsDestination: () {
-                            Navigator.of(pageContext).pop();
-                            _assignStopSelection(stop, asStart: false);
-                          },
-                        ),
-                      ),
-                    );
+                    _pushStationDetailsPage(parentContext, stop);
                   },
                 ),
               ],
@@ -912,9 +1092,26 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     final zoomBottomOffset =
         viewPadding.bottom + fabHeight + fabGap + sheetOffset;
     final showBusStops =
-        busStops.isNotEmpty && _currentZoom >= _busStopZoomThreshold;
+        _showBusPins &&
+        busStops.isNotEmpty &&
+        _currentZoom >= _busStopZoomThreshold;
     final showFerryStops =
-        ferryStops.isNotEmpty && _currentZoom >= _busStopZoomThreshold;
+        _showFerryPins &&
+        ferryStops.isNotEmpty &&
+        _currentZoom >= _busStopZoomThreshold;
+
+    final filteredRailStops = railStops.where((stop) {
+      final isTrain = _isStopTrain(stop);
+      final isMetro = _isStopMetro(stop);
+
+      if (isTrain && !_showTrainPins) return false;
+      if (isMetro && !_showMetroPins) return false;
+      if (!isTrain && !isMetro) {
+        // Fallback if type isn't correctly identified, use metro fallback as before
+        if (!_showMetroPins) return false;
+      }
+      return true;
+    }).toList();
 
     final routeStopIds = <String>{};
     for (final seg in activeSegments) {
@@ -925,15 +1122,29 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       if (seg.end.stopId != null) routeStopIds.add(seg.end.stopId!);
     }
 
+    // Dynamic marker sizing based on zoom
+    final double railBaseSize = math.max(
+      6.0,
+      (_currentZoom - 10.0) * 3.0 + 8.0,
+    );
+    final double railSelectedSize = railBaseSize * 1.375;
+    final double railBorderWidth = math.max(1.0, railBaseSize / 5.0);
+    final double railSelectedBorderWidth = math.max(
+      2.0,
+      railSelectedSize / 5.0,
+    );
+
     return Stack(
       children: [
         FlutterMap(
+          key: _mapKey,
           mapController: _mapController,
           options: MapOptions(
-            initialCenter: const LatLng(13.7463, 100.5347),
-            initialZoom: 12.0,
+            initialCenter: _currentCenter,
+            initialZoom: _currentZoom,
             onMapEvent: (event) {
               final newZoom = event.camera.zoom;
+              _currentCenter = event.camera.center;
               if ((newZoom - _currentZoom).abs() > 0.05) {
                 setState(() => _currentZoom = newZoom);
               }
@@ -950,6 +1161,18 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             if (shapeSegments.isNotEmpty)
               PolylineLayer(
                 polylines: shapeSegments
+                    .where((s) {
+                      final isTrain = _isShapeTrain(s);
+                      final isMetro = _isShapeMetro(s);
+                      // If it matches a known shape type, check the toggle
+                      if (isTrain && !_showTrainPins) return false;
+                      if (isMetro && !_showMetroPins) return false;
+                      // Fallback: if it's not strictly known, still show it unless we hide all maybe?
+                      // Actually shapes in shapes.txt are just trains/metros.
+                      // If we consider them "Metro" when not train:
+                      if (!isTrain && !isMetro && !_showMetroPins) return false;
+                      return true;
+                    })
                     .map(
                       (s) => Polyline(
                         points: s.points,
@@ -1021,12 +1244,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                             message: stop.name,
                             child: Container(
                               decoration: BoxDecoration(
-                                color: (activeSegments.isNotEmpty &&
+                                color:
+                                    (activeSegments.isNotEmpty &&
                                         !routeStopIds.contains(stop.stopId))
                                     ? Colors.grey.shade400
                                     : Colors.cyan.shade600,
                                 border: Border.all(
-                                  color: (activeSegments.isNotEmpty &&
+                                  color:
+                                      (activeSegments.isNotEmpty &&
                                           !routeStopIds.contains(stop.stopId))
                                       ? Colors.grey.shade600
                                       : Colors.black.withValues(alpha: 0.18),
@@ -1051,19 +1276,19 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                     )
                     .toList(),
               ),
-            if (railStops.isNotEmpty)
+            if (filteredRailStops.isNotEmpty)
               MarkerLayer(
-                markers: railStops
+                markers: filteredRailStops
                     .map(
                       (stop) => Marker(
                         point: LatLng(stop.lat, stop.lon),
                         width: (stop.stopId == startId || stop.stopId == destId)
-                            ? 22
-                            : 16,
+                            ? railSelectedSize
+                            : railBaseSize,
                         height:
                             (stop.stopId == startId || stop.stopId == destId)
-                            ? 22
-                            : 16,
+                            ? railSelectedSize
+                            : railBaseSize,
                         child: GestureDetector(
                           onTap: () => _showStopDetails(context, stop),
                           child: Tooltip(
@@ -1090,8 +1315,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                                   width:
                                       (stop.stopId == startId ||
                                           stop.stopId == destId)
-                                      ? 4
-                                      : 3,
+                                      ? railSelectedBorderWidth
+                                      : railBorderWidth,
                                 ),
                               ),
                             ),
@@ -1136,6 +1361,44 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   ),
                 ],
               ),
+            if (_userLocation?.latitude != null &&
+                _userLocation?.longitude != null)
+              MarkerLayer(
+                markers: [
+                  Marker(
+                    point: LatLng(
+                      _userLocation!.latitude!,
+                      _userLocation!.longitude!,
+                    ),
+                    width: 40,
+                    height: 40,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.blueAccent.withValues(alpha: 0.3),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Container(
+                          width: 20,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            color: Colors.blue,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 3),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.2),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             if (activeSegments.isNotEmpty)
               PolylineLayer(polylines: _buildRoutePolylines(activeSegments)),
             const RichAttributionWidget(
@@ -1148,60 +1411,118 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         Positioned(
           right: 16,
           bottom: zoomBottomOffset,
-          child: Material(
-            elevation: 6,
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(32),
-            child: Container(
-              decoration: BoxDecoration(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              _buildFilterMenu(),
+              const SizedBox(height: 16),
+              Material(
+                elevation: 6,
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(32),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.08),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(32),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
-                ],
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.add),
+                        tooltip: 'Zoom in',
+                        onPressed: () => _adjustMapZoom(0.75),
+                        iconSize: 28,
+                        padding: const EdgeInsets.all(12),
+                        constraints: const BoxConstraints(
+                          minWidth: 56,
+                          minHeight: 48,
+                        ),
+                      ),
+                      Container(width: 36, height: 1, color: Colors.black12),
+                      IconButton(
+                        icon: const Icon(Icons.remove),
+                        tooltip: 'Zoom out',
+                        onPressed: () => _adjustMapZoom(-0.75),
+                        iconSize: 28,
+                        padding: const EdgeInsets.all(12),
+                        constraints: const BoxConstraints(
+                          minWidth: 56,
+                          minHeight: 48,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.add),
-                    tooltip: 'Zoom in',
-                    onPressed: () => _adjustMapZoom(0.75),
-                    iconSize: 28,
-                    padding: const EdgeInsets.all(12),
-                    constraints: const BoxConstraints(
-                      minWidth: 56,
-                      minHeight: 48,
-                    ),
-                  ),
-                  Container(width: 36, height: 1, color: Colors.black12),
-                  IconButton(
-                    icon: const Icon(Icons.remove),
-                    tooltip: 'Zoom out',
-                    onPressed: () => _adjustMapZoom(-0.75),
-                    iconSize: 28,
-                    padding: const EdgeInsets.all(12),
-                    constraints: const BoxConstraints(
-                      minWidth: 56,
-                      minHeight: 48,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            ],
           ),
         ),
       ],
     );
   }
 
+  Widget _buildFilterMenu() {
+    return MenuAnchor(
+      alignmentOffset: const Offset(-80, 0),
+      menuChildren: [
+        CheckboxMenuButton(
+          value: _showTrainPins,
+          onChanged: (val) => setState(() => _showTrainPins = val ?? true),
+          child: const Text('Train'),
+        ),
+        CheckboxMenuButton(
+          value: _showMetroPins,
+          onChanged: (val) => setState(() => _showMetroPins = val ?? true),
+          child: const Text('Metro'),
+        ),
+        CheckboxMenuButton(
+          value: _showBusPins,
+          onChanged: (val) => setState(() => _showBusPins = val ?? true),
+          child: const Text('Bus'),
+        ),
+        CheckboxMenuButton(
+          value: _showFerryPins,
+          onChanged: (val) => setState(() => _showFerryPins = val ?? true),
+          child: const Text('Ferry'),
+        ),
+      ],
+      builder: (context, controller, child) {
+        return Material(
+          elevation: 6,
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(32),
+          child: IconButton(
+            icon: const Icon(Icons.layers),
+            tooltip: 'Filter Pins',
+            onPressed: () {
+              if (controller.isOpen) {
+                controller.close();
+              } else {
+                controller.open();
+              }
+            },
+            iconSize: 28,
+            padding: const EdgeInsets.all(12),
+            constraints: const BoxConstraints(minWidth: 56, minHeight: 56),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildWideLayout(BuildContext context, Widget headerOverlay) {
     final width = MediaQuery.of(context).size.width;
     final hasRoutes = directionOptions.isNotEmpty;
-    final panelWidth = math.min(440.0, width * 0.35);
+    // ensure the side panel is at least 320px wide so route options text does not overflow
+    final panelWidth = math.max(320.0, math.min(440.0, width * 0.35));
     final theme = Theme.of(context);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1397,7 +1718,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         ),
         alignment: Alignment.center,
         child: Text(
-          stop.code ?? stop.stopId,
+          stop.code ?? '',
           style: TextStyle(
             color: (lineColor.computeLuminance() > 0.5)
                 ? Colors.black
@@ -1467,6 +1788,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                     linePrefixes: linePrefixes,
                     lineColors: lineColors,
                     getLineName: _getLineName,
+                    getLineNames: _getLineNames,
+                    getServicePriority: _getServicePriority,
                     onSelect: (stop) {
                       controller.closeView(stop.name);
                       _handleCollapsedStopSelection(stop);
@@ -1807,6 +2130,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   linePrefixes: linePrefixes,
                   lineColors: lineColors,
                   getLineName: _getLineName,
+                  getLineNames: _getLineNames,
+                  getServicePriority: _getServicePriority,
                   onSelect: (stop) {
                     ctrl.closeView(stop.name);
                     _selectStopFromSearch(stop, asStart: asStart);
@@ -1846,11 +2171,66 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     );
   }
 
+  bool _isStopMetro(gtfs.Stop stop) {
+    final lineNames = _stopToLinesMap[stop.stopId];
+    if (lineNames != null) {
+      for (final lName in lineNames) {
+        final route = allRoutes
+            .where(
+              (r) =>
+                  r.longName.toUpperCase() == lName.toUpperCase() ||
+                  r.routeId.toUpperCase() == lName.toUpperCase(),
+            )
+            .firstOrNull;
+        if (route?.type == '1') {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  bool _isStopTrain(gtfs.Stop stop) {
+    final lineNames = _stopToLinesMap[stop.stopId];
+    if (lineNames != null) {
+      for (final lName in lineNames) {
+        final route = allRoutes
+            .where(
+              (r) =>
+                  r.longName.toUpperCase() == lName.toUpperCase() ||
+                  r.routeId.toUpperCase() == lName.toUpperCase(),
+            )
+            .firstOrNull;
+        if (route?.type == '2') {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  bool _isShapeTrain(ShapeSegment shape) {
+    if (shape.routeId == null) return false;
+    final rId = shape.routeId!.replaceAll('\uFEFF', '').toUpperCase(); // Avoid BOM issues
+    final route = allRoutes
+        .where((r) => r.routeId.replaceAll('\uFEFF', '').toUpperCase() == rId)
+        .firstOrNull;
+    return route?.type == '2';
+  }
+
+  bool _isShapeMetro(ShapeSegment shape) {
+    if (shape.routeId == null) return false;
+    final rId = shape.routeId!.replaceAll('\uFEFF', '').toUpperCase();
+    final route = allRoutes
+        .where((r) => r.routeId.replaceAll('\uFEFF', '').toUpperCase() == rId)
+        .firstOrNull;
+    return route?.type == '1';
+  }
+
   int _getServicePriority(gtfs.Stop stop) {
     if (stop.stopId.startsWith('F')) return 4;
     if (busStops.any((s) => s.stopId == stop.stopId)) return 3;
-    final lineName = _getLineName(stop.stopId) ?? '';
-    if (lineName.contains('SRT') || lineName.contains('Train')) return 2;
+    if (_isStopTrain(stop)) return 2;
     return 1;
   }
 
@@ -1934,6 +2314,27 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     _collapsedSearchController = SearchController();
     _directionService = DirectionService(lineNameResolver: _getLineName);
     _loadRoutesAndStops();
+    _initLocationTracking();
+  }
+
+  Future<void> _initLocationTracking() async {
+    final location = Location();
+    bool serviceEnabled = await location.serviceEnabled();
+    if (!serviceEnabled) return;
+    PermissionStatus permissionGranted = await location.hasPermission();
+    if (permissionGranted != PermissionStatus.granted &&
+        permissionGranted != PermissionStatus.grantedLimited) {
+      return;
+    }
+    _locationSub = location.onLocationChanged.listen((
+      LocationData currentLocation,
+    ) {
+      if (mounted) {
+        setState(() {
+          _userLocation = currentLocation;
+        });
+      }
+    });
   }
 
   @override
@@ -1941,6 +2342,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     _startSearchController.dispose();
     _destSearchController.dispose();
     _collapsedSearchController.dispose();
+    _locationSub?.cancel();
     super.dispose();
   }
 
@@ -1979,8 +2381,11 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       }
     }
     colorMap['BMTA Bus'] = Colors.blueAccent;
-      final combinedStops = <gtfs.Stop>[...stops, ...busStopList, ...ferryStops];
+    final combinedStops = <gtfs.Stop>[...stops, ...busStopList, ...ferryStops];
     final stopMap = {for (final stop in combinedStops) stop.stopId: stop};
+
+    await _buildStopToLinesMap(routes);
+
     _directionService.updateData(
       allStops: combinedStops,
       stopLookup: stopMap,
@@ -1989,12 +2394,15 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       fareDataMap: fareDataMap,
       stopOrderMap: stopOrderMap,
       fareTableMap: fareTableMap,
+      ferryFlatFares: ferryFlatFares,
+      ferryZoneMatrix: ferryZoneMatrix,
+      ferryZones: ferryZones,
     );
     // Load GTFS shapes (preferred) — use tripMap loaded from DirectionService to avoid re-parsing
     List<ShapeSegment> shapes = const <ShapeSegment>[];
     try {
       final tripMap = await _directionService.loadTrips();
-      shapes = await GtfsShapesService().loadSegments(
+      final loadedShapes = await GtfsShapesService().loadSegments(
         shapesAsset: 'assets/gtfs_data/shapes.txt',
         routeColors: {
           for (final r in routes)
@@ -2004,7 +2412,25 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         },
         tripMap: tripMap,
       );
+      final mutableShapes = List<ShapeSegment>.from(loadedShapes);
+      mutableShapes.sort((a, b) {
+        final topZ = ['RN', 'RW', 'Air', 'AIR'];
+        final aTop = topZ.contains(a.routeId) ? 1 : 0;
+        final bTop = topZ.contains(b.routeId) ? 1 : 0;
+        return aTop.compareTo(bTop);
+      });
+      shapes = mutableShapes;
     } catch (_) {}
+
+    stops.sort((a, b) {
+      final topZ = ['RN', 'RW', 'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8'];
+      bool aTop = topZ.any((p) => a.stopId.startsWith(p));
+      bool bTop = topZ.any((p) => b.stopId.startsWith(p));
+      if (aTop && !bTop) return 1;
+      if (!aTop && bTop) return -1;
+      return 0;
+    });
+
     setState(() {
       allRoutes = routes;
       railStops = stops;
@@ -2297,6 +2723,22 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         fareTableMap[rowKey] = fares;
       }
     } catch (_) {}
+
+    try {
+      ferryFlatFares = await RouteAssetLoader.loadFerryFlatFares(
+        'assets/gtfs_data/ferry_flat_fares.txt',
+      );
+    } catch (_) {}
+    try {
+      ferryZoneMatrix = await RouteAssetLoader.loadFerryZoneMatrix(
+        'assets/gtfs_data/ferry_zone_matrix.txt',
+      );
+    } catch (_) {}
+    try {
+      ferryZones = await RouteAssetLoader.loadFerryZones(
+        'assets/gtfs_data/ferry_zones.txt',
+      );
+    } catch (_) {}
   }
 
   List<String> _parseCsvLine(String line) {
@@ -2324,6 +2766,80 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     return result;
   }
 
+  Future<void> _buildStopToLinesMap(List<gtfs.Route> routes) async {
+    final routeMap = {for (final r in routes) r.routeId: r};
+    final tripToLine = <String, String>{};
+    try {
+      final tripContent = await rootBundle.loadString(
+        'assets/gtfs_data/trips.txt',
+      );
+      final lines = const LineSplitter().convert(tripContent);
+      if (lines.length > 1) {
+        final header = _parseCsvLine(lines[0]);
+        final routeIdx = header.indexOf('route_id');
+        final tripIdx = header.indexOf('trip_id');
+        if (routeIdx != -1 && tripIdx != -1) {
+          for (int i = 1; i < lines.length; i++) {
+            if (lines[i].trim().isEmpty) continue;
+            final row = _parseCsvLine(lines[i]);
+            if (row.length > math.max(routeIdx, tripIdx)) {
+              final rId = row[routeIdx].trim();
+              final tId = row[tripIdx].trim();
+              final route = routeMap[rId];
+              if (route != null) {
+                final lineName = route.longName.isNotEmpty
+                    ? route.longName
+                    : route.routeId;
+                tripToLine[tId] = lineName;
+              }
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    final stopTimesFiles = [
+      'assets/gtfs_data/stop_times.txt',
+      'assets/gtfs_data/bus_stop_times.txt',
+      'assets/gtfs_data/ferry_stop_times.txt',
+    ];
+
+    for (final file in stopTimesFiles) {
+      try {
+        final stContent = await rootBundle.loadString(file);
+        final lines = const LineSplitter().convert(stContent);
+        if (lines.length <= 1) continue;
+        final header = _parseCsvLine(lines[0]);
+        final tripIdx = header.indexOf('trip_id');
+        final stopIdx = header.indexOf('stop_id');
+        if (tripIdx == -1 || stopIdx == -1) continue;
+
+        for (int i = 1; i < lines.length; i++) {
+          if (lines[i].trim().isEmpty) continue;
+          final row = _parseCsvLine(lines[i]);
+          if (row.length > math.max(tripIdx, stopIdx)) {
+            final tId = row[tripIdx].trim();
+            final sId = row[stopIdx].trim();
+            final lineName = tripToLine[tId];
+            if (lineName != null) {
+              _stopToLinesMap.putIfAbsent(sId, () => {}).add(lineName);
+            } else if (file.contains('ferry_stop_times') &&
+                tId.startsWith('F_')) {
+              final routeId = tId.split('_TRIP')[0];
+              final route = routeMap[routeId];
+              if (route != null) {
+                final lName = route.longName.isNotEmpty
+                    ? route.longName
+                    : route.routeId;
+                _stopToLinesMap.putIfAbsent(sId, () => {}).add(lName);
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    }
+  }
+
   String? _cleanHex(String? hex) {
     if (hex == null) return null;
     var s = hex.trim().replaceAll('\r', '').replaceAll('#', '');
@@ -2331,7 +2847,69 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     return s.toUpperCase();
   }
 
+  void _animatedMapMove(
+    LatLng destLocation,
+    double destZoom, {
+    int durationMs = 500,
+    Curve curve = Curves.fastOutSlowIn,
+  }) {
+    // Create some tweens. These serve to split up the transition from one location to another.
+    // In our case, we want to split the transition be<tween> our current map center and the destination.
+    final latTween = Tween<double>(
+      begin: _mapController.camera.center.latitude,
+      end: destLocation.latitude,
+    );
+    final lngTween = Tween<double>(
+      begin: _mapController.camera.center.longitude,
+      end: destLocation.longitude,
+    );
+    final zoomTween = Tween<double>(
+      begin: _mapController.camera.zoom,
+      end: destZoom,
+    );
+
+    // Create a animation controller that has a duration and a TickerProvider.
+    final controller = AnimationController(
+      duration: Duration(milliseconds: durationMs),
+      vsync: this,
+    );
+    // The animation determines what path the animation will take. You can try different Curves values, although I found
+    // fastOutSlowIn to be my favorite.
+    final Animation<double> animation = CurvedAnimation(
+      parent: controller,
+      curve: curve,
+    );
+
+    // Note this method of encoding the target destination is a workaround.
+    // When proper gradients are available we can directly use a generic Vector2.
+    controller.addListener(() {
+      _mapController.move(
+        LatLng(latTween.evaluate(animation), lngTween.evaluate(animation)),
+        zoomTween.evaluate(animation),
+      );
+    });
+
+    animation.addStatusListener((status) {
+      if (status == AnimationStatus.completed ||
+          status == AnimationStatus.dismissed) {
+        controller.dispose();
+      }
+    });
+
+    controller.forward();
+  }
+
   Future<void> _goToMyLocation() async {
+    if (_userLocation?.latitude != null && _userLocation?.longitude != null) {
+      _animatedMapMove(
+        LatLng(_userLocation!.latitude!, _userLocation!.longitude!),
+        math.max(_mapController.camera.zoom, 15.0),
+      );
+      // Still allow it to fall through to refresh location just in case? Or return?
+      // Better to return for instant response, location stream is updating it anyway.
+      return;
+    }
+
     Location location = Location();
     bool serviceEnabled = await location.serviceEnabled();
     if (!serviceEnabled) {
@@ -2343,11 +2921,27 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       permissionGranted = await location.requestPermission();
       if (permissionGranted != PermissionStatus.granted) return;
     }
+
+    _locationSub ??= location.onLocationChanged.listen((
+      LocationData currentLocation,
+    ) {
+      if (mounted) {
+        setState(() {
+          _userLocation = currentLocation;
+        });
+      }
+    });
+
     final userLocation = await location.getLocation();
     if (userLocation.latitude != null && userLocation.longitude != null) {
-      _mapController.move(
+      if (mounted) {
+        setState(() {
+          _userLocation = userLocation;
+        });
+      }
+      _animatedMapMove(
         LatLng(userLocation.latitude!, userLocation.longitude!),
-        _mapController.camera.zoom,
+        math.max(_mapController.camera.zoom, 15.0),
       );
     }
   }
@@ -2403,16 +2997,21 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         }
       });
     }
-    final width = MediaQuery.of(context).size.width;
-    final isWideLayout = width >= 900;
+    final mediaQuery = MediaQuery.of(context);
+    final width = mediaQuery.size.width;
+    final height = mediaQuery.size.height;
+
+    // Breakpoint for foldables, tablets, and landscape phones
+    final isWideLayout = width >= 600 || (width > height && height < 500);
+
     final bool showHome = !showNav || _selectedNavIndex == 0;
     late final Widget body;
     if (showHome) {
       body = _buildHomeContent(context, isWideLayout);
     } else if (_selectedNavIndex == 1) {
       body = TransitUpdatesListPage(
-        initialReports: _transitReports,
-        loadReports: TransitUpdatesRepository.fetchLatestReports,
+        initialReports: TransitUpdateService().activeReports,
+        loadReports: () async => TransitUpdateService().activeReports,
       );
     } else {
       body = MorePage(
@@ -2421,28 +3020,64 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         onOpenGraphicMap: _openGraphicMap,
         onOpenCards: _openCardsPage,
         profile: _profile,
+        currentAccentColor: widget.currentAccentColor,
+        onAccentColorChanged: widget.onAccentColorChanged,
       );
     }
+
+    final bodyContent = SafeArea(
+      top: false,
+      bottom: !isWideLayout, // if wide, rail handles safe area horizontally
+      child: body,
+    );
+
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
-      body: SafeArea(top: false, child: body),
+      body: (isWideLayout && showNav)
+          ? Row(
+              children: [
+                NavigationRail(
+                  selectedIndex: _selectedNavIndex,
+                  onDestinationSelected: (index) {
+                    setState(() => _selectedNavIndex = index);
+                  },
+                  labelType: NavigationRailLabelType.all,
+                  destinations: const [
+                    NavigationRailDestination(
+                      icon: Icon(Icons.home_outlined),
+                      selectedIcon: Icon(Icons.home_rounded),
+                      label: Text('Home'),
+                    ),
+                    NavigationRailDestination(
+                      icon: Icon(Icons.campaign_outlined),
+                      selectedIcon: Icon(Icons.campaign),
+                      label: Text('Updates'),
+                    ),
+                    NavigationRailDestination(
+                      icon: Icon(Icons.more_horiz),
+                      selectedIcon: Icon(Icons.more),
+                      label: Text('More'),
+                    ),
+                  ],
+                ),
+                const VerticalDivider(thickness: 1, width: 1),
+                Expanded(child: bodyContent),
+              ],
+            )
+          : bodyContent,
       floatingActionButton: showHome ? _buildLocationFab(context) : null,
-      bottomNavigationBar: showNav ? _buildNavigationBar() : null,
+      bottomNavigationBar: (!isWideLayout && showNav)
+          ? _buildNavigationBar()
+          : null,
     );
   }
 
   Widget _buildHomeContent(BuildContext context, bool isWideLayout) {
     final headerOverlay = _buildHeaderOverlay(context, isWideLayout);
     return SizedBox.expand(
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 400),
-        child: KeyedSubtree(
-          key: ValueKey<bool>(isWideLayout),
-          child: isWideLayout
-              ? _buildWideLayout(context, headerOverlay)
-              : _buildPhoneLayout(context, headerOverlay),
-        ),
-      ),
+      child: isWideLayout
+          ? _buildWideLayout(context, headerOverlay)
+          : _buildPhoneLayout(context, headerOverlay),
     );
   }
 
@@ -2473,18 +3108,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   }
 
   Widget _buildLocationFab(BuildContext context) {
-    final isCompact = MediaQuery.of(context).size.width < 520;
-    if (isCompact) {
-      return FloatingActionButton(
-        onPressed: _goToMyLocation,
-        tooltip: 'Center map on my location',
-        child: const Icon(Icons.my_location),
-      );
-    }
-    return FloatingActionButton.extended(
+    return FloatingActionButton(
       onPressed: _goToMyLocation,
-      icon: const Icon(Icons.my_location),
-      label: const Text('My location'),
+      tooltip: 'Center map on my location',
+      child: const Icon(Icons.my_location),
     );
   }
 

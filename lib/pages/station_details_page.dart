@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:route/services/gtfs_models.dart' as gtfs;
+import 'package:route/widgets/station_timetable.dart';
 
 class StationDetailsPage extends StatelessWidget {
   const StationDetailsPage({
@@ -9,6 +10,11 @@ class StationDetailsPage extends StatelessWidget {
     this.lineName,
     required this.onSelectAsStart,
     required this.onSelectAsDestination,
+    this.transferStops = const [],
+    this.lineNameResolver,
+    this.lineColorResolver,
+    this.lineColorByName,
+    this.onTransferStationSelected,
   });
 
   final gtfs.Stop stop;
@@ -16,6 +22,11 @@ class StationDetailsPage extends StatelessWidget {
   final String? lineName;
   final VoidCallback onSelectAsStart;
   final VoidCallback onSelectAsDestination;
+  final List<gtfs.Stop> transferStops;
+  final String? Function(String stopId)? lineNameResolver;
+  final Color Function(String stopId)? lineColorResolver;
+  final Color Function(String lineName)? lineColorByName;
+  final void Function(gtfs.Stop stop)? onTransferStationSelected;
 
   bool get _hasThaiName =>
       stop.thaiName != null && stop.thaiName!.trim().isNotEmpty;
@@ -25,7 +36,8 @@ class StationDetailsPage extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final infoChips = <Widget>[
-      _InfoChip(label: 'Stop ID', value: stop.stopId),
+      if (stop.code != null && stop.code!.isNotEmpty)
+        _InfoChip(label: 'Stop Code', value: stop.code!),
       if (lineName != null && lineName!.isNotEmpty)
         _InfoChip(label: 'Line', value: lineName!),
       _InfoChip(
@@ -39,7 +51,7 @@ class StationDetailsPage extends StatelessWidget {
         _InfoChip(label: 'Code', value: stop.code!),
     ];
     return Scaffold(
-      appBar: AppBar(title: Text(stop.name)),
+      appBar: AppBar(title: Text(_hasThaiName ? stop.thaiName! : stop.name)),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
@@ -49,6 +61,7 @@ class StationDetailsPage extends StatelessWidget {
               lineColor: lineColor,
               lineName: lineName,
               hasThaiName: _hasThaiName,
+              lineColorByName: lineColorByName,
             ),
             const SizedBox(height: 24),
             const _SectionHeader('Station facts'),
@@ -68,6 +81,77 @@ class StationDetailsPage extends StatelessWidget {
               subtitle:
                   'Lat ${stop.lat.toStringAsFixed(5)}, Lon ${stop.lon.toStringAsFixed(5)}',
             ),
+            if (transferStops.isNotEmpty) ...[
+              const SizedBox(height: 28),
+              const _SectionHeader('Transfers'),
+              const SizedBox(height: 12),
+              ...transferStops.map((tStop) {
+                final tLineName =
+                    lineNameResolver?.call(tStop.stopId) ?? 'Unknown Line';
+                final tLineColor =
+                    lineColorResolver?.call(tStop.stopId) ?? Colors.grey;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                    tileColor: scheme.surfaceContainerHighest.withValues(
+                      alpha: 0.5,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(color: scheme.outlineVariant),
+                    ),
+                    leading: Container(
+                      width: 16,
+                      height: 16,
+                      decoration: BoxDecoration(
+                        color: tLineColor,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    title: Text(
+                      (tStop.thaiName != null &&
+                              tStop.thaiName!.trim().isNotEmpty)
+                          ? tStop.thaiName!
+                          : tStop.name,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
+                        children: tLineName.split(', ').map((sl) {
+                          final slColor =
+                              lineColorByName?.call(sl) ?? tLineColor;
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: slColor.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              sl,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: slColor,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => onTransferStationSelected?.call(tStop),
+                  ),
+                );
+              }),
+            ],
             const SizedBox(height: 28),
             const _SectionHeader('Trip planning'),
             _QuickActionButtons(
@@ -81,6 +165,10 @@ class StationDetailsPage extends StatelessWidget {
                 color: scheme.onSurfaceVariant,
               ),
             ),
+            const SizedBox(height: 28),
+            const _SectionHeader('Timetable & Departures'),
+            const SizedBox(height: 12),
+            StationTimetableSection(stopId: stop.stopId),
           ],
         ),
       ),
@@ -238,12 +326,14 @@ class _StationHeroCard extends StatelessWidget {
     required this.lineColor,
     required this.lineName,
     required this.hasThaiName,
+    this.lineColorByName,
   });
 
   final gtfs.Stop stop;
   final Color lineColor;
   final String? lineName;
   final bool hasThaiName;
+  final Color Function(String lineName)? lineColorByName;
 
   @override
   Widget build(BuildContext context) {
@@ -271,7 +361,7 @@ class _StationHeroCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      stop.name,
+                      hasThaiName ? stop.thaiName! : stop.name,
                       style: theme.textTheme.headlineSmall?.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w800,
@@ -281,7 +371,7 @@ class _StationHeroCard extends StatelessWidget {
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
                         child: Text(
-                          stop.thaiName!,
+                          stop.name,
                           style: theme.textTheme.titleMedium?.copyWith(
                             color: Colors.white70,
                           ),
@@ -303,22 +393,38 @@ class _StationHeroCard extends StatelessWidget {
           if (lineName != null && lineName!.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 16),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  lineName!,
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: lineName!.split(', ').map((singleLine) {
+                  final specificColor =
+                      lineColorByName?.call(singleLine) ??
+                      Colors.white.withValues(alpha: 0.15);
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: specificColor,
+                      borderRadius: BorderRadius.circular(999),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.1),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      singleLine,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  );
+                }).toList(),
               ),
             ),
         ],

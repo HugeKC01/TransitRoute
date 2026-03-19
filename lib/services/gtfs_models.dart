@@ -170,3 +170,17 @@ class FareTableRow {
 }
 
 // You can extend these models for more GTFS fields as needed.
+
+class Frequency {
+  final String tripId;
+  final String startTime;
+  final String endTime;
+  final int headwaySecs;
+
+  Frequency({
+    required this.tripId,
+    required this.startTime,
+    required this.endTime,
+    required this.headwaySecs,
+  });
+}
