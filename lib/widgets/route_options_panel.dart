@@ -386,17 +386,15 @@ class _RouteOptionCard extends StatelessWidget {
                                       ? Colors.black87
                                       : Colors.white;
 
-                                  IconData getTransportIcon(String name) {
-                                    final lower = name.toLowerCase();
-                                    if (lower.contains('walk')) {
+                                  IconData getTransportIcon(RouteSegment segment) {
+                                    if (segment.mode == TravelMode.walk) {
                                       return Icons.directions_walk;
                                     }
-                                    if (lower.contains('bus')) {
-                                      return Icons.directions_bus;
-                                    }
-                                    if (lower.contains('boat') ||
-                                        lower.contains('ferry')) {
+                                    if (segment.isFerry) {
                                       return Icons.directions_boat;
+                                    }
+                                    if (segment.isBus) {
+                                      return Icons.directions_bus;
                                     }
                                     return Icons.directions_transit;
                                   }
@@ -421,7 +419,7 @@ class _RouteOptionCard extends StatelessWidget {
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Icon(
-                                          getTransportIcon(lineName),
+                                          getTransportIcon(transitSegments[i]),
                                           size: 16,
                                           color: textColor,
                                         ),

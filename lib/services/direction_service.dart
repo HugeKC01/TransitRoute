@@ -81,6 +81,42 @@ class RouteSegment {
     this.hasIssue = false,
     this.issueNotice,
   });
+
+  bool get isBus {
+    if (mode != TravelMode.transit) return false;
+    final name = routeShortName?.toLowerCase() ?? '';
+    if (name.contains('bus') || name.contains('bmta') || name.contains('brt')) {
+      return true;
+    }
+    if (intermediateStops != null && intermediateStops!.isNotEmpty) {
+      final id = intermediateStops!.first.stopId.trim();
+      final lastId = intermediateStops!.last.stopId.trim();
+      
+      if (id.startsWith('ST_') || id.startsWith('STOP_') || id.startsWith('BRT_') || int.tryParse(id) != null) return true;
+      if (lastId.startsWith('ST_') || lastId.startsWith('STOP_') || lastId.startsWith('BRT_') || int.tryParse(lastId) != null) return true;
+      
+      final nonBusPrefixes = ['CEN', 'E', 'N', 'S', 'W', 'RN', 'RW', 'BL', 'PK', 'YL', 'A', 'PP', 'F_', 'SRT'];
+      bool isNonBus = false;
+      for (final p in nonBusPrefixes) {
+        if (id.startsWith(p) && !id.startsWith('ST_')) {
+          isNonBus = true;
+          break;
+        }
+      }
+      if (!isNonBus && id.isNotEmpty) return true;
+    }
+    return false;
+  }
+
+  bool get isFerry {
+    if (mode != TravelMode.transit) return false;
+    final name = routeShortName?.toLowerCase() ?? '';
+    if (name.contains('boat') || name.contains('ferry')) return true;
+    if (intermediateStops != null && intermediateStops!.isNotEmpty) {
+      if (intermediateStops!.first.stopId.startsWith('F_')) return true;
+    }
+    return false;
+  }
 }
 
 class DirectionOption {
@@ -97,7 +133,7 @@ class DirectionOption {
 
   final List<RouteSegment> segments;
   final Set<String> tags;
-  final String label;
+  String label;
   final double distanceMeters;
   final int minutes;
   final Map<String, int> fareBreakdown;
@@ -376,7 +412,41 @@ class DirectionService {
         );
       }
 
-      return segments;
+      // Merge any consecutive walk segments into a single cohesive walk
+      final merged = <RouteSegment>[];
+      for (final seg in segments) {
+        if (merged.isNotEmpty &&
+            merged.last.mode == TravelMode.walk &&
+            seg.mode == TravelMode.walk) {
+          final last = merged.last;
+          
+          String? combinedInstruction = last.instruction;
+          if (seg.instruction != null && seg.instruction != 'Walk to transfer') {
+            combinedInstruction = seg.instruction;
+          } else if (last.instruction != null && last.instruction!.startsWith('Walk to')) {
+            combinedInstruction = 'Walk to ${seg.end.name}';
+          }
+
+          merged[merged.length - 1] = RouteSegment(
+            mode: TravelMode.walk,
+            start: last.start,
+            end: seg.end,
+            distanceMeters: last.distanceMeters + seg.distanceMeters,
+            durationMinutes: last.durationMinutes + seg.durationMinutes,
+            instruction: combinedInstruction,
+          );
+        } else {
+          merged.add(seg);
+        }
+      }
+
+      // Filter out pure 0-distance zero-minute segments at the ends or middle 
+      // (which sometimes get created by single-stop artifacts) unless it's literally the only segment.
+      if (merged.length > 1) {
+        merged.removeWhere((s) => s.mode == TravelMode.walk && s.distanceMeters == 0 && s.durationMinutes == 0);
+      }
+
+      return merged.isNotEmpty ? merged : segments;
     }
 
     void addOption(List<gtfs.Stop> stops, Set<String> tags) {
@@ -590,67 +660,44 @@ class DirectionService {
       return 0; // Maintain previous relative order for ties in issue status
     });
 
-    if (options.isEmpty) {
+    final List<DirectionOption> uniqueOptions = [];
+    final Map<String, DirectionOption> sigMap = {};
+
+    for (final opt in options) {
+      final sigParts = opt.segments
+          .where((s) => s.mode == TravelMode.transit)
+          .map((seg) {
+        final startId = seg.intermediateStops?.first.stopId ?? seg.start.name;
+        final endId = seg.intermediateStops?.last.stopId ?? seg.end.name;
+        return 'Transit(${seg.routeShortName})[$startId->$endId]';
+      });
+      final sig = sigParts.isEmpty ? 'WalkOnly' : sigParts.join('|');
+
+      if (sigMap.containsKey(sig)) {
+        sigMap[sig]!.tags.addAll(opt.tags);
+        sigMap[sig]!.label = _optionLabelText(sigMap[sig]!.tags);
+      } else {
+        sigMap[sig] = opt;
+        uniqueOptions.add(opt);
+      }
+    }
+
+    if (uniqueOptions.isEmpty) {
       return DirectionResult.empty();
     }
 
     int selectionIndex = 0;
-    for (int i = 0; i < options.length; i++) {
-      if (options[i].tags.contains(routingMode)) {
+    for (int i = 0; i < uniqueOptions.length; i++) {
+      if (uniqueOptions[i].tags.contains(routingMode)) {
         selectionIndex = i;
         break;
       }
     }
 
-    await _enrichSegmentsWithRoadRouting(options);
-    await _enrichSegmentsWithTimetable(options);
+    await _enrichSegmentsWithRoadRouting(uniqueOptions);
+    await _enrichSegmentsWithTimetable(uniqueOptions);
 
-    return DirectionResult(options: options, selectionIndex: selectionIndex);
-  }
-
-  bool _isBusSegment(RouteSegment segment) {
-    if (segment.mode != TravelMode.transit) return false;
-    
-    final name = segment.routeShortName?.toLowerCase() ?? '';
-    if (name.contains('bus') || name.contains('bmta') || name.contains('brt')) {
-      return true;
-    }
-
-    if (segment.intermediateStops != null &&
-        segment.intermediateStops!.isNotEmpty) {
-      final id = segment.intermediateStops!.first.stopId.trim();
-      final lastId = segment.intermediateStops!.last.stopId.trim();
-      
-      // Known bus prefixes or purely numeric
-      if (id.startsWith('ST_') ||
-          id.startsWith('STOP_') ||
-          id.startsWith('BRT_') ||
-          int.tryParse(id) != null) {
-        return true;
-      }
-      if (lastId.startsWith('ST_') ||
-          lastId.startsWith('STOP_') ||
-          lastId.startsWith('BRT_') ||
-          int.tryParse(lastId) != null) {
-        return true;
-      }
-      
-      // If it doesn't look like a standard rail/ferry prefix
-      final nonBusPrefixes = ['CEN', 'E', 'N', 'S', 'W', 'RN', 'RW', 'BL', 'PK', 'YL', 'A', 'PP', 'F_', 'SRT'];
-      bool isNonBus = false;
-      for (final p in nonBusPrefixes) {
-        // Strict match for short prefixes to avoid matching 'N1' to 'N' if we meant only specific? No, N1 is a rail or ferry stop.
-        if (id.startsWith(p) && !id.startsWith('ST_')) {
-          isNonBus = true;
-          break;
-        }
-      }
-      if (!isNonBus && id.isNotEmpty) {
-         // Could be a bus!
-         return true;
-      }
-    }
-    return false;
+    return DirectionResult(options: uniqueOptions, selectionIndex: selectionIndex);
   }
 
   final Map<String, List<LocationPoint>> _osrmPolylineCache = {};
@@ -667,7 +714,7 @@ class DirectionService {
         if (segment.mode == TravelMode.walk ||
             segment.mode == TravelMode.bicycle ||
             segment.mode == TravelMode.taxi ||
-            _isBusSegment(segment)) {
+            segment.isBus) {
           routingTasks.add(_fetchRoadRouting(segment));
         }
       }
@@ -676,9 +723,12 @@ class DirectionService {
   }
 
   Future<void> _fetchRoadRouting(RouteSegment segment) async {
-    final profile = segment.mode == TravelMode.walk
-        ? 'walking'
-        : (segment.mode == TravelMode.bicycle ? 'cycling' : 'driving');
+    String baseUrl = 'https://router.project-osrm.org/route/v1/driving';
+    if (segment.mode == TravelMode.walk) {
+      baseUrl = 'https://routing.openstreetmap.de/routed-foot/route/v1/driving';
+    } else if (segment.mode == TravelMode.bicycle) {
+      baseUrl = 'https://routing.openstreetmap.de/routed-bike/route/v1/driving';
+    }
 
     final List<String> coordsStrs = [];
     if (segment.mode == TravelMode.transit &&
@@ -700,7 +750,7 @@ class DirectionService {
     final coordsString = coordsStrs.join(';');
 
     final url =
-        'https://router.project-osrm.org/route/v1/$profile/$coordsString?overview=full&geometries=geojson';
+        '$baseUrl/$coordsString?overview=full&geometries=geojson';
 
     if (_osrmOngoingRequests.containsKey(url)) {
       await _osrmOngoingRequests[url];

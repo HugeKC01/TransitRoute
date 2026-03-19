@@ -81,8 +81,9 @@ class RouteDetailsSheet extends StatelessWidget {
       iconColor = Colors.deepOrange;
       title = segment.instruction ?? 'Motorcycle Taxi';
     } else {
-      if (segment.routeShortName != null &&
-          segment.routeShortName!.toLowerCase().contains("bus")) {
+      if (segment.isFerry) {
+        icon = Icons.directions_boat;
+      } else if (segment.isBus) {
         icon = Icons.directions_bus;
       } else {
         icon = Icons.train;
