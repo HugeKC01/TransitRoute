@@ -83,6 +83,12 @@ class MyHomePage extends StatefulWidget {
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
+class _ProjectionResult {
+  final LatLng point;
+  final double dist;
+  _ProjectionResult(this.point, this.dist);
+}
+
 class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   final MapController _mapController = MapController();
   late final SearchController _startSearchController;
@@ -321,7 +327,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     for (final segment in segments) {
       if (segment.mode == TravelMode.walk ||
           segment.mode == TravelMode.bicycle ||
-          segment.mode == TravelMode.taxi) {
+          segment.mode == TravelMode.taxi ||
+          (segment.mode == TravelMode.transit && segment.roadPolyline != null)) {
         List<LatLng> points = [];
         if (segment.roadPolyline != null && segment.roadPolyline!.isNotEmpty) {
           points = segment.roadPolyline!
@@ -335,21 +342,40 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         }
 
         Color lineColor = Colors.grey.shade600;
+        double width = 4.0;
+        StrokePattern? pattern = const StrokePattern.dotted();
+        
         if (segment.mode == TravelMode.bicycle) {
           lineColor = Colors.green.shade600;
-        }
-        if (segment.mode == TravelMode.taxi) {
+        } else if (segment.mode == TravelMode.taxi) {
           lineColor = Colors.orange.shade600;
+        } else if (segment.mode == TravelMode.transit) {
+          final lineName = segment.routeShortName ?? '';
+          lineColor = _getPolylineColor(lineName);
+          width = 6.0;
+          pattern = null;
         }
 
         polylines.add(
           Polyline(
             points: points,
             color: lineColor,
-            strokeWidth: 4.0,
-            pattern: const StrokePattern.dotted(),
+            strokeWidth: width,
+            pattern: pattern ?? const StrokePattern.solid(),
           ),
         );
+        
+        // Also draw 90 degree offsets for bus stops towards the route line if it is a bus route
+        if (segment.mode == TravelMode.transit && segment.intermediateStops != null) {
+          for (final stop in segment.intermediateStops!) {
+            _addOffsetConnectionLine(
+              polylines: polylines,
+              stopPoint: LatLng(stop.lat, stop.lon),
+              routePoints: points,
+              color: lineColor,
+            );
+          }
+        }
       } else {
         final route = segment.intermediateStops;
         if (route == null || route.length < 2) continue;
@@ -423,6 +449,59 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       }
     }
     return polylines;
+  }
+
+  void _addOffsetConnectionLine({
+    required List<Polyline> polylines,
+    required LatLng stopPoint,
+    required List<LatLng> routePoints,
+    required Color color,
+  }) {
+    if (routePoints.isEmpty) return;
+    
+    // Find closest segment and its projection
+    double bestDist = double.infinity;
+    LatLng? bestProj;
+    
+    for (int i = 0; i < routePoints.length - 1; i++) {
+      final p1 = routePoints[i];
+      final p2 = routePoints[i + 1];
+      
+      final projInfo = __projectPointToSegment(stopPoint, p1, p2);
+      if (projInfo.dist < bestDist) {
+        bestDist = projInfo.dist;
+        bestProj = projInfo.point;
+      }
+    }
+    
+    if (bestProj != null && bestDist > 0.00005) { // Only draw if > ~5 meters
+      polylines.add(
+        Polyline(
+          points: [stopPoint, bestProj],
+          color: color.withValues(alpha: 0.5),
+          strokeWidth: 3.0,
+        ),
+      );
+    }
+  }
+
+  _ProjectionResult __projectPointToSegment(LatLng pt, LatLng v, LatLng w) {
+    // Basic flat-earth projection (good enough for small distances)
+    double l2 = math.pow(v.latitude - w.latitude, 2) + math.pow(v.longitude - w.longitude, 2).toDouble();
+    if (l2 == 0.0) {
+      double dist = math.sqrt(math.pow(pt.latitude - v.latitude, 2) + math.pow(pt.longitude - v.longitude, 2));
+      return _ProjectionResult(v, dist);
+    }
+    
+    double t = ((pt.latitude - v.latitude) * (w.latitude - v.latitude) + (pt.longitude - v.longitude) * (w.longitude - v.longitude)) / l2;
+    t = math.max(0, math.min(1, t));
+    
+    final projLat = v.latitude + t * (w.latitude - v.latitude);
+    final projLng = v.longitude + t * (w.longitude - v.longitude);
+    final proj = LatLng(projLat, projLng);
+    
+    double dist = math.sqrt(math.pow(pt.latitude - projLat, 2) + math.pow(pt.longitude - projLng, 2));
+    return _ProjectionResult(proj, dist);
   }
 
   void _assignStopSelection(gtfs.Stop stop, {required bool asStart}) {

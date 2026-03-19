@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -164,6 +165,7 @@ class DirectionService {
 
   final Map<String, Map<String, double>> _distanceGraph = {};
   final Map<String, Map<String, int>> _timeGraph = {};
+  final Map<String, Map<String, Set<String>>> _transitEdges = {};
   bool _graphBuilt = false;
 
   void updateData({
@@ -211,6 +213,9 @@ class DirectionService {
       _graphBuilt = false;
       _distanceGraph.clear();
       _timeGraph.clear();
+      _transitEdges.clear();
+      _cachedStopTimes = null;
+      _cachedTrips = null;
     }
   }
 
@@ -423,22 +428,20 @@ class DirectionService {
 
     final metrics = <_RouteMetrics>[];
     for (final option in optionMap.values) {
+      option.segments ??= _buildSegmentsFromStops(option.stops);
+      
       final distance =
-          option.segments?.fold(0.0, (sum, seg) => sum + seg.distanceMeters) ??
-          geo.routeDistanceMeters(option.stops);
+          option.segments!.fold(0.0, (sum, seg) => sum + seg.distanceMeters);
       final minutes =
-          option.segments?.fold(0, (sum, seg) => sum + seg.durationMinutes) ??
-          _estimateRouteMinutes(option.stops);
+          option.segments!.fold(0, (sum, seg) => sum + seg.durationMinutes);
 
       final fareBreakdown = _fareCalculator.calculateFare(option.stops);
 
-      if (option.segments != null) {
-        for (final seg in option.segments!) {
-          if (seg.fare > 0) {
-            String subLabel = seg.instruction ?? 'Transit';
-            fareBreakdown[subLabel] = (fareBreakdown[subLabel] ?? 0) + seg.fare;
-            fareBreakdown['total'] = (fareBreakdown['total'] ?? 0) + seg.fare;
-          }
+      for (final seg in option.segments!) {
+        if (seg.fare > 0) {
+          String subLabel = seg.instruction ?? 'Transit';
+          fareBreakdown[subLabel] = (fareBreakdown[subLabel] ?? 0) + seg.fare;
+          fareBreakdown['total'] = (fareBreakdown['total'] ?? 0) + seg.fare;
         }
       }
 
@@ -458,17 +461,31 @@ class DirectionService {
     final minFare = metrics.map((m) => m.fareTotal).reduce(math.min);
     final minDistance = metrics.map((m) => m.distanceMeters).reduce(math.min);
     final minMinutes = metrics.map((m) => m.minutes).reduce(math.min);
+    
+    // Calculate transfers and stops using actual segment counts
+    final minTransfers = metrics.map((m) {
+      return m.route.segments!.where((s) => s.mode == TravelMode.transit).length;
+    }).reduce(math.min);
+    
+    final minStops = metrics.map((m) => m.route.stops.length).reduce(math.min);
 
     for (final metric in metrics) {
-      if (metric.fareTotal == minFare) {
-        metric.route.tags.add('Cheapest');
-      }
-      if (metric.distanceMeters == minDistance) {
-        metric.route.tags.add('Shortest');
-      }
-      if (metric.minutes == minMinutes) {
-        metric.route.tags.add('Fastest');
-      }
+      final route = metric.route;
+      
+      // Clean up previous dynamically generated heuristic tags if they are inaccurate
+      route.tags.remove('Shortest');
+      route.tags.remove('Fastest');
+      route.tags.remove('Cheapest');
+      route.tags.remove('Low transfers');
+      route.tags.remove('Fewest stops');
+
+      if (metric.fareTotal == minFare) route.tags.add('Cheapest');
+      if (metric.distanceMeters == minDistance) route.tags.add('Shortest');
+      if (metric.minutes == minMinutes) route.tags.add('Fastest');
+      
+      final transfers = route.segments!.where((s) => s.mode == TravelMode.transit).length;
+      if (transfers == minTransfers) route.tags.add('Low transfers');
+      if (route.stops.length == minStops) route.tags.add('Fewest stops');
     }
 
     int transitRank(_RouteMetrics metric) {
@@ -520,8 +537,7 @@ class DirectionService {
     final transitService = TransitUpdateService();
 
     final options = metrics.map((metric) {
-      final segments =
-          metric.route.segments ?? _buildSegmentsFromStops(metric.route.stops);
+      final segments = metric.route.segments!;
 
       bool optionHasIssue = false;
       String? optionIssueNotice;
@@ -592,32 +608,124 @@ class DirectionService {
     return DirectionResult(options: options, selectionIndex: selectionIndex);
   }
 
+  bool _isBusSegment(RouteSegment segment) {
+    if (segment.mode != TravelMode.transit) return false;
+    
+    final name = segment.routeShortName?.toLowerCase() ?? '';
+    if (name.contains('bus') || name.contains('bmta') || name.contains('brt')) {
+      return true;
+    }
+
+    if (segment.intermediateStops != null &&
+        segment.intermediateStops!.isNotEmpty) {
+      final id = segment.intermediateStops!.first.stopId.trim();
+      final lastId = segment.intermediateStops!.last.stopId.trim();
+      
+      // Known bus prefixes or purely numeric
+      if (id.startsWith('ST_') ||
+          id.startsWith('STOP_') ||
+          id.startsWith('BRT_') ||
+          int.tryParse(id) != null) {
+        return true;
+      }
+      if (lastId.startsWith('ST_') ||
+          lastId.startsWith('STOP_') ||
+          lastId.startsWith('BRT_') ||
+          int.tryParse(lastId) != null) {
+        return true;
+      }
+      
+      // If it doesn't look like a standard rail/ferry prefix
+      final nonBusPrefixes = ['CEN', 'E', 'N', 'S', 'W', 'RN', 'RW', 'BL', 'PK', 'YL', 'A', 'PP', 'F_', 'SRT'];
+      bool isNonBus = false;
+      for (final p in nonBusPrefixes) {
+        // Strict match for short prefixes to avoid matching 'N1' to 'N' if we meant only specific? No, N1 is a rail or ferry stop.
+        if (id.startsWith(p) && !id.startsWith('ST_')) {
+          isNonBus = true;
+          break;
+        }
+      }
+      if (!isNonBus && id.isNotEmpty) {
+         // Could be a bus!
+         return true;
+      }
+    }
+    return false;
+  }
+
+  final Map<String, List<LocationPoint>> _osrmPolylineCache = {};
+  final Map<String, double> _osrmDistCache = {};
+  final Map<String, int> _osrmDurationCache = {};
+  final Map<String, Future<void>> _osrmOngoingRequests = {};
+
   Future<void> _enrichSegmentsWithRoadRouting(
     List<DirectionOption> options,
   ) async {
-    final List<Future<void>> futures = [];
+    final List<Future<void>> routingTasks = [];
     for (final option in options) {
       for (final segment in option.segments) {
         if (segment.mode == TravelMode.walk ||
             segment.mode == TravelMode.bicycle ||
-            segment.mode == TravelMode.taxi) {
-          futures.add(_fetchRoadRouting(segment));
+            segment.mode == TravelMode.taxi ||
+            _isBusSegment(segment)) {
+          routingTasks.add(_fetchRoadRouting(segment));
         }
       }
     }
-    await Future.wait(futures);
+    await Future.wait(routingTasks);
   }
 
   Future<void> _fetchRoadRouting(RouteSegment segment) async {
     final profile = segment.mode == TravelMode.walk
         ? 'walking'
         : (segment.mode == TravelMode.bicycle ? 'cycling' : 'driving');
+
+    final List<String> coordsStrs = [];
+    if (segment.mode == TravelMode.transit &&
+        segment.intermediateStops != null &&
+        segment.intermediateStops!.isNotEmpty) {
+      final s = segment.intermediateStops!;
+      int step = (s.length / 80).ceil();
+      if (step < 1) step = 1;
+      for (int i = 0; i < s.length; i += step) {
+        coordsStrs.add('${s[i].lon},${s[i].lat}');
+      }
+      if ((s.length - 1) % step != 0) {
+        coordsStrs.add('${s.last.lon},${s.last.lat}');
+      }
+    } else {
+      coordsStrs.add('${segment.start.lon},${segment.start.lat}');
+      coordsStrs.add('${segment.end.lon},${segment.end.lat}');
+    }
+    final coordsString = coordsStrs.join(';');
+
     final url =
-        'https://router.project-osrm.org/route/v1/$profile/${segment.start.lon},${segment.start.lat};${segment.end.lon},${segment.end.lat}?overview=full&geometries=geojson';
+        'https://router.project-osrm.org/route/v1/$profile/$coordsString?overview=full&geometries=geojson';
+
+    if (_osrmOngoingRequests.containsKey(url)) {
+      await _osrmOngoingRequests[url];
+    }
+
+    if (_osrmPolylineCache.containsKey(url)) {
+      segment.roadPolyline = _osrmPolylineCache[url];
+      if (segment.mode != TravelMode.transit) {
+        if (_osrmDistCache.containsKey(url)) {
+          segment.distanceMeters = _osrmDistCache[url]!;
+        }
+        if (_osrmDurationCache.containsKey(url)) {
+          segment.durationMinutes = _osrmDurationCache[url]!;
+        }
+      }
+      return;
+    }
+
+    final completer = Completer<void>();
+    _osrmOngoingRequests[url] = completer.future;
+
     try {
       final response = await http
           .get(Uri.parse(url))
-          .timeout(const Duration(seconds: 3));
+          .timeout(const Duration(seconds: 4));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['routes'] != null && data['routes'].isNotEmpty) {
@@ -634,17 +742,30 @@ class DirectionService {
                 )
                 .toList();
             segment.roadPolyline = polyline;
+            _osrmPolylineCache[url] = polyline;
+
             final dist = data['routes'][0]['distance'];
             final duration = data['routes'][0]['duration'];
-            if (dist != null) segment.distanceMeters = (dist as num).toDouble();
-            if (duration != null) {
-              segment.durationMinutes = ((duration as num) / 60).ceil();
+            if (segment.mode != TravelMode.transit) {
+              if (dist != null) {
+                segment.distanceMeters = (dist as num).toDouble();
+                _osrmDistCache[url] = segment.distanceMeters;
+              }
+              if (duration != null) {
+                segment.durationMinutes = ((duration as num) / 60).ceil();
+                _osrmDurationCache[url] = segment.durationMinutes;
+              }
             }
           }
         }
+      } else {
+        await Future.delayed(const Duration(milliseconds: 200));
       }
     } catch (e) {
       debugPrint("Error routing road: $e");
+    } finally {
+      completer.complete();
+      _osrmOngoingRequests.remove(url);
     }
   }
 
@@ -666,6 +787,9 @@ class DirectionService {
         for (int j = 0; j < entry.value.length - 1; j++) {
           final a = entry.value[j]['stopId'] as String;
           final b = entry.value[j + 1]['stopId'] as String;
+          
+          final lineName = entry.value[j]['lineName'] as String?;
+          
           final stopA =
               _stopLookup[a] ??
               _allStops.firstWhere(
@@ -687,6 +811,11 @@ class DirectionService {
           _distanceGraph.putIfAbsent(a, () => {})[b] = dist;
           final estMinutes = (dist / 800.0 * 2).clamp(1, 6).toInt();
           _timeGraph.putIfAbsent(a, () => {})[b] = estMinutes;
+          
+          _transitEdges.putIfAbsent(a, () => {}).putIfAbsent(b, () => {});
+          if (lineName != null) {
+            _transitEdges[a]![b]!.add(lineName);
+          }
         }
       }
       _addTransferEdges();
@@ -750,7 +879,14 @@ class DirectionService {
     }
   }
 
+  Map<String, List<Map<String, dynamic>>>? _cachedStopTimes;
+  Map<String, gtfs.Trip>? _cachedTrips;
+
   Future<Map<String, List<Map<String, dynamic>>>> _loadStopTimes() async {
+    if (_cachedStopTimes != null) {
+      return _cachedStopTimes!;
+    }
+    
     final stopTimes = await _loadStopTimesFromAssets(_stopTimeAssets);
 
     try {
@@ -764,6 +900,7 @@ class DirectionService {
           final row = parseCsvLine(line);
           if (row.length > 5) {
             final busLineId = row[0].trim();
+            final lineName = row[1].trim();
             final tripId = 'BUS_$busLineId';
             int sequence = 1;
             for (int j = 5; j < row.length; j++) {
@@ -772,6 +909,7 @@ class DirectionService {
               stopTimes.putIfAbsent(tripId, () => []).add({
                 'stopId': stopId,
                 'stopSequence': sequence++,
+                'lineName': lineName,
               });
             }
           }
@@ -779,6 +917,7 @@ class DirectionService {
       }
     } catch (_) {}
 
+    _cachedStopTimes = stopTimes;
     return stopTimes;
   }
 
@@ -830,6 +969,10 @@ class DirectionService {
   }
 
   Future<Map<String, gtfs.Trip>> loadTrips() async {
+    if (_cachedTrips != null) {
+      return _cachedTrips!;
+    }
+    
     try {
       final tripsContent = await rootBundle.loadString(
         'assets/gtfs_data/trips.txt',
@@ -922,6 +1065,7 @@ class DirectionService {
         }
       } catch (_) {}
 
+      _cachedTrips = result;
       return result;
     } catch (_) {
       return {};
@@ -1116,6 +1260,24 @@ class DirectionService {
     );
     addRoute(distancePriority, {'Distance priority'});
 
+    final busPriority = _dijkstraWeightedPath(
+      start,
+      dest,
+      distanceWeight: 1.0,
+      timeWeight: 1.0,
+      railCostPenalty: 5000.0,
+    );
+    addRoute(busPriority, {'Bus priority'});
+
+    final railPriority = _dijkstraWeightedPath(
+      start,
+      dest,
+      distanceWeight: 1.0,
+      timeWeight: 0.2, // fast rail
+      busCostPenalty: 5000.0,
+    );
+    addRoute(railPriority, {'Rail priority'});
+
     final taggedRoutes = routes.values.toList();
     if (taggedRoutes.isEmpty) {
       return taggedRoutes;
@@ -1282,30 +1444,36 @@ class DirectionService {
     double distanceWeight = 1.0,
     double timeWeight = 1.0,
     double transferPenalty = 0.0,
+    double busCostPenalty = 0.0,
+    double railCostPenalty = 0.0,
   }) {
     final nodes = {..._distanceGraph.keys, ..._timeGraph.keys};
     if (!nodes.contains(start) || !nodes.contains(dest)) {
       return [];
     }
-    final distance = <String, double>{
+    final distance = <String, double>{ // Use faster raw initialization
       for (final node in nodes) node: double.infinity,
     };
     final previous = <String, String?>{};
-    final visited = <String>{};
+    final unvisited = Set<String>.from(nodes);
     distance[start] = 0;
 
-    while (true) {
+    while (unvisited.isNotEmpty) {
       String? current;
       double best = double.infinity;
-      for (final entry in distance.entries) {
-        if (!visited.contains(entry.key) && entry.value < best) {
-          best = entry.value;
-          current = entry.key;
+      
+      // Fast sweep over unvisited only
+      for (final node in unvisited) {
+        final dist = distance[node]!;
+        if (dist < best) {
+          best = dist;
+          current = node;
         }
       }
+      
       if (current == null) break;
       if (current == dest) break;
-      visited.add(current);
+      unvisited.remove(current);
 
       final neighborIds = <String>{};
       neighborIds.addAll(
@@ -1322,13 +1490,32 @@ class DirectionService {
             math.max(1, edgeDistance / 500.0);
         double edgeCost = edgeDistance * distanceWeight + edgeTime * timeWeight;
         if (transferPenalty > 0) {
-          final currentLine = lineNameResolver(current);
-          final neighborLine = lineNameResolver(neighbor);
-          if (currentLine != null &&
-              neighborLine != null &&
-              currentLine != neighborLine) {
-            edgeCost += transferPenalty;
+          final currentLines = lineNameResolver(current)?.split(', ') ?? [];
+          final neighborLines = lineNameResolver(neighbor)?.split(', ') ?? [];
+          
+          List<String> incomingLines = currentLines;
+          final prev = previous[current];
+          if (prev != null) {
+            final prevLines = lineNameResolver(prev)?.split(', ') ?? [];
+            final sharedPrev = prevLines.where((l) => currentLines.contains(l)).toList();
+            if (sharedPrev.isNotEmpty) {
+              incomingLines = sharedPrev;
+            }
           }
+
+          if (incomingLines.isNotEmpty && neighborLines.isNotEmpty) {
+            final sharedNext = incomingLines.where((l) => neighborLines.contains(l)).toList();
+            if (sharedNext.isEmpty) {
+              edgeCost += transferPenalty;
+            }
+          }
+        }
+        final isNeighborBus = neighbor.toUpperCase().startsWith('ST_') || neighbor.toUpperCase().startsWith('STOP_');
+        if (busCostPenalty > 0 && isNeighborBus) {
+          edgeCost += busCostPenalty;
+        }
+        if (railCostPenalty > 0 && !isNeighborBus) {
+          edgeCost += railCostPenalty;
         }
         final candidate = distance[current]! + edgeCost;
         if (candidate < (distance[neighbor] ?? double.infinity)) {
@@ -1452,11 +1639,15 @@ class DirectionService {
       final a = getLinesForStop(stops[0].stopId);
       final b = getLinesForStop(stops[1].stopId);
       final shared = a.where((x) => b.contains(x)).toList();
-      currentLineName = shared.isNotEmpty
-          ? shared.first
-          : (a.isNotEmpty
-                ? a.first
-                : lineNameResolver(stops[0].stopId)?.split(', ').first);
+      final directLines = _transitEdges[stops[0].stopId]?[stops[1].stopId] ?? {};
+      final validShared = shared.where((x) => directLines.isEmpty || directLines.contains(x)).toList();
+      currentLineName = validShared.isNotEmpty
+          ? validShared.first
+          : (shared.isNotEmpty 
+              ? shared.first 
+              : (a.isNotEmpty
+                  ? a.first
+                  : lineNameResolver(stops[0].stopId)?.split(', ').first));
     } else {
       final a = getLinesForStop(stops[0].stopId);
       currentLineName = a.isNotEmpty
@@ -1471,9 +1662,20 @@ class DirectionService {
       final a = getLinesForStop(prev.stopId);
       final b = getLinesForStop(stop.stopId);
       final shared = a.where((x) => b.contains(x)).toList();
+      
+      final Map<String, Set<String>>? edgeMap = _transitEdges[prev.stopId];
+      final bool isDirectTransit = edgeMap?.containsKey(stop.stopId) ?? false;
+      final Set<String> directLines = isDirectTransit ? (edgeMap![stop.stopId] ?? {}) : {};
 
-      if (shared.isEmpty) {
-        // WALK TRANSFER! No common line.
+      // If there are specific lines that operate this physical transit edge, ensure the shared line is one of them.
+      // If it's train/ferry (empty directLines but isDirectTransit), we assume all shared lines are good.
+      bool hasValidLine = shared.isNotEmpty;
+      if (isDirectTransit && directLines.isNotEmpty) {
+        hasValidLine = shared.any((line) => directLines.contains(line));
+      }
+
+      if (!isDirectTransit || !hasValidLine) {
+        // WALK TRANSFER! No common line or no physical transit connection.
         final subStops = stops.sublist(currentSegmentStartIndex, i);
         if (subStops.isNotEmpty) {
           segments.add(
@@ -1509,11 +1711,15 @@ class DirectionService {
           final na = getLinesForStop(stop.stopId);
           final nb = getLinesForStop(stops[i + 1].stopId);
           final ns = na.where((x) => nb.contains(x)).toList();
-          currentLineName = ns.isNotEmpty
-              ? ns.first
-              : (na.isNotEmpty
-                    ? na.first
-                    : lineNameResolver(stop.stopId)?.split(', ').first);
+          final nextDirectLines = _transitEdges[stop.stopId]?[stops[i + 1].stopId] ?? {};
+          final validNs = ns.where((x) => nextDirectLines.isEmpty || nextDirectLines.contains(x)).toList();
+          currentLineName = validNs.isNotEmpty
+              ? validNs.first
+              : (ns.isNotEmpty 
+                  ? ns.first 
+                  : (na.isNotEmpty
+                      ? na.first
+                      : lineNameResolver(stop.stopId)?.split(', ').first));
         } else {
           final na = getLinesForStop(stop.stopId);
           currentLineName = na.isNotEmpty
@@ -1521,9 +1727,16 @@ class DirectionService {
               : lineNameResolver(stop.stopId)?.split(', ').first;
         }
       } else {
-        final edgeLine = shared.contains(currentLineName)
-            ? currentLineName
-            : shared.first;
+        // We already verified via hasValidLine that `shared` containing valid lines for this edge isn't empty (if directLines not empty).
+        // Try to keep currentLineName if it's legally valid.
+        String? edgeLine;
+        if (currentLineName != null && shared.contains(currentLineName) && (directLines.isEmpty || directLines.contains(currentLineName))) {
+          edgeLine = currentLineName;
+        } else {
+          final validShared = shared.where((x) => directLines.isEmpty || directLines.contains(x)).toList();
+          edgeLine = validShared.isNotEmpty ? validShared.first : shared.first;
+        }
+
         if (edgeLine != currentLineName) {
           final subStops = stops.sublist(currentSegmentStartIndex, i);
           if (subStops.isNotEmpty) {
@@ -1664,7 +1877,7 @@ class _TaggedRoute {
     : tags = tags != null ? {...tags} : <String>{};
 
   final List<gtfs.Stop> stops;
-  final List<RouteSegment>? segments;
+  List<RouteSegment>? segments;
   final Set<String> tags;
 }
 
