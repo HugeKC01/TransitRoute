@@ -2211,18 +2211,18 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
   bool _isShapeTrain(ShapeSegment shape) {
     if (shape.routeId == null) return false;
-    final rId = shape.routeId!.toUpperCase();
+    final rId = shape.routeId!.replaceAll('\uFEFF', '').toUpperCase(); // Avoid BOM issues
     final route = allRoutes
-        .where((r) => r.routeId.toUpperCase() == rId)
+        .where((r) => r.routeId.replaceAll('\uFEFF', '').toUpperCase() == rId)
         .firstOrNull;
     return route?.type == '2';
   }
 
   bool _isShapeMetro(ShapeSegment shape) {
     if (shape.routeId == null) return false;
-    final rId = shape.routeId!.toUpperCase();
+    final rId = shape.routeId!.replaceAll('\uFEFF', '').toUpperCase();
     final route = allRoutes
-        .where((r) => r.routeId.toUpperCase() == rId)
+        .where((r) => r.routeId.replaceAll('\uFEFF', '').toUpperCase() == rId)
         .firstOrNull;
     return route?.type == '1';
   }
