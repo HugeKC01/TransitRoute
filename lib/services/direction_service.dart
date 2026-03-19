@@ -528,8 +528,16 @@ class DirectionService {
       return DirectionResult.empty();
     }
 
-    final minFare = metrics.map((m) => m.fareTotal).reduce(math.min);
     final minDistance = metrics.map((m) => m.distanceMeters).reduce(math.min);
+    
+    // Filter out options that are ridiculously long compared to the shortest route
+    metrics.removeWhere((m) => m.distanceMeters > minDistance * 3);
+
+    if (metrics.isEmpty) {
+      return DirectionResult.empty();
+    }
+
+    final minFare = metrics.map((m) => m.fareTotal).reduce(math.min);
     final minMinutes = metrics.map((m) => m.minutes).reduce(math.min);
     
     // Calculate transfers and stops using actual segment counts
@@ -1138,6 +1146,35 @@ class DirectionService {
     return null;
   }
 
+  (int, int)? _findBestSegmentIndices(
+    List<Map<String, dynamic>> tripStops,
+    String a,
+    String b,
+  ) {
+    int bestI = -1;
+    int bestJ = -1;
+    int minSpan = 1 << 30;
+    for (int i = 0; i < tripStops.length; i++) {
+      if (tripStops[i]['stopId'] == a) {
+        for (int j = i + 1; j < tripStops.length; j++) {
+          if (tripStops[j]['stopId'] == b) {
+            final span = j - i;
+            if (span < minSpan) {
+              minSpan = span;
+              bestI = i;
+              bestJ = j;
+            }
+            break;
+          }
+        }
+      }
+    }
+    if (bestI != -1 && bestJ != -1) {
+      return (bestI, bestJ);
+    }
+    return null;
+  }
+
   List<gtfs.Stop>? _findDirectTrip({
     required Map<String, List<Map<String, dynamic>>> stopTimes,
     required Map<String, gtfs.Trip> tripMap,
@@ -1188,33 +1225,33 @@ class DirectionService {
     }
 
     String? selectedTripId;
-    int bestSpan = -1;
+    int bestSpan = 1 << 30;
     for (final entry in stopTimes.entries) {
       final tripId = entry.key;
       final routeId = tripMap[tripId]?.routeId;
       if (routeId == null || !candidateRouteIds.contains(routeId)) continue;
       final tripStops = entry.value;
-      final startIdx = tripStops.indexWhere((s) => s['stopId'] == startStopId);
-      final destIdx = tripStops.indexWhere((s) => s['stopId'] == destStopId);
-      if (startIdx != -1 && destIdx > startIdx) {
+      final indices = _findBestSegmentIndices(tripStops, startStopId, destStopId);
+      if (indices != null) {
+        final startIdx = indices.$1;
+        final destIdx = indices.$2;
         final span = destIdx - startIdx;
-        if (span > bestSpan) {
+        if (span < bestSpan) {
           bestSpan = span;
           selectedTripId = tripId;
         }
       }
     }
     if (selectedTripId == null) {
-      bestSpan = -1;
+      bestSpan = 1 << 30;
       for (final entry in stopTimes.entries) {
         final tripStops = entry.value;
-        final startIdx = tripStops.indexWhere(
-          (s) => s['stopId'] == startStopId,
-        );
-        final destIdx = tripStops.indexWhere((s) => s['stopId'] == destStopId);
-        if (startIdx != -1 && destIdx > startIdx) {
+        final indices = _findBestSegmentIndices(tripStops, startStopId, destStopId);
+        if (indices != null) {
+          final startIdx = indices.$1;
+          final destIdx = indices.$2;
           final span = destIdx - startIdx;
-          if (span > bestSpan) {
+          if (span < bestSpan) {
             bestSpan = span;
             selectedTripId = entry.key;
           }
@@ -1226,9 +1263,10 @@ class DirectionService {
     }
     final tripStops = stopTimes[selectedTripId];
     if (tripStops == null) return null;
-    final startIdx = tripStops.indexWhere((s) => s['stopId'] == startStopId);
-    final destIdx = tripStops.indexWhere((s) => s['stopId'] == destStopId);
-    if (startIdx == -1 || destIdx <= startIdx) return null;
+    final indices = _findBestSegmentIndices(tripStops, startStopId, destStopId);
+    if (indices == null) return null;
+    final startIdx = indices.$1;
+    final destIdx = indices.$2;
     final segment = tripStops.sublist(startIdx, destIdx + 1);
     final stopsList = segment.map((step) {
       final id = step['stopId'] as String;
@@ -1372,9 +1410,10 @@ class DirectionService {
         final routeId = tripMap[entry.key]?.routeId;
         if (routeId == null || !allowedRouteIds.contains(routeId)) continue;
         final tripStops = entry.value;
-        final ia = tripStops.indexWhere((s) => s['stopId'] == a);
-        final ib = tripStops.indexWhere((s) => s['stopId'] == b);
-        if (ia == -1 || ib <= ia) continue;
+        final indices = _findBestSegmentIndices(tripStops, a, b);
+        if (indices == null) continue;
+        final ia = indices.$1;
+        final ib = indices.$2;
         final span = ib - ia;
         if (span < bestSpan) {
           bestSpan = span;
