@@ -8,6 +8,8 @@ import 'package:route/services/csv_utils.dart';
 import 'package:route/services/fare_calculator.dart';
 import 'package:route/services/geo_utils.dart' as geo;
 import 'package:route/services/gtfs_models.dart' as gtfs;
+import 'package:route/services/transit_update_service.dart';
+import 'package:route/services/timetable_service.dart';
 import 'package:flutter/material.dart';
 
 typedef LineNameResolver = String? Function(String stopId);
@@ -56,6 +58,12 @@ class RouteSegment {
   String? instruction; // e.g., "Walk to BTS Siam" or "Take Sukhumvit Line"
   final List<gtfs.Stop>? intermediateStops;
   List<LocationPoint>? roadPolyline;
+  final bool hasIssue;
+  final String? issueNotice;
+
+  // Timetable
+  String? nextDepartureTime;
+  String? frequencyInfo;
 
   RouteSegment({
     required this.mode,
@@ -69,6 +77,8 @@ class RouteSegment {
     this.instruction,
     this.intermediateStops,
     this.roadPolyline,
+    this.hasIssue = false,
+    this.issueNotice,
   });
 }
 
@@ -80,6 +90,8 @@ class DirectionOption {
     required this.distanceMeters,
     required this.minutes,
     required this.fareBreakdown,
+    this.hasIssue = false,
+    this.issueNotice,
   });
 
   final List<RouteSegment> segments;
@@ -88,6 +100,8 @@ class DirectionOption {
   final double distanceMeters;
   final int minutes;
   final Map<String, int> fareBreakdown;
+  final bool hasIssue;
+  final String? issueNotice;
 
   // Helper to retrieve all transit stops involved across all segments
   List<gtfs.Stop> get allStops {
@@ -160,6 +174,9 @@ class DirectionService {
     Map<String, int>? fareDataMap,
     Map<String, int>? stopOrderMap,
     Map<String, List<int>>? fareTableMap,
+    Map<String, int>? ferryFlatFares,
+    Map<String, int>? ferryZoneMatrix,
+    Map<String, String>? ferryZones,
   }) {
     bool resetGraphs = false;
     if (allStops != null) {
@@ -176,12 +193,18 @@ class DirectionService {
     if (fareTypeMap != null ||
         fareDataMap != null ||
         stopOrderMap != null ||
-        fareTableMap != null) {
+        fareTableMap != null ||
+        ferryFlatFares != null ||
+        ferryZoneMatrix != null ||
+        ferryZones != null) {
       _fareCalculator.updateData(
         fareTypeMap: fareTypeMap,
         fareDataMap: fareDataMap,
         stopOrderMap: stopOrderMap,
         fareTableMap: fareTableMap,
+        ferryFlatFares: ferryFlatFares,
+        ferryZoneMatrix: ferryZoneMatrix,
+        ferryZones: ferryZones,
       );
     }
     if (resetGraphs) {
@@ -189,6 +212,43 @@ class DirectionService {
       _distanceGraph.clear();
       _timeGraph.clear();
     }
+  }
+
+  List<gtfs.Stop> getTransferStations(String stopId) {
+    final Set<String> connectedStopIds = {};
+    for (final hubGroup in _transferHubs) {
+      if (hubGroup.contains(stopId)) {
+        for (final s in hubGroup) {
+          if (s != stopId) {
+            connectedStopIds.add(s);
+          }
+        }
+      }
+    }
+    final currentStop = _stopLookup[stopId];
+    if (currentStop != null) {
+      for (final stop in _allStops) {
+        if (stop.stopId != stopId && !connectedStopIds.contains(stop.stopId)) {
+          final dist = geo.haversine(
+            currentStop.lat,
+            currentStop.lon,
+            stop.lat,
+            stop.lon,
+          );
+          if (dist <= 300.0) {
+            connectedStopIds.add(stop.stopId);
+          }
+        }
+      }
+    }
+    final List<gtfs.Stop> transfers = [];
+    for (final id in connectedStopIds) {
+      final s = _stopLookup[id];
+      if (s != null) {
+        transfers.add(s);
+      }
+    }
+    return transfers;
   }
 
   String? _findClosestStop(LocationPoint point) {
@@ -413,12 +473,18 @@ class DirectionService {
 
     int transitRank(_RouteMetrics metric) {
       final hasBus = metric.route.stops.any(
-        (s) => s.stopId.toUpperCase().startsWith('ST_'),
+        (s) =>
+            s.stopId.toUpperCase().startsWith('ST_') ||
+            s.stopId.toUpperCase().startsWith('STOP_'),
       );
       final hasRail =
           metric.route.stops.length !=
           metric.route.stops
-              .where((s) => s.stopId.toUpperCase().startsWith('ST_'))
+              .where(
+                (s) =>
+                    s.stopId.toUpperCase().startsWith('ST_') ||
+                    s.stopId.toUpperCase().startsWith('STOP_'),
+              )
               .length;
       switch (preferredTransit) {
         case 'Prefer Bus':
@@ -451,20 +517,62 @@ class DirectionService {
       return a.distanceMeters.compareTo(b.distanceMeters);
     });
 
-    final options = metrics
-        .map(
-          (metric) => DirectionOption(
-            segments:
-                metric.route.segments ??
-                _buildSegmentsFromStops(metric.route.stops),
-            tags: Set<String>.from(metric.route.tags),
-            label: _optionLabelText(metric.route.tags),
-            distanceMeters: metric.distanceMeters,
-            minutes: metric.minutes,
-            fareBreakdown: Map<String, int>.from(metric.fareBreakdown),
-          ),
-        )
-        .toList();
+    final transitService = TransitUpdateService();
+
+    final options = metrics.map((metric) {
+      final segments =
+          metric.route.segments ?? _buildSegmentsFromStops(metric.route.stops);
+
+      bool optionHasIssue = false;
+      String? optionIssueNotice;
+
+      for (int i = 0; i < segments.length; i++) {
+        final seg = segments[i];
+        if (seg.mode == TravelMode.transit && seg.routeShortName != null) {
+          final reports = transitService.getReportsForLine(seg.routeShortName!);
+          if (reports.isNotEmpty) {
+            final highestSeverity = reports.reduce(
+              (r1, r2) => r1.severity > r2.severity ? r1 : r2,
+            );
+            segments[i] = RouteSegment(
+              mode: seg.mode,
+              start: seg.start,
+              end: seg.end,
+              distanceMeters: seg.distanceMeters,
+              durationMinutes: seg.durationMinutes,
+              fare: seg.fare,
+              routeId: seg.routeId,
+              routeShortName: seg.routeShortName,
+              instruction: seg.instruction,
+              intermediateStops: seg.intermediateStops,
+              roadPolyline: seg.roadPolyline,
+              hasIssue: true,
+              issueNotice: highestSeverity.title,
+            );
+            optionHasIssue = true;
+            optionIssueNotice ??= highestSeverity.title;
+          }
+        }
+      }
+
+      return DirectionOption(
+        segments: segments,
+        tags: Set<String>.from(metric.route.tags),
+        label: _optionLabelText(metric.route.tags),
+        distanceMeters: metric.distanceMeters,
+        minutes: metric.minutes,
+        fareBreakdown: Map<String, int>.from(metric.fareBreakdown),
+        hasIssue: optionHasIssue,
+        issueNotice: optionIssueNotice,
+      );
+    }).toList();
+
+    // Re-sort options to penalize ones with issues
+    options.sort((a, b) {
+      if (a.hasIssue && !b.hasIssue) return 1;
+      if (!a.hasIssue && b.hasIssue) return -1;
+      return 0; // Maintain previous relative order for ties in issue status
+    });
 
     if (options.isEmpty) {
       return DirectionResult.empty();
@@ -479,6 +587,7 @@ class DirectionService {
     }
 
     await _enrichSegmentsWithRoadRouting(options);
+    await _enrichSegmentsWithTimetable(options);
 
     return DirectionResult(options: options, selectionIndex: selectionIndex);
   }
@@ -576,10 +685,8 @@ class DirectionService {
             stopB.lon,
           );
           _distanceGraph.putIfAbsent(a, () => {})[b] = dist;
-          _distanceGraph.putIfAbsent(b, () => {})[a] = dist;
           final estMinutes = (dist / 800.0 * 2).clamp(1, 6).toInt();
           _timeGraph.putIfAbsent(a, () => {})[b] = estMinutes;
-          _timeGraph.putIfAbsent(b, () => {})[a] = estMinutes;
         }
       }
       _addTransferEdges();
@@ -835,8 +942,8 @@ class DirectionService {
       final tripStops = entry.value;
       final startIdx = tripStops.indexWhere((s) => s['stopId'] == startStopId);
       final destIdx = tripStops.indexWhere((s) => s['stopId'] == destStopId);
-      if (startIdx != -1 && destIdx != -1) {
-        final span = (destIdx - startIdx).abs();
+      if (startIdx != -1 && destIdx > startIdx) {
+        final span = destIdx - startIdx;
         if (span > bestSpan) {
           bestSpan = span;
           selectedTripId = tripId;
@@ -851,8 +958,8 @@ class DirectionService {
           (s) => s['stopId'] == startStopId,
         );
         final destIdx = tripStops.indexWhere((s) => s['stopId'] == destStopId);
-        if (startIdx != -1 && destIdx != -1) {
-          final span = (destIdx - startIdx).abs();
+        if (startIdx != -1 && destIdx > startIdx) {
+          final span = destIdx - startIdx;
           if (span > bestSpan) {
             bestSpan = span;
             selectedTripId = entry.key;
@@ -867,10 +974,8 @@ class DirectionService {
     if (tripStops == null) return null;
     final startIdx = tripStops.indexWhere((s) => s['stopId'] == startStopId);
     final destIdx = tripStops.indexWhere((s) => s['stopId'] == destStopId);
-    if (startIdx == -1 || destIdx == -1) return null;
-    final segment = startIdx <= destIdx
-        ? tripStops.sublist(startIdx, destIdx + 1)
-        : tripStops.sublist(destIdx, startIdx + 1).reversed.toList();
+    if (startIdx == -1 || destIdx <= startIdx) return null;
+    final segment = tripStops.sublist(startIdx, destIdx + 1);
     final stopsList = segment.map((step) {
       final id = step['stopId'] as String;
       return _stopLookup[id] ??
@@ -997,14 +1102,11 @@ class DirectionService {
         final tripStops = entry.value;
         final ia = tripStops.indexWhere((s) => s['stopId'] == a);
         final ib = tripStops.indexWhere((s) => s['stopId'] == b);
-        if (ia == -1 || ib == -1) continue;
-        final lo = ia < ib ? ia : ib;
-        final hi = ia < ib ? ib : ia;
-        final span = hi - lo;
+        if (ia == -1 || ib <= ia) continue;
+        final span = ib - ia;
         if (span < bestSpan) {
           bestSpan = span;
-          final seg = tripStops.sublist(lo, hi + 1);
-          bestSegment = ia <= ib ? seg : seg.reversed.toList();
+          bestSegment = tripStops.sublist(ia, ib + 1);
         }
       }
       return bestSegment;
@@ -1260,14 +1362,21 @@ class DirectionService {
     int currentSegmentStartIndex = 0;
 
     List<String> getLinesForStop(String stopId) {
-      if (_routes.isEmpty) {
-        final r = lineNameResolver(stopId);
-        return r != null ? [r] : [];
+      if (stopId.startsWith('ST_') || stopId.startsWith('STOP_')) {
+        return ['BMTA Bus'];
       }
+      final r = lineNameResolver(stopId);
+      if (r != null && r.isNotEmpty) {
+        return r.split(', ');
+      }
+
+      // Fallback
       final lines = <String>[];
       for (final route in _routes) {
         for (final pref in route.linePrefixes) {
-          if (stopId.startsWith(pref)) {
+          if (pref == stopId ||
+              (stopId.startsWith(pref) &&
+                  (pref == 'F_' || !pref.startsWith('F_')))) {
             lines.add(
               route.longName.isNotEmpty ? route.longName : route.routeId,
             );
@@ -1285,12 +1394,14 @@ class DirectionService {
       final shared = a.where((x) => b.contains(x)).toList();
       currentLineName = shared.isNotEmpty
           ? shared.first
-          : (a.isNotEmpty ? a.first : lineNameResolver(stops[0].stopId));
+          : (a.isNotEmpty
+                ? a.first
+                : lineNameResolver(stops[0].stopId)?.split(', ').first);
     } else {
       final a = getLinesForStop(stops[0].stopId);
       currentLineName = a.isNotEmpty
           ? a.first
-          : lineNameResolver(stops[0].stopId);
+          : lineNameResolver(stops[0].stopId)?.split(', ').first;
     }
 
     for (int i = 1; i < stops.length; i++) {
@@ -1340,12 +1451,14 @@ class DirectionService {
           final ns = na.where((x) => nb.contains(x)).toList();
           currentLineName = ns.isNotEmpty
               ? ns.first
-              : (na.isNotEmpty ? na.first : lineNameResolver(stop.stopId));
+              : (na.isNotEmpty
+                    ? na.first
+                    : lineNameResolver(stop.stopId)?.split(', ').first);
         } else {
           final na = getLinesForStop(stop.stopId);
           currentLineName = na.isNotEmpty
               ? na.first
-              : lineNameResolver(stop.stopId);
+              : lineNameResolver(stop.stopId)?.split(', ').first;
         }
       } else {
         final edgeLine = shared.contains(currentLineName)
@@ -1419,6 +1532,70 @@ class DirectionService {
       }
     }
     return false;
+  }
+
+  Future<void> _enrichSegmentsWithTimetable(
+    List<DirectionOption> options,
+  ) async {
+    for (final option in options) {
+      for (final segment in option.segments) {
+        if (segment.mode == TravelMode.transit) {
+          final stopMatch = _allStops
+              .where(
+                (s) =>
+                    s.name == segment.start.name || s.lat == segment.start.lat,
+              )
+              .toList();
+
+          if (stopMatch.isNotEmpty) {
+            final stopId = stopMatch.first.stopId;
+            try {
+              final entries = await TimetableService.getTimetableForStop(
+                stopId,
+              );
+              if (entries.isNotEmpty) {
+                final now = DateTime.now();
+                final currentTimeString =
+                    '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
+
+                TimetableEntry? nextMatch;
+                for (var e in entries) {
+                  if (e.isFrequency) {
+                    if (e.startTime != null &&
+                        e.endTime != null &&
+                        currentTimeString.compareTo(e.startTime!) >= 0 &&
+                        currentTimeString.compareTo(e.endTime!) <= 0) {
+                      nextMatch = e;
+                      break;
+                    }
+                  } else {
+                    if (e.departureTime.isNotEmpty &&
+                        e.departureTime.compareTo(currentTimeString) >= 0) {
+                      if (nextMatch == null ||
+                          e.departureTime.compareTo(nextMatch.departureTime) <
+                              0) {
+                        nextMatch = e;
+                      }
+                    }
+                  }
+                }
+
+                if (nextMatch != null) {
+                  if (nextMatch.isFrequency) {
+                    segment.frequencyInfo =
+                        'Every ${nextMatch.headwaySecs != null ? nextMatch.headwaySecs! ~/ 60 : "?"} mins';
+                  } else {
+                    final parts = nextMatch.departureTime.split(':');
+                    segment.nextDepartureTime =
+                        '${parts[0].padLeft(2, '0')}:${parts[1].padLeft(2, '0')}';
+                  }
+                }
+              }
+            } catch (_) {}
+          }
+        }
+      }
+    }
   }
 }
 

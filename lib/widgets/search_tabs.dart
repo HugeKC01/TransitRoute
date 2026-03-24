@@ -7,7 +7,9 @@ class ServiceTabs extends StatefulWidget {
   final Map<String, List<String>> linePrefixes;
   final Map<String, Color> lineColors;
   final String? Function(String) getLineName;
+  final List<String> Function(String)? getLineNames;
   final void Function(gtfs.Stop) onSelect;
+  final int Function(gtfs.Stop) getServicePriority;
 
   const ServiceTabs({
     super.key,
@@ -16,7 +18,9 @@ class ServiceTabs extends StatefulWidget {
     required this.linePrefixes,
     required this.lineColors,
     required this.getLineName,
+    this.getLineNames,
     required this.onSelect,
+    required this.getServicePriority,
   });
 
   @override
@@ -51,24 +55,30 @@ class _ServiceTabsState extends State<ServiceTabs>
   ) {
     final Map<String, List<gtfs.Stop>> grouped = {};
     for (final stop in stops) {
-      final lineName = widget.getLineName(stop.stopId) ?? 'Unknown';
-      if (filterLine(lineName, stop)) {
-        grouped.putIfAbsent(lineName, () => []).add(stop);
+      if (widget.getLineNames != null) {
+        final lineNames = widget.getLineNames!(stop.stopId);
+        if (lineNames.isEmpty) {
+          if (filterLine('Unknown', stop)) {
+            grouped.putIfAbsent('Unknown', () => []).add(stop);
+          }
+        } else {
+          for (final lineName in lineNames) {
+            if (filterLine(lineName, stop)) {
+              grouped.putIfAbsent(lineName, () => []).add(stop);
+            }
+          }
+        }
+      } else {
+        final lineName = widget.getLineName(stop.stopId) ?? 'Unknown';
+        if (filterLine(lineName, stop)) {
+          grouped.putIfAbsent(lineName, () => []).add(stop);
+        }
       }
     }
     return grouped;
   }
 
-  int _getServicePriority(gtfs.Stop stop) {
-    if (stop.stopId.startsWith('F')) return 4;
-    if (widget.busStops.any((s) => s.stopId == stop.stopId)) return 3;
-    final lineName = widget.getLineName(stop.stopId) ?? '';
-    if (lineName.contains('SRT') || lineName.contains('Train')) return 2;
-    return 1;
-  }
-
-  Widget _buildStopTile(BuildContext context, gtfs.Stop stop) {
-    final lineName = widget.getLineName(stop.stopId) ?? 'Unknown';
+  Widget _buildStopTile(BuildContext context, gtfs.Stop stop, String lineName) {
     final lineColor = widget.lineColors[lineName] ?? Colors.grey;
     final theme = Theme.of(context);
 
@@ -83,7 +93,7 @@ class _ServiceTabsState extends State<ServiceTabs>
         ),
         alignment: Alignment.center,
         child: Text(
-          stop.code ?? stop.stopId,
+          stop.code ?? '',
           style: TextStyle(
             color: (lineColor.computeLuminance() > 0.5)
                 ? Colors.black
@@ -117,14 +127,22 @@ class _ServiceTabsState extends State<ServiceTabs>
         ? selectedLine
         : null;
 
-    final List<Object> listItems = [];
+    final List<({bool isHeader, String line, gtfs.Stop? stop})> listItems = [];
     if (effectiveSelectedLine == null) {
       for (final line in lines) {
-        listItems.add(line);
-        listItems.addAll(groupedStops[line]!);
+        listItems.add((isHeader: true, line: line, stop: null));
+        for (final stop in groupedStops[line]!) {
+          listItems.add((isHeader: false, line: line, stop: stop));
+        }
       }
     } else {
-      listItems.addAll(groupedStops[effectiveSelectedLine]!);
+      for (final stop in groupedStops[effectiveSelectedLine]!) {
+        listItems.add((
+          isHeader: false,
+          line: effectiveSelectedLine,
+          stop: stop,
+        ));
+      }
     }
 
     return Column(
@@ -185,8 +203,8 @@ class _ServiceTabsState extends State<ServiceTabs>
                   itemBuilder: (context, index) {
                     final item = listItems[index];
 
-                    if (item is String) {
-                      final color = widget.lineColors[item] ?? Colors.grey;
+                    if (item.isHeader) {
+                      final color = widget.lineColors[item.line] ?? Colors.grey;
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -213,7 +231,7 @@ class _ServiceTabsState extends State<ServiceTabs>
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
-                                    item,
+                                    item.line,
                                     style: Theme.of(context)
                                         .textTheme
                                         .titleSmall
@@ -230,8 +248,8 @@ class _ServiceTabsState extends State<ServiceTabs>
                           ),
                         ],
                       );
-                    } else if (item is gtfs.Stop) {
-                      return _buildStopTile(context, item);
+                    } else if (item.stop != null) {
+                      return _buildStopTile(context, item.stop!, item.line);
                     }
 
                     return const SizedBox.shrink();
@@ -251,19 +269,19 @@ class _ServiceTabsState extends State<ServiceTabs>
 
     final metroStops = _groupStopsByLine(
       widget.allStops,
-      (line, stop) => _getServicePriority(stop) == 1,
+      (line, stop) => widget.getServicePriority(stop) == 1,
     );
     final trainStops = _groupStopsByLine(
       widget.allStops,
-      (line, stop) => _getServicePriority(stop) == 2,
+      (line, stop) => widget.getServicePriority(stop) == 2,
     );
     final busStops = _groupStopsByLine(
       widget.allStops,
-      (line, stop) => _getServicePriority(stop) == 3,
+      (line, stop) => widget.getServicePriority(stop) == 3,
     );
     final ferryStops = _groupStopsByLine(
       widget.allStops,
-      (line, stop) => _getServicePriority(stop) == 4,
+      (line, stop) => widget.getServicePriority(stop) == 4,
     );
 
     return SizedBox(
