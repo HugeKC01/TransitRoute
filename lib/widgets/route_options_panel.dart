@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:route/services/direction_service.dart';
-import 'package:route/services/route_formatters.dart';
+import 'formatters.dart';
+
 
 class RouteOptionsPanel extends StatelessWidget {
   const RouteOptionsPanel({
@@ -177,7 +178,9 @@ class _RouteOptionCard extends StatelessWidget {
     final headlineTags = filteredTags.take(3).toList();
     final remainingTags = filteredTags.length - headlineTags.length;
     final distanceText = formatDistance(option.distanceMeters);
-    final lineSegments = splitRouteByLine(stops, lineNameResolver);
+    final transitSegments = option.segments
+        .where((s) => s.mode == TravelMode.transit && s.routeShortName != null)
+        .toList();
 
     final theme = Theme.of(context);
     final highlightColor = switch (highlightType) {
@@ -348,7 +351,7 @@ class _RouteOptionCard extends StatelessWidget {
                   ],
 
                   // Transit Line Visualizer
-                  if (lineSegments.isNotEmpty) ...[
+                  if (transitSegments.isNotEmpty) ...[
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -360,7 +363,7 @@ class _RouteOptionCard extends StatelessWidget {
                         scrollDirection: Axis.horizontal,
                         child: Row(
                           children: [
-                            for (int i = 0; i < lineSegments.length; i++) ...[
+                            for (int i = 0; i < transitSegments.length; i++) ...[
                               if (i > 0)
                                 Padding(
                                   padding: const EdgeInsets.symmetric(
@@ -374,10 +377,7 @@ class _RouteOptionCard extends StatelessWidget {
                                 ),
                               Builder(
                                 builder: (context) {
-                                  final lineName = resolveSegmentLineName(
-                                    lineSegments[i],
-                                    lineNameResolver,
-                                  );
+                                  final lineName = transitSegments[i].routeShortName ?? 'Unknown line';
                                   final color =
                                       lineColors[lineName] ??
                                       theme.colorScheme.primary;
@@ -386,17 +386,15 @@ class _RouteOptionCard extends StatelessWidget {
                                       ? Colors.black87
                                       : Colors.white;
 
-                                  IconData getTransportIcon(String name) {
-                                    final lower = name.toLowerCase();
-                                    if (lower.contains('walk')) {
+                                  IconData getTransportIcon(RouteSegment segment) {
+                                    if (segment.mode == TravelMode.walk) {
                                       return Icons.directions_walk;
                                     }
-                                    if (lower.contains('bus')) {
-                                      return Icons.directions_bus;
-                                    }
-                                    if (lower.contains('boat') ||
-                                        lower.contains('ferry')) {
+                                    if (segment.isFerry) {
                                       return Icons.directions_boat;
+                                    }
+                                    if (segment.isBus) {
+                                      return Icons.directions_bus;
                                     }
                                     return Icons.directions_transit;
                                   }
@@ -421,7 +419,7 @@ class _RouteOptionCard extends StatelessWidget {
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Icon(
-                                          getTransportIcon(lineName),
+                                          getTransportIcon(transitSegments[i]),
                                           size: 16,
                                           color: textColor,
                                         ),

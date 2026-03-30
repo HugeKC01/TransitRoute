@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'widgets/station_details_content.dart';
+
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:latlong2/latlong.dart';
@@ -83,6 +86,12 @@ class MyHomePage extends StatefulWidget {
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
+class _ProjectionResult {
+  final LatLng point;
+  final double dist;
+  _ProjectionResult(this.point, this.dist);
+}
+
 class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   final MapController _mapController = MapController();
   late final SearchController _startSearchController;
@@ -111,6 +120,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   List<gtfs.Stop> busStops = [];
   List<gtfs.Stop> ferryStops = [];
   Map<String, String> fareTypeMap = {};
+  Map<String, gtfs.BusRouteInfo> busRouteInfoMap = {};
   Map<String, int> fareDataMap = {};
   Map<String, int> stopOrderMap = {};
   Map<String, List<int>> fareTableMap = {};
@@ -118,9 +128,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   Map<String, int> ferryZoneMatrix = {};
   Map<String, String> ferryZones = {};
 
-  String routingMode = 'Shortest';
+  String routingMode = 'Fastest';
   String transitPreference = 'Auto';
-  bool _headerCollapsed = false;
+  final ValueNotifier<bool> _headerCollapsed = ValueNotifier<bool>(false);
   double _currentZoom = 12.0;
   static const double _busStopZoomThreshold = 15.0;
 
@@ -276,13 +286,13 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       directionOptions = List<DirectionOption>.from(result.options);
       if (directionOptions.isEmpty) {
         selectedDirectionIndex = 0;
-        _headerCollapsed = false;
+        _headerCollapsed.value = false;
       } else {
         selectedDirectionIndex = result.selectionIndex.clamp(
           0,
           directionOptions.length - 1,
         );
-        _headerCollapsed = true;
+        _headerCollapsed.value = true;
       }
     });
   }
@@ -321,7 +331,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     for (final segment in segments) {
       if (segment.mode == TravelMode.walk ||
           segment.mode == TravelMode.bicycle ||
-          segment.mode == TravelMode.taxi) {
+          segment.mode == TravelMode.taxi ||
+          (segment.mode == TravelMode.transit &&
+              segment.roadPolyline != null)) {
         List<LatLng> points = [];
         if (segment.roadPolyline != null && segment.roadPolyline!.isNotEmpty) {
           points = segment.roadPolyline!
@@ -335,21 +347,41 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         }
 
         Color lineColor = Colors.grey.shade600;
+        double width = 4.0;
+        StrokePattern? pattern = const StrokePattern.dotted();
+
         if (segment.mode == TravelMode.bicycle) {
           lineColor = Colors.green.shade600;
-        }
-        if (segment.mode == TravelMode.taxi) {
+        } else if (segment.mode == TravelMode.taxi) {
           lineColor = Colors.orange.shade600;
+        } else if (segment.mode == TravelMode.transit) {
+          final lineName = segment.routeShortName ?? '';
+          lineColor = _getPolylineColor(lineName);
+          width = 6.0;
+          pattern = null;
         }
 
         polylines.add(
           Polyline(
             points: points,
             color: lineColor,
-            strokeWidth: 4.0,
-            pattern: const StrokePattern.dotted(),
+            strokeWidth: width,
+            pattern: pattern ?? const StrokePattern.solid(),
           ),
         );
+
+        // Also draw 90 degree offsets for bus stops towards the route line if it is a bus route
+        if (segment.mode == TravelMode.transit &&
+            segment.intermediateStops != null) {
+          for (final stop in segment.intermediateStops!) {
+            _addOffsetConnectionLine(
+              polylines: polylines,
+              stopPoint: LatLng(stop.lat, stop.lon),
+              routePoints: points,
+              color: lineColor,
+            );
+          }
+        }
       } else {
         final route = segment.intermediateStops;
         if (route == null || route.length < 2) continue;
@@ -425,6 +457,70 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     return polylines;
   }
 
+  void _addOffsetConnectionLine({
+    required List<Polyline> polylines,
+    required LatLng stopPoint,
+    required List<LatLng> routePoints,
+    required Color color,
+  }) {
+    if (routePoints.isEmpty) return;
+
+    // Find closest segment and its projection
+    double bestDist = double.infinity;
+    LatLng? bestProj;
+
+    for (int i = 0; i < routePoints.length - 1; i++) {
+      final p1 = routePoints[i];
+      final p2 = routePoints[i + 1];
+
+      final projInfo = __projectPointToSegment(stopPoint, p1, p2);
+      if (projInfo.dist < bestDist) {
+        bestDist = projInfo.dist;
+        bestProj = projInfo.point;
+      }
+    }
+
+    if (bestProj != null && bestDist > 0.00005) {
+      // Only draw if > ~5 meters
+      polylines.add(
+        Polyline(
+          points: [stopPoint, bestProj],
+          color: color.withValues(alpha: 0.5),
+          strokeWidth: 3.0,
+        ),
+      );
+    }
+  }
+
+  _ProjectionResult __projectPointToSegment(LatLng pt, LatLng v, LatLng w) {
+    // Basic flat-earth projection (good enough for small distances)
+    double l2 =
+        math.pow(v.latitude - w.latitude, 2) +
+        math.pow(v.longitude - w.longitude, 2).toDouble();
+    if (l2 == 0.0) {
+      double dist = math.sqrt(
+        math.pow(pt.latitude - v.latitude, 2) +
+            math.pow(pt.longitude - v.longitude, 2),
+      );
+      return _ProjectionResult(v, dist);
+    }
+
+    double t =
+        ((pt.latitude - v.latitude) * (w.latitude - v.latitude) +
+            (pt.longitude - v.longitude) * (w.longitude - v.longitude)) /
+        l2;
+    t = math.max(0, math.min(1, t));
+
+    final projLat = v.latitude + t * (w.latitude - v.latitude);
+    final projLng = v.longitude + t * (w.longitude - v.longitude);
+    final proj = LatLng(projLat, projLng);
+
+    double dist = math.sqrt(
+      math.pow(pt.latitude - projLat, 2) + math.pow(pt.longitude - projLng, 2),
+    );
+    return _ProjectionResult(proj, dist);
+  }
+
   void _assignStopSelection(gtfs.Stop stop, {required bool asStart}) {
     setState(() {
       if (asStart) {
@@ -436,7 +532,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         _customDestPoint = null;
         _destSearchController.text = stop.name;
       }
-      _headerCollapsed = false;
+      _headerCollapsed.value = false;
     });
   }
 
@@ -471,315 +567,46 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     final lineColor = _getLineColor(stop.stopId);
     final transferStops = _directionService.getTransferStations(stop.stopId);
     final parentContext = context;
+    final width = MediaQuery.of(context).size.width;
+    final isWide = width > 600;
+
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      isScrollControlled: false,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      elevation: 2,
+      constraints: isWide ? const BoxConstraints(maxWidth: 420) : null,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (sheetContext) {
-        final theme = Theme.of(sheetContext);
-        final colorScheme = theme.colorScheme;
-        final bottomInset = MediaQuery.of(sheetContext).padding.bottom;
-        final hasThaiName =
-            stop.thaiName != null && stop.thaiName!.trim().isNotEmpty;
-        Widget infoChip(String label, String value) {
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: colorScheme.outlineVariant),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  label.toUpperCase(),
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    letterSpacing: 0.4,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          );
-        }
-
-        Widget quickAction({
-          required IconData icon,
-          required String title,
-          required String subtitle,
-          required VoidCallback onTap,
-        }) {
-          return Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(16),
-              onTap: onTap,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: colorScheme.surfaceContainerHigh,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Icon(icon, color: colorScheme.primary),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(title, style: theme.textTheme.titleMedium),
-                          Text(
-                            subtitle,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Icon(Icons.chevron_right),
-                  ],
-                ),
-              ),
-            ),
-          );
-        }
-
-        final priority = _getServicePriority(stop);
-        IconData typeIcon = Icons.subway;
-        if (priority == 2) typeIcon = Icons.train;
-        if (priority == 3) typeIcon = Icons.directions_bus;
-        if (priority == 4) typeIcon = Icons.directions_boat;
-
-        return SafeArea(
-          top: false,
-          child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(24, 12, 24, bottomInset + 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: colorScheme.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: lineColor,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Icon(typeIcon, color: Colors.white),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              hasThaiName ? stop.thaiName! : stop.name,
-                              style: theme.textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            if (hasThaiName)
-                              Text(
-                                stop.name,
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            if (lineName != null && lineName.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 8),
-                                child: Wrap(
-                                  spacing: 6,
-                                  runSpacing: 6,
-                                  children: lineName.split(', ').map((
-                                    singleLine,
-                                  ) {
-                                    final specificColor = _getPolylineColor(
-                                      singleLine,
-                                    );
-                                    return Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: specificColor.withValues(
-                                          alpha: 0.15,
-                                        ),
-                                        borderRadius: BorderRadius.circular(
-                                          999,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        singleLine,
-                                        style: theme.textTheme.labelMedium
-                                            ?.copyWith(
-                                              color: specificColor,
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                      ),
-                                    );
-                                  }).toList(),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 8,
-                  children: [
-                    if (stop.code != null && stop.code!.isNotEmpty)
-                      infoChip('Stop Code', stop.code!),
-                    infoChip(
-                      'Coordinates',
-                      'Lat ${stop.lat.toStringAsFixed(4)}, Lon ${stop.lon.toStringAsFixed(4)}',
-                    ),
-                    if (stop.zoneId != null && stop.zoneId!.isNotEmpty)
-                      infoChip('Zone', stop.zoneId!),
-                    if (stop.code != null && stop.code!.isNotEmpty)
-                      infoChip('Code', stop.code!),
-                  ],
-                ),
-                UpcomingDeparturesWidget(stopId: stop.stopId),
-                if (transferStops.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  Text(
-                    'Transfers',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  ...transferStops.map((tStop) {
-                    final tLineName =
-                        _getLineName(tStop.stopId) ?? 'Unknown Line';
-                    final tLineColor = _getLineColor(tStop.stopId);
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                        ),
-                        tileColor: colorScheme.surfaceContainerHighest
-                            .withValues(alpha: 0.5),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          side: BorderSide(color: colorScheme.outlineVariant),
-                        ),
-                        leading: Container(
-                          width: 16,
-                          height: 16,
-                          decoration: BoxDecoration(
-                            color: tLineColor,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        title: Text(
-                          (tStop.thaiName != null &&
-                                  tStop.thaiName!.trim().isNotEmpty)
-                              ? tStop.thaiName!
-                              : tStop.name,
-                          style: theme.textTheme.bodyLarge?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        subtitle: Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Wrap(
-                            spacing: 4,
-                            runSpacing: 4,
-                            children: tLineName.split(', ').map((sl) {
-                              final slColor = _getPolylineColor(sl);
-                              return Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: slColor.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  sl,
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: slColor,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () {
-                          Navigator.of(sheetContext).pop();
-                          _showStopDetails(parentContext, tStop);
-                        },
-                      ),
-                    );
-                  }),
-                ],
-                const SizedBox(height: 20),
-                quickAction(
-                  icon: Icons.trip_origin,
-                  title: 'Set as origin',
-                  subtitle: 'Plan a route starting here',
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    _assignStopSelection(stop, asStart: true);
-                  },
-                ),
-                quickAction(
-                  icon: Icons.flag,
-                  title: 'Set as destination',
-                  subtitle: 'Use this stop as your endpoint',
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    _assignStopSelection(stop, asStart: false);
-                  },
-                ),
-                const SizedBox(height: 8),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.info_outline),
-                  title: const Text('View full station details'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    _pushStationDetailsPage(parentContext, stop);
-                  },
-                ),
-              ],
-            ),
+        return ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.85,
+          ),
+          child: StationDetailsContent(
+            stop: stop,
+            lineColor: lineColor,
+            lineName: lineName,
+            isBottomSheet: true,
+            transferStops: transferStops,
+            lineNameResolver: (id) => _getLineName(id),
+            lineColorResolver: (id) => _getLineColor(id),
+            lineColorByName: (name) => _getPolylineColor(name),
+            onSelectAsStart: () {
+              Navigator.pop(sheetContext);
+              _assignStopSelection(stop, asStart: true);
+            },
+            onSelectAsDestination: () {
+              Navigator.pop(sheetContext);
+              _assignStopSelection(stop, asStart: false);
+            },
+            onTransferStationSelected: (tStop) {
+              Navigator.pop(sheetContext);
+              _showStopDetails(parentContext, tStop);
+            },
           ),
         );
       },
@@ -805,7 +632,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         );
         _destSearchController.text = 'Dropped Pin';
       }
-      _headerCollapsed = false;
+      _headerCollapsed.value = false;
     });
 
     if ((selectedStartStopId != null || _customStartPoint != null) &&
@@ -999,7 +826,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           selectedDestinationStopId != null ||
           _customStartPoint != null ||
           _customDestPoint != null) {
-        _headerCollapsed = false;
+        _headerCollapsed.value = false;
       }
     });
     if ((selectedStartStopId != null || _customStartPoint != null) &&
@@ -1027,7 +854,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       _destSearchController.clear();
       _collapsedSearchController.clear();
       if (!preserveHeaderState) {
-        _headerCollapsed = false;
+        _headerCollapsed.value = false;
       }
     });
   }
@@ -1084,13 +911,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     final activeSegments = activeRouteSegments;
     final viewPadding = MediaQuery.of(context).padding;
     final screenWidth = MediaQuery.of(context).size.width;
-    final isCompact = screenWidth < 520;
-    const fabHeight = 56.0;
-    final fabGap = isCompact ? 24.0 : 32.0;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isWide = screenWidth > 600;
     final hasRoutes = directionOptions.isNotEmpty;
-    final sheetOffset = hasRoutes ? 320.0 : 0.0;
-    final zoomBottomOffset =
-        viewPadding.bottom + fabHeight + fabGap + sheetOffset;
+
+    // Responsive bottom offset that animates up if there are routes
+    final zoomBottomOffset = isWide
+        ? 24.0
+        : (hasRoutes ? screenHeight * 0.45 + 16.0 : viewPadding.bottom + 16.0);
     final showBusStops =
         _showBusPins &&
         busStops.isNotEmpty &&
@@ -1408,8 +1236,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             ),
           ],
         ),
-        Positioned(
-          right: 16,
+        AnimatedPositioned(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+          right: isWide ? 24 : 16,
           bottom: zoomBottomOffset,
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1419,7 +1249,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               const SizedBox(height: 16),
               Material(
                 elevation: 6,
-                color: Colors.white,
+                color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(32),
                 child: Container(
                   decoration: BoxDecoration(
@@ -1446,7 +1276,13 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                           minHeight: 48,
                         ),
                       ),
-                      Container(width: 36, height: 1, color: Colors.black12),
+                      Container(
+                        width: 36,
+                        height: 1,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.outline.withValues(alpha: 0.2),
+                      ),
                       IconButton(
                         icon: const Icon(Icons.remove),
                         tooltip: 'Zoom out',
@@ -1459,6 +1295,35 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                         ),
                       ),
                     ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Material(
+                elevation: 6,
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(32),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(32),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.my_location),
+                    tooltip: 'Current Location',
+                    onPressed: _goToMyLocation,
+                    iconSize: 28,
+                    padding: const EdgeInsets.all(12),
+                    constraints: const BoxConstraints(
+                      minWidth: 56,
+                      minHeight: 56,
+                    ),
                   ),
                 ),
               ),
@@ -1497,7 +1362,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       builder: (context, controller, child) {
         return Material(
           elevation: 6,
-          color: Colors.white,
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(32),
           child: IconButton(
             icon: const Icon(Icons.layers),
@@ -1522,66 +1387,109 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     final width = MediaQuery.of(context).size.width;
     final hasRoutes = directionOptions.isNotEmpty;
     // ensure the side panel is at least 320px wide so route options text does not overflow
-    final panelWidth = math.max(320.0, math.min(440.0, width * 0.35));
+    final panelWidth = math.max(340.0, math.min(400.0, width * 0.3));
     final theme = Theme.of(context);
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    final topInset = MediaQuery.of(context).padding.top;
+
+    return Stack(
       children: [
-        if (hasRoutes)
-          Container(
-            width: panelWidth,
-            color: theme.colorScheme.surface,
-            child: ListView(
-              padding: const EdgeInsets.only(bottom: 24),
-              children: [_buildRouteOptionsSection(context)],
+        // Map fills the entire background
+        Positioned.fill(child: _buildMap(context)),
+
+        // Floating options panel on the left (Desktop/Tablet)
+        AnimatedPositioned(
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeInOutCubic,
+          left: hasRoutes ? 24 : -panelWidth - 32, // Slide in from the left
+          top: topInset + 100, // Below the floating header
+          bottom: 24,
+          width: panelWidth,
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 250),
+            opacity: hasRoutes ? 1.0 : 0.0,
+            child: Material(
+              elevation: 12,
+              color: theme.colorScheme.surface.withValues(
+                alpha: 0.95,
+              ), // Slight transparency
+              borderRadius: BorderRadius.circular(24),
+              clipBehavior: Clip.antiAlias,
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: ListView(
+                  padding: const EdgeInsets.only(bottom: 24, top: 12),
+                  children: [_buildRouteOptionsSection(context)],
+                ),
+              ),
             ),
           ),
-        if (hasRoutes) const VerticalDivider(width: 1),
-        Expanded(child: Stack(children: [_buildMap(context), headerOverlay])),
+        ),
+
+        // Floating header overlay over everything
+        headerOverlay,
       ],
     );
   }
 
   Widget _buildPhoneLayout(BuildContext context, Widget headerOverlay) {
     final hasRoutes = directionOptions.isNotEmpty;
-    final initialSize = hasRoutes ? 0.4 : 0.25;
     final theme = Theme.of(context);
+
+    // Dynamic initial sheet height when routes exist
+    final sheetInitialSize = hasRoutes ? 0.45 : 0.0;
+
     return Stack(
       children: [
         Positioned.fill(child: _buildMap(context)),
         headerOverlay,
+
+        // Drag sheet spanning full height but starting at initialSize
         if (hasRoutes)
           DraggableScrollableSheet(
-            initialChildSize: initialSize,
-            minChildSize: 0.2,
-            maxChildSize: 0.9,
+            initialChildSize: sheetInitialSize,
+            minChildSize: 0.25,
+            maxChildSize: 0.95,
             builder: (context, controller) {
               final bottomPadding = MediaQuery.of(context).padding.bottom;
-              return Material(
-                elevation: 12,
-                color: theme.colorScheme.surface,
-                clipBehavior: Clip.antiAlias,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(24),
+              return Container(
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surface,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(28),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.15),
+                      blurRadius: 20,
+                      offset: const Offset(0, -4),
+                    ),
+                  ],
                 ),
-                child: ListView(
-                  controller: controller,
-                  padding: EdgeInsets.only(bottom: bottomPadding + 24),
-                  children: [
-                    const SizedBox(height: 12),
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.outlineVariant,
-                          borderRadius: BorderRadius.circular(2),
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(28),
+                  ),
+                  child: ListView(
+                    controller: controller,
+                    padding: EdgeInsets.only(bottom: bottomPadding + 24),
+                    children: [
+                      const SizedBox(height: 12),
+                      Center(
+                        child: Container(
+                          width: 48,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.outlineVariant.withValues(
+                              alpha: 0.5,
+                            ),
+                            borderRadius: BorderRadius.circular(2.5),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    _buildRouteOptionsSection(context),
-                  ],
+                      const SizedBox(height: 16),
+                      _buildRouteOptionsSection(context),
+                    ],
+                  ),
                 ),
               );
             },
@@ -1604,57 +1512,87 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     final destLabel =
         _customDestPoint?.name ??
         (dest != null ? _stopDisplayLabel(dest) : null);
-    final isCollapsed = _headerCollapsed;
-    return Material(
-      elevation: 10,
-      borderRadius: BorderRadius.circular(24),
-      color: theme.colorScheme.surface,
-      clipBehavior: Clip.antiAlias,
-      child: AnimatedSize(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeInOut,
-        alignment: Alignment.topCenter,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 250),
-            switchInCurve: Curves.easeInOut,
-            switchOutCurve: Curves.easeInOut,
-            transitionBuilder: (child, animation) {
-              return FadeTransition(opacity: animation, child: child);
-            },
-            child: isCollapsed
-                ? KeyedSubtree(
-                    key: const ValueKey('collapsed_header'),
-                    child: _buildCollapsedHeaderContent(
-                      context,
-                      startLabel,
-                      destLabel,
-                    ),
-                  )
-                : KeyedSubtree(
-                    key: const ValueKey('expanded_header'),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _buildSelectionSummaryCard(context, start, dest),
-                      ],
+    return ValueListenableBuilder<bool>(
+      valueListenable: _headerCollapsed,
+      builder: (context, isCollapsed, _) {
+        return Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.1),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+              child: Container(
+                color: theme.colorScheme.surface.withValues(alpha: 0.85),
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: AnimatedSize(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOutCubic,
+                    alignment: Alignment.topCenter,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 300),
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        transitionBuilder: (child, animation) {
+                          return FadeTransition(
+                            opacity: animation,
+                            child: child,
+                          );
+                        },
+                        child: isCollapsed
+                            ? KeyedSubtree(
+                                key: const ValueKey('collapsed_header'),
+                                child: _buildCollapsedHeaderContent(
+                                  context,
+                                  startLabel,
+                                  destLabel,
+                                ),
+                              )
+                            : KeyedSubtree(
+                                key: const ValueKey('expanded_header'),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    _buildSelectionSummaryCard(
+                                      context,
+                                      start,
+                                      dest,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                      ),
                     ),
                   ),
+                ),
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
   Widget _buildHeaderOverlay(BuildContext context, bool isWideLayout) {
-    final horizontal = isWideLayout ? 32.0 : 16.0;
+    final horizontal = isWideLayout ? 24.0 : 16.0;
     final topInset = MediaQuery.of(context).padding.top;
     final top = topInset + 12.0;
-    final maxWidth = isWideLayout ? 520.0 : 600.0;
+    final maxWidth = isWideLayout ? 400.0 : 600.0;
     return Align(
-      alignment: Alignment.topCenter,
+      alignment: isWideLayout ? Alignment.topLeft : Alignment.topCenter,
       child: Padding(
         padding: EdgeInsets.only(top: top, left: horizontal, right: horizontal),
         child: ConstrainedBox(
@@ -1684,9 +1622,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       constraints: const BoxConstraints.tightFor(width: 40, height: 40),
       padding: EdgeInsets.zero,
       onPressed: () {
-        setState(() {
-          _headerCollapsed = true;
-        });
+        _headerCollapsed.value = true;
       },
     );
   }
@@ -1696,9 +1632,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       tooltip: 'Show planner',
       icon: const Icon(Icons.unfold_more),
       onPressed: () {
-        setState(() {
-          _headerCollapsed = false;
-        });
+        _headerCollapsed.value = false;
       },
     );
   }
@@ -2091,7 +2025,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                       }
                       directionOptions = [];
                       selectedDirectionIndex = 0;
-                      _headerCollapsed = false;
+                      _headerCollapsed.value = false;
                     });
                   },
                 ),
@@ -2211,7 +2145,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
   bool _isShapeTrain(ShapeSegment shape) {
     if (shape.routeId == null) return false;
-    final rId = shape.routeId!.replaceAll('\uFEFF', '').toUpperCase(); // Avoid BOM issues
+    final rId = shape.routeId!
+        .replaceAll('\uFEFF', '')
+        .toUpperCase(); // Avoid BOM issues
     final route = allRoutes
         .where((r) => r.routeId.replaceAll('\uFEFF', '').toUpperCase() == rId)
         .firstOrNull;
@@ -2278,7 +2214,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         _destSearchController.text = stop.name;
       }
       if (!preserveHeaderState) {
-        _headerCollapsed = false;
+        _headerCollapsed.value = false;
       }
     });
 
@@ -2339,6 +2275,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _headerCollapsed.dispose();
     _startSearchController.dispose();
     _destSearchController.dispose();
     _collapsedSearchController.dispose();
@@ -2397,6 +2334,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       ferryFlatFares: ferryFlatFares,
       ferryZoneMatrix: ferryZoneMatrix,
       ferryZones: ferryZones,
+      busRouteInfoMap: busRouteInfoMap,
     );
     // Load GTFS shapes (preferred) — use tripMap loaded from DirectionService to avoid re-parsing
     List<ShapeSegment> shapes = const <ShapeSegment>[];
@@ -2838,6 +2776,43 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         }
       } catch (_) {}
     }
+
+    // Also parse bus_route_stop.txt for _stopToLinesMap
+    try {
+      final content = await rootBundle.loadString(
+        'assets/gtfs_data/bus_route_stop.txt',
+      );
+      final lines = const LineSplitter().convert(content);
+      for (int i = 1; i < lines.length; i++) {
+        if (lines[i].trim().isEmpty) continue;
+        final row = _parseCsvLine(lines[i]);
+        if (row.length > 5) {
+          final routeShortName = row[1].trim();
+          final routeId = routeShortName.split(' ').first;
+          final route = routeMap[routeId];
+          final lineName = route != null && route.longName.isNotEmpty
+              ? route.longName
+              : routeShortName;
+          final descriptionBus = row[2].trim();
+          final typeId = row[3].trim();
+          final isExpressway =
+              descriptionBus.contains('ทางด่วน') ||
+              routeShortName.contains('E') ||
+              routeShortName.contains('ทางด่วน');
+          busRouteInfoMap[lineName] = gtfs.BusRouteInfo(
+            routeShortName: lineName,
+            typeId: typeId,
+            isExpressway: isExpressway,
+          );
+          for (int j = 5; j < row.length; j++) {
+            final sId = row[j].trim();
+            if (sId.isNotEmpty) {
+              _stopToLinesMap.putIfAbsent(sId, () => {}).add(lineName);
+            }
+          }
+        }
+      }
+    } catch (_) {}
   }
 
   String? _cleanHex(String? hex) {
@@ -3065,12 +3040,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               ],
             )
           : bodyContent,
-      floatingActionButton: showHome ? _buildLocationFab(context) : null,
+      // floatingActionButton managed in Map layouts directly
       bottomNavigationBar: (!isWideLayout && showNav)
           ? _buildNavigationBar()
           : null,
     );
   }
+
+
 
   Widget _buildHomeContent(BuildContext context, bool isWideLayout) {
     final headerOverlay = _buildHeaderOverlay(context, isWideLayout);
@@ -3104,14 +3081,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           label: 'More',
         ),
       ],
-    );
-  }
-
-  Widget _buildLocationFab(BuildContext context) {
-    return FloatingActionButton(
-      onPressed: _goToMyLocation,
-      tooltip: 'Center map on my location',
-      child: const Icon(Icons.my_location),
     );
   }
 
