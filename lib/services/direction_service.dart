@@ -64,6 +64,7 @@ class RouteSegment {
   // Transit-specific details
   final String? routeId;
   final String? routeShortName;
+  final String? routeType;
   String? instruction; // e.g., "Walk to BTS Siam" or "Take Sukhumvit Line"
   final List<gtfs.Stop>? intermediateStops;
   List<LocationPoint>? roadPolyline;
@@ -83,6 +84,7 @@ class RouteSegment {
     this.fare = 0,
     this.routeId,
     this.routeShortName,
+    this.routeType,
     this.instruction,
     this.intermediateStops,
     this.roadPolyline,
@@ -92,61 +94,45 @@ class RouteSegment {
 
   bool get isBus {
     if (mode != TravelMode.transit) return false;
+    final rType = routeType;
+    if (rType != null) {
+      if (rType == '3' || rType.toLowerCase() == 'bus') return true;
+    }
     final name = routeShortName?.toLowerCase() ?? '';
     if (name.contains('bus') || name.contains('bmta') || name.contains('brt')) {
       return true;
     }
     if (intermediateStops != null && intermediateStops!.isNotEmpty) {
       final id = intermediateStops!.first.stopId.trim();
-      final lastId = intermediateStops!.last.stopId.trim();
-
-      if (id.startsWith('ST_') ||
-          id.startsWith('STOP_') ||
-          id.startsWith('BRT_') ||
-          int.tryParse(id) != null)
-        return true;
-      if (lastId.startsWith('ST_') ||
-          lastId.startsWith('STOP_') ||
-          lastId.startsWith('BRT_') ||
-          int.tryParse(lastId) != null)
-        return true;
-
-      final nonBusPrefixes = [
-        'CEN',
-        'E',
-        'N',
-        'S',
-        'W',
-        'RN',
-        'RW',
-        'BL',
-        'PK',
-        'YL',
-        'A',
-        'PP',
-        'F_',
-        'SRT',
-      ];
-      bool isNonBus = false;
-      for (final p in nonBusPrefixes) {
-        if (id.startsWith(p) && !id.startsWith('ST_')) {
-          isNonBus = true;
-          break;
-        }
-      }
-      if (!isNonBus && id.isNotEmpty) return true;
+      if (id.startsWith('ST_') || id.startsWith('STOP_') || int.tryParse(id) != null) return true;
     }
     return false;
   }
 
   bool get isFerry {
     if (mode != TravelMode.transit) return false;
+    final rType = routeType;
+    if (rType != null) {
+      if (rType == '4' || rType.toLowerCase() == 'ferry') return true;
+    }
     final name = routeShortName?.toLowerCase() ?? '';
     if (name.contains('boat') || name.contains('ferry')) return true;
-    if (intermediateStops != null && intermediateStops!.isNotEmpty) {
-      if (intermediateStops!.first.stopId.startsWith('F_')) return true;
+    return false;
+  }
+
+  bool get isTrain {
+    if (mode != TravelMode.transit) return false;
+    final rType = routeType;
+    if (rType != null) {
+      if (rType == '2' || rType.toLowerCase() == 'rail') return true;
     }
     return false;
+  }
+
+  bool get isMetro {
+    if (mode != TravelMode.transit) return false;
+    if (isBus || isFerry || isTrain) return false;
+    return true;
   }
 }
 
@@ -234,6 +220,28 @@ class DirectionService {
   final Map<String, Map<String, int>> _timeGraph = {};
   final Map<String, Map<String, Set<String>>> _transitEdges = {};
   bool _graphBuilt = false;
+
+  String? getRouteTypeForStop(String stopId) {
+    if (stopId.startsWith('ST_') || stopId.startsWith('STOP_')) return '3'; // Bus
+    if (int.tryParse(stopId) != null) return '3'; // Bus numeric IDs
+    for (final route in _routes) {
+      for (final pref in route.linePrefixes) {
+        if (stopId == pref || (pref != 'F_' && stopId.startsWith(pref)) || (pref == 'F_' && stopId.startsWith('F_'))) {
+          return route.type;
+        }
+      }
+    }
+    return null;
+  }
+
+  String? getRouteTypeForLine(String lineName) {
+    for (final route in _routes) {
+      if (route.longName == lineName || route.routeId == lineName || route.shortName == lineName) {
+        return route.type;
+      }
+    }
+    return null;
+  }
 
   void updateData({
     List<gtfs.Stop>? allStops,
@@ -344,7 +352,7 @@ class DirectionService {
 
   Future<DirectionResult> findDirections({
     required String routingMode,
-    required String preferredTransit,
+    required List<String> allowedTransitTypes,
     required LocationPoint startPoint,
     required LocationPoint destPoint,
   }) async {
@@ -377,10 +385,7 @@ class DirectionService {
     final tripMap = await loadTrips();
     final routeIdToPrefixes = {
       for (final route in _routes) 
-        if (!route.longName.toLowerCase().contains('srt') && 
-            !route.longName.toLowerCase().contains('red line') && 
-            route.type.toLowerCase() != 'train')
-          route.routeId: route.linePrefixes,
+        route.routeId: route.linePrefixes,
     };
 
     final Map<String, _TaggedRoute> optionMap = {};
@@ -543,6 +548,29 @@ class DirectionService {
     for (final option in optionMap.values) {
       option.segments ??= _buildSegmentsFromStops(option.stops);
 
+      bool matchesAllowedTypes = true;
+      for (final seg in option.segments!) {
+        if (seg.mode == TravelMode.transit) {
+          if (seg.isFerry && !allowedTransitTypes.contains('Ferry')) {
+            matchesAllowedTypes = false;
+            break;
+          }
+          if (seg.isBus && !allowedTransitTypes.contains('Bus')) {
+            matchesAllowedTypes = false;
+            break;
+          }
+          if (seg.isTrain && !allowedTransitTypes.contains('Train')) {
+            matchesAllowedTypes = false;
+            break;
+          }
+          if (seg.isMetro && !allowedTransitTypes.contains('Metro')) {
+            matchesAllowedTypes = false;
+            break;
+          }
+        }
+      }
+      if (!matchesAllowedTypes) continue;
+
       final distance = option.segments!.fold(
         0.0,
         (sum, seg) => sum + seg.distanceMeters,
@@ -631,29 +659,7 @@ class DirectionService {
       if (route.stops.length == minStops) route.tags.add('Fewest stops');
     }
 
-    int transitRank(_RouteMetrics metric) {
-      final transitSegments = metric.route.segments?.where((s) => s.mode == TravelMode.transit).toList() ?? [];
-      final hasBus = transitSegments.any((s) => s.isBus);
-      final hasRail = transitSegments.any((s) => !s.isBus && !s.isFerry);
-      
-      switch (preferredTransit) {
-        case 'Prefer Bus':
-          if (hasBus && !hasRail) return 0;
-          if (hasBus) return 1;
-          return 2;
-        case 'Prefer Rail':
-          if (hasRail && !hasBus) return 0;
-          if (hasRail) return 1;
-          return 2;
-        default:
-          return 1;
-      }
-    }
-
     metrics.sort((a, b) {
-      final transitCompare = transitRank(a).compareTo(transitRank(b));
-      if (transitCompare != 0) return transitCompare;
-
       final aPriority = a.route.tags.contains(routingMode) ? 0 : 1;
       final bPriority = b.route.tags.contains(routingMode) ? 0 : 1;
       if (aPriority != bPriority) return aPriority.compareTo(bPriority);
@@ -692,6 +698,7 @@ class DirectionService {
               fare: seg.fare,
               routeId: seg.routeId,
               routeShortName: seg.routeShortName,
+              routeType: seg.routeType,
               instruction: seg.instruction,
               intermediateStops: seg.intermediateStops,
               roadPolyline: seg.roadPolyline,
@@ -752,28 +759,12 @@ class DirectionService {
 
     int selectionIndex = 0;
     
-    // Determine the tag to match based on the transit preference
     String targetTag = routingMode;
-    if (preferredTransit.toLowerCase().contains("rail")) {
-      targetTag = 'Rail priority';
-    } else if (preferredTransit.toLowerCase().contains("bus")) {
-      targetTag = 'Bus priority';
-    }
 
     for (int i = 0; i < uniqueOptions.length; i++) {
       if (uniqueOptions[i].tags.contains(targetTag)) {
         selectionIndex = i;
         break;
-      }
-    }
-
-    // Fallback to routingMode if preference was not found
-    if (selectionIndex == 0 && targetTag != routingMode) {
-      for (int i = 0; i < uniqueOptions.length; i++) {
-        if (uniqueOptions[i].tags.contains(routingMode)) {
-          selectionIndex = i;
-          break;
-        }
       }
     }
 
@@ -1259,47 +1250,8 @@ class DirectionService {
     required String startStopId,
     required String destStopId,
   }) {
-    String extractPrefix(String stopId) {
-      if (stopId == 'CEN') return 'CEN';
-      final buffer = StringBuffer();
-      for (final ch in stopId.split('')) {
-        if (RegExp(r'[A-Za-z]').hasMatch(ch)) {
-          buffer.write(ch);
-        } else {
-          break;
-        }
-      }
-      return buffer.toString();
-    }
-
-    final startPrefix = extractPrefix(startStopId);
-    final destPrefix = extractPrefix(destStopId);
-
     final Map<String, List<String>> routePrefixes = routeIdToPrefixes;
-    Set<String> candidateRouteIds = {};
-    final bool prefersSukhumvit =
-        (startPrefix == 'N' || startPrefix == 'E') ||
-        (destPrefix == 'N' || destPrefix == 'E');
-    final bool prefersSilom =
-        (startPrefix == 'W' || startPrefix == 'S') ||
-        (destPrefix == 'W' || destPrefix == 'S');
-    if (prefersSukhumvit && !prefersSilom) {
-      for (final entry in routePrefixes.entries) {
-        final prefixes = entry.value;
-        if (prefixes.contains('N') || prefixes.contains('E')) {
-          candidateRouteIds.add(entry.key);
-        }
-      }
-    } else if (prefersSilom && !prefersSukhumvit) {
-      for (final entry in routePrefixes.entries) {
-        final prefixes = entry.value;
-        if (prefixes.contains('W') || prefixes.contains('S')) {
-          candidateRouteIds.add(entry.key);
-        }
-      }
-    } else {
-      candidateRouteIds = routePrefixes.keys.toSet();
-    }
+    Set<String> candidateRouteIds = routePrefixes.keys.toSet();
 
     String? selectedTripId;
     int bestSpan = 1 << 30;
@@ -1603,12 +1555,6 @@ class DirectionService {
       final neighbors =
           _distanceGraph[current]?.keys ?? const Iterable<String>.empty();
       for (final neighbor in neighbors) {
-        final lineName = lineNameResolver(neighbor) ?? '';
-        final lower = lineName.toLowerCase();
-        if (lower.contains('srt') || lower.contains('red line') || lower.contains('train')) {
-           continue; 
-        }
-
         if (!prev.containsKey(neighbor)) {
           prev[neighbor] = current;
           queue.add(neighbor);
@@ -1650,12 +1596,12 @@ class DirectionService {
     }
 
     int getModePriority(String line) {
-      final l = line.toLowerCase();
-      if (l == 'walk') return 5;
-      if (l.contains('boat') || l.contains('ferry')) return 4;
-      if (l.contains('bus') || l.contains('bmta') || l.contains('brt')) return 3;
-      if (l.contains('srt') || l.contains('red line') || l.contains('train')) return 2;
-      return 1; // Metro
+      if (line == 'START' || line == 'WALK') return 5;
+      final lineType = getRouteTypeForLine(line);
+      if (lineType == '4') return 4; // Ferry
+      if (lineType == '3') return 3; // Bus
+      if (lineType == '2') return 2; // Train (SRT Mainline)
+      return 1; // Metro (1) or others
     }
 
     final distance = <String, double>{};
@@ -1698,11 +1644,8 @@ class DirectionService {
         
         final baseEdgeCost = edgeDistance * distanceWeight + edgeTime * timeWeight;
 
-        final neighborUpper = neighbor.toUpperCase();
-        final isNeighborBus = neighborUpper.startsWith('ST_') || 
-                              neighborUpper.startsWith('STOP_') || 
-                              neighborUpper.startsWith('BRT_') || 
-                              int.tryParse(neighbor) != null;
+        final rType = getRouteTypeForStop(neighbor);
+        final isNeighborBus = rType == '3';
         
         double nodePenalty = 0.0;
         if (busCostPenalty > 0 && isNeighborBus) nodePenalty += busCostPenalty;
@@ -1712,11 +1655,6 @@ class DirectionService {
         if (nLinesStr.isEmpty) nLinesStr = ['WALK'];
         
         for (final nLine in nLinesStr) {
-          final lLower = nLine.toLowerCase();
-          if (lLower.contains('srt') || lLower.contains('red line') || lLower.contains('train')) {
-             continue; // Temporarily disable Train Line
-          }
-
           double cost = currentDist + baseEdgeCost + nodePenalty;
           
           bool isTransfer = false;
@@ -1846,7 +1784,7 @@ class DirectionService {
     int currentSegmentStartIndex = 0;
 
     List<String> getLinesForStop(String stopId) {
-      if (stopId.startsWith('ST_') || stopId.startsWith('STOP_')) {
+      if (stopId.startsWith('ST_') || stopId.startsWith('STOP_') || int.tryParse(stopId) != null) {
         return ['BMTA Bus'];
       }
       final r = lineNameResolver(stopId);
@@ -1933,6 +1871,7 @@ class DirectionService {
                   : 0,
               intermediateStops: subStops,
               routeShortName: currentLineName,
+              routeType: currentLineName != null ? getRouteTypeForLine(currentLineName) : null,
             ),
           );
         }
@@ -2006,6 +1945,7 @@ class DirectionService {
                     : 0,
                 intermediateStops: subStops,
                 routeShortName: currentLineName,
+              routeType: currentLineName != null ? getRouteTypeForLine(currentLineName) : null,
               ),
             );
           }
@@ -2027,6 +1967,7 @@ class DirectionService {
             durationMinutes: _estimateRouteMinutes(remainingStops),
             intermediateStops: remainingStops,
             routeShortName: currentLineName,
+              routeType: currentLineName != null ? getRouteTypeForLine(currentLineName) : null,
           ),
         );
       } else if (remainingStops.length == 1 && segments.isEmpty) {
@@ -2040,6 +1981,7 @@ class DirectionService {
             durationMinutes: 0,
             intermediateStops: remainingStops,
             routeShortName: currentLineName,
+              routeType: currentLineName != null ? getRouteTypeForLine(currentLineName) : null,
           ),
         );
       }

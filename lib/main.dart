@@ -129,7 +129,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   Map<String, String> ferryZones = {};
 
   String routingMode = 'Fastest';
-  String transitPreference = 'Auto';
+  List<String> allowedTransitTypes = ['Metro', 'Train', 'Bus', 'Ferry'];
   final ValueNotifier<bool> _headerCollapsed = ValueNotifier<bool>(false);
   double _currentZoom = 12.0;
   static const double _busStopZoomThreshold = 15.0;
@@ -278,7 +278,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
     final result = await _directionService.findDirections(
       routingMode: routingMode,
-      preferredTransit: transitPreference,
+      allowedTransitTypes: allowedTransitTypes,
       startPoint: startOpt,
       destPoint: destOpt,
     );
@@ -1945,12 +1945,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
   Widget _buildTransitPreferenceChooser(BuildContext context) {
     final theme = Theme.of(context);
-    final options = ['Auto', 'Prefer Rail', 'Prefer Bus'];
+    final options = ['Metro', 'Train', 'Bus', 'Ferry'];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Transit priority',
+          'Allowed transit types',
           style: theme.textTheme.labelMedium?.copyWith(
             color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
           ),
@@ -1960,11 +1960,18 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           spacing: 8,
           runSpacing: 4,
           children: options.map((opt) {
-            return ChoiceChip(
+            final isSelected = allowedTransitTypes.contains(opt);
+            return FilterChip(
               label: Text(opt),
-              selected: transitPreference == opt,
-              onSelected: (_) {
-                setState(() => transitPreference = opt);
+              selected: isSelected,
+              onSelected: (selected) {
+                setState(() {
+                  if (selected) {
+                    allowedTransitTypes.add(opt);
+                  } else {
+                    allowedTransitTypes.remove(opt);
+                  }
+                });
                 if (selectedStartStopId != null &&
                     selectedDestinationStopId != null) {
                   _findDirection();
