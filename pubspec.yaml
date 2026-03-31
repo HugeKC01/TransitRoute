@@ -42,6 +42,7 @@ dependencies:
   cloud_firestore: ^6.0.3
   location: ^8.0.1
   google_fonts: ^8.0.2
+  collection: ^1.19.1
   
 
 dev_dependencies:
@@ -88,6 +89,7 @@ flutter:
     - assets/gtfs_data/ferry_zones.txt
     - assets/gtfs_data/fixed_timetables.txt
     - assets/gtfs_data/frequencies.txt
+    - assets/gtfs_data/bus_route_stop.txt
   # To add assets to your application, add an assets section, like this:
 
     
