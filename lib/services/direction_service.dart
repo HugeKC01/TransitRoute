@@ -104,7 +104,10 @@ class RouteSegment {
     }
     if (intermediateStops != null && intermediateStops!.isNotEmpty) {
       final id = intermediateStops!.first.stopId.trim();
-      if (id.startsWith('ST_') || id.startsWith('STOP_') || int.tryParse(id) != null) return true;
+      if (id.startsWith('ST_') ||
+          id.startsWith('STOP_') ||
+          int.tryParse(id) != null)
+        return true;
     }
     return false;
   }
@@ -190,6 +193,7 @@ class DirectionService {
   List<gtfs.Stop> _allStops = const [];
   Map<String, gtfs.Stop> _stopLookup = const {};
   List<gtfs.Route> _routes = const [];
+  Map<String, gtfs.BusRouteInfo> _busRouteInfoMap = const {};
   final FareCalculator _fareCalculator = FareCalculator();
 
   static const List<List<String>> _transferHubs = [
@@ -219,28 +223,57 @@ class DirectionService {
   final Map<String, Map<String, double>> _distanceGraph = {};
   final Map<String, Map<String, int>> _timeGraph = {};
   final Map<String, Map<String, Set<String>>> _transitEdges = {};
+  final Map<String, String> _stopToRouteTypeCache = {};
+  final Map<String, String> _lineToRouteTypeCache = {};
   bool _graphBuilt = false;
 
   String? getRouteTypeForStop(String stopId) {
-    if (stopId.startsWith('ST_') || stopId.startsWith('STOP_')) return '3'; // Bus
-    if (int.tryParse(stopId) != null) return '3'; // Bus numeric IDs
-    for (final route in _routes) {
-      for (final pref in route.linePrefixes) {
-        if (stopId == pref || (pref != 'F_' && stopId.startsWith(pref)) || (pref == 'F_' && stopId.startsWith('F_'))) {
-          return route.type;
+    if (_stopToRouteTypeCache.containsKey(stopId)) {
+      return _stopToRouteTypeCache[stopId];
+    }
+    String? result;
+    if (stopId.startsWith('ST_') || stopId.startsWith('STOP_')) {
+      result = '3'; // Bus
+    } else if (int.tryParse(stopId) != null) {
+      result = '3'; // Bus numeric IDs
+    } else {
+      for (final route in _routes) {
+        for (final pref in route.linePrefixes) {
+          if (stopId == pref ||
+              (pref != 'F_' && stopId.startsWith(pref)) ||
+              (pref == 'F_' && stopId.startsWith('F_'))) {
+            result = route.type;
+            break;
+          }
         }
+        if (result != null) break;
       }
     }
-    return null;
+    _stopToRouteTypeCache[stopId] = result ?? '';
+    return result == '' ? null : result;
   }
 
   String? getRouteTypeForLine(String lineName) {
+    if (lineName == 'BMTA Bus') return '3'; // Hardcode fallback for generic bus
+    if (_lineToRouteTypeCache.containsKey(lineName)) {
+      return _lineToRouteTypeCache[lineName];
+    }
+    String? result;
     for (final route in _routes) {
-      if (route.longName == lineName || route.routeId == lineName || route.shortName == lineName) {
-        return route.type;
+      if (route.longName == lineName ||
+          route.routeId == lineName ||
+          route.shortName == lineName) {
+        result = route.type;
+        break;
       }
     }
-    return null;
+    
+    if (result == null && _busRouteInfoMap.containsKey(lineName)) {
+      result = '3';
+    }
+
+    _lineToRouteTypeCache[lineName] = result ?? '';
+    return result == '' ? null : result;
   }
 
   void updateData({
@@ -267,6 +300,9 @@ class DirectionService {
     }
     if (routes != null) {
       _routes = List<gtfs.Route>.from(routes);
+    }
+    if (busRouteInfoMap != null) {
+      _busRouteInfoMap = Map<String, gtfs.BusRouteInfo>.from(busRouteInfoMap);
     }
     if (fareTypeMap != null ||
         fareDataMap != null ||
@@ -384,8 +420,7 @@ class DirectionService {
     }
     final tripMap = await loadTrips();
     final routeIdToPrefixes = {
-      for (final route in _routes) 
-        route.routeId: route.linePrefixes,
+      for (final route in _routes) route.routeId: route.linePrefixes,
     };
 
     final Map<String, _TaggedRoute> optionMap = {};
@@ -549,7 +584,15 @@ class DirectionService {
       option.segments ??= _buildSegmentsFromStops(option.stops);
 
       bool matchesAllowedTypes = true;
+      double totalWalkingDistance = 0.0;
+      bool hasLongWalkSegment = false;
       for (final seg in option.segments!) {
+        if (seg.mode == TravelMode.walk) {
+          totalWalkingDistance += seg.distanceMeters;
+          if (seg.distanceMeters > 1000) {
+            hasLongWalkSegment = true;
+          }
+        }
         if (seg.mode == TravelMode.transit) {
           if (seg.isFerry && !allowedTransitTypes.contains('Ferry')) {
             matchesAllowedTypes = false;
@@ -570,6 +613,7 @@ class DirectionService {
         }
       }
       if (!matchesAllowedTypes) continue;
+      if (hasLongWalkSegment || totalWalkingDistance > 2000) continue;
 
       final distance = option.segments!.fold(
         0.0,
@@ -758,7 +802,7 @@ class DirectionService {
     }
 
     int selectionIndex = 0;
-    
+
     String targetTag = routingMode;
 
     for (int i = 0; i < uniqueOptions.length; i++) {
@@ -904,7 +948,22 @@ class DirectionService {
     try {
       final stopTimes = await _loadStopTimes();
       if (stopTimes.isEmpty) return;
+      final tripMap = await loadTrips();
+
       for (final entry in stopTimes.entries) {
+        final tripId = entry.key;
+        final trip = tripMap[tripId];
+        String? defaultLineName;
+        if (trip != null) {
+          final route = _routes.firstWhere(
+            (r) => r.routeId == trip.routeId,
+            orElse: () => gtfs.Route(routeId: '', shortName: '', longName: '', type: '', agencyId: '', linePrefixes: []),
+          );
+          if (route.routeId.isNotEmpty) {
+            defaultLineName = route.longName.isNotEmpty ? route.longName : route.routeId;
+          }
+        }
+
         entry.value.sort(
           (a, b) =>
               (a['stopSequence'] as int).compareTo(b['stopSequence'] as int),
@@ -913,7 +972,7 @@ class DirectionService {
           final a = entry.value[j]['stopId'] as String;
           final b = entry.value[j + 1]['stopId'] as String;
 
-          final lineName = entry.value[j]['lineName'] as String?;
+          final lineName = entry.value[j]['lineName'] as String? ?? defaultLineName;
 
           final stopA =
               _stopLookup[a] ??
@@ -1027,6 +1086,7 @@ class DirectionService {
           if (row.length > 5) {
             final busLineId = row[0].trim();
             final lineName = row[1].trim();
+            // row[2] = description_bus, row[3] = type_id, row[4] = agency_id
             final tripId = 'BUS_$busLineId';
             int sequence = 1;
             for (int j = 5; j < row.length; j++) {
@@ -1174,7 +1234,8 @@ class DirectionService {
             if (row.length > 5) {
               final busLineId = row[0].trim();
               final routeShortName = row[1].trim();
-              final headsign = row[2].trim();
+              final headsign = row[2].trim(); // description_bus
+              // row[3] = type_id, row[4] = agency_id
               final routeId = routeShortName.split(' ').first;
               final tripId = 'BUS_$busLineId';
               result[tripId] = gtfs.Trip(
@@ -1607,7 +1668,9 @@ class DirectionService {
     final distance = <String, double>{};
     final previous = <String, String?>{};
     // We import collection package at the top and add _DijkstraNode class at the bottom.
-    final queue = PriorityQueue<_DijkstraNode>((a, b) => a.cost.compareTo(b.cost));
+    final queue = PriorityQueue<_DijkstraNode>(
+      (a, b) => a.cost.compareTo(b.cost),
+    );
 
     final startState = "${start}|START";
     distance[startState] = 0.0;
@@ -1621,7 +1684,7 @@ class DirectionService {
       final currentStop = currentNode.stopId;
       final currentLine = currentNode.lineName;
       final currentDist = currentNode.cost;
-      
+
       final currentState = "${currentStop}|${currentLine}";
       if (currentDist > (distance[currentState] ?? double.infinity)) continue;
 
@@ -1634,61 +1697,91 @@ class DirectionService {
       }
 
       final neighborIds = <String>{};
-      neighborIds.addAll(_distanceGraph[currentStop]?.keys ?? const Iterable.empty());
-      neighborIds.addAll(_timeGraph[currentStop]?.keys ?? const Iterable.empty());
+      neighborIds.addAll(
+        _distanceGraph[currentStop]?.keys ?? const Iterable.empty(),
+      );
+      neighborIds.addAll(
+        _timeGraph[currentStop]?.keys ?? const Iterable.empty(),
+      );
 
       for (final neighbor in neighborIds) {
-        final edgeDistance = _distanceGraph[currentStop]?[neighbor] ?? _distanceBetweenStops(currentStop, neighbor);
+        final edgeDistance =
+            _distanceGraph[currentStop]?[neighbor] ??
+            _distanceBetweenStops(currentStop, neighbor);
         if (edgeDistance <= 0) continue;
-        final edgeTime = (_timeGraph[currentStop]?[neighbor]?.toDouble()) ?? math.max(1, edgeDistance / 500.0);
-        
-        final baseEdgeCost = edgeDistance * distanceWeight + edgeTime * timeWeight;
+        final edgeTime =
+            (_timeGraph[currentStop]?[neighbor]?.toDouble()) ??
+            math.max(1, edgeDistance / 500.0);
+
+        final baseEdgeCost =
+            edgeDistance * distanceWeight + edgeTime * timeWeight;
 
         final rType = getRouteTypeForStop(neighbor);
         final isNeighborBus = rType == '3';
-        
+
         double nodePenalty = 0.0;
         if (busCostPenalty > 0 && isNeighborBus) nodePenalty += busCostPenalty;
-        if (railCostPenalty > 0 && !isNeighborBus) nodePenalty += railCostPenalty;
+        if (railCostPenalty > 0 && !isNeighborBus)
+          nodePenalty += railCostPenalty;
 
-        List<String> nLinesStr = lineNameResolver(neighbor)?.split(', ') ?? [];
-        if (nLinesStr.isEmpty) nLinesStr = ['WALK'];
-        
-        for (final nLine in nLinesStr) {
-          double cost = currentDist + baseEdgeCost + nodePenalty;
-          
-          bool isTransfer = false;
-          if (currentLine != 'START' && currentLine != 'WALK' && nLine != 'WALK' && currentLine != nLine) {
-             isTransfer = true;
+        final Set<String> transitLines = _transitEdges[currentStop]?[neighbor] ?? {};
+        final bool hasTransitEdge = transitLines.isNotEmpty;
+
+        List<String> validLines = [];
+        if (hasTransitEdge) {
+          validLines.addAll(transitLines);
+          if (edgeDistance <= 500) {
+            validLines.add('WALK');
           }
-          if (nLine == 'WALK' && currentLine != 'START' && currentLine != 'WALK') {
-             isTransfer = true; 
+        } else {
+          final neighborLinesStr = lineNameResolver(neighbor)?.split(', ') ?? [];
+          validLines.addAll(neighborLinesStr);
+          validLines.add('WALK');
+        }
+
+        validLines = validLines.toSet().toList();
+        if (validLines.isEmpty) validLines = ['WALK'];
+
+        for (final nLine in validLines) {
+          double cost = currentDist + baseEdgeCost + nodePenalty;
+
+          bool isTransfer = false;
+          if (currentLine != 'START' &&
+              currentLine != 'WALK' &&
+              nLine != 'WALK' &&
+              currentLine != nLine) {
+            isTransfer = true;
+          }
+          if (nLine == 'WALK' &&
+              currentLine != 'START' &&
+              currentLine != 'WALK') {
+            isTransfer = true;
           }
           if (currentLine == 'WALK' && nLine != 'WALK') {
-             isTransfer = true; 
+            isTransfer = true;
           }
-          
+
           if (isTransfer) {
-             cost += transferPenalty > 0 ? transferPenalty : 200; 
-             
-             int p1 = getModePriority(currentLine);
-             int p2 = getModePriority(nLine);
-             
-             if (p2 > p1) {
-                 cost += 500; 
-             } else if (p2 < p1) {
-                 cost += 0; 
-             }
-             
-             if (p1 == p2 && currentLine != nLine) {
-                 cost += transferPenalty * 0.2; 
-             }
+            cost += transferPenalty > 0 ? transferPenalty : 200;
+
+            int p1 = getModePriority(currentLine);
+            int p2 = getModePriority(nLine);
+
+            if (p2 > p1) {
+              cost += 500;
+            } else if (p2 < p1) {
+              cost += 0;
+            }
+
+            if (p1 == p2 && currentLine != nLine) {
+              cost += transferPenalty * 0.2;
+            }
           }
-          
+
           if (getModePriority(nLine) == 3) {
-             cost += 50; 
+            cost += 50;
           }
-          
+
           final nextState = "${neighbor}|${nLine}";
           if (cost < (distance[nextState] ?? double.infinity)) {
             distance[nextState] = cost;
@@ -1710,7 +1803,7 @@ class DirectionService {
       }
       cursor = previous[cursor];
     }
-    
+
     final reversed = pathIds.reversed.toList();
     return reversed
         .map(
@@ -1784,16 +1877,34 @@ class DirectionService {
     int currentSegmentStartIndex = 0;
 
     List<String> getLinesForStop(String stopId) {
-      if (stopId.startsWith('ST_') || stopId.startsWith('STOP_') || int.tryParse(stopId) != null) {
-        return ['BMTA Bus'];
+      final lines = <String>{};
+
+      // Add lines dynamically loaded from GTFS / bus_route_stop.txt
+      final outgoing = _transitEdges[stopId];
+      if (outgoing != null) {
+        for (final edges in outgoing.values) {
+          lines.addAll(edges);
+        }
+      }
+      // Also check incoming edges if we want all lines for the stop
+      for (final a in _transitEdges.keys) {
+        final bEdges = _transitEdges[a]?[stopId];
+        if (bEdges != null) {
+          lines.addAll(bEdges);
+        }
+      }
+
+      if (stopId.startsWith('ST_') ||
+          stopId.startsWith('STOP_') ||
+          int.tryParse(stopId) != null) {
+        lines.add('BMTA Bus');
       }
       final r = lineNameResolver(stopId);
       if (r != null && r.isNotEmpty) {
-        return r.split(', ');
+        lines.addAll(r.split(', '));
       }
 
       // Fallback
-      final lines = <String>[];
       for (final route in _routes) {
         for (final pref in route.linePrefixes) {
           if (pref == stopId ||
@@ -1806,7 +1917,7 @@ class DirectionService {
           }
         }
       }
-      return lines;
+      return lines.toList();
     }
 
     String? currentLineName;
@@ -1871,7 +1982,9 @@ class DirectionService {
                   : 0,
               intermediateStops: subStops,
               routeShortName: currentLineName,
-              routeType: currentLineName != null ? getRouteTypeForLine(currentLineName) : null,
+              routeType: currentLineName != null
+                  ? getRouteTypeForLine(currentLineName)
+                  : null,
             ),
           );
         }
@@ -1945,7 +2058,9 @@ class DirectionService {
                     : 0,
                 intermediateStops: subStops,
                 routeShortName: currentLineName,
-              routeType: currentLineName != null ? getRouteTypeForLine(currentLineName) : null,
+                routeType: currentLineName != null
+                    ? getRouteTypeForLine(currentLineName)
+                    : null,
               ),
             );
           }
@@ -1967,7 +2082,9 @@ class DirectionService {
             durationMinutes: _estimateRouteMinutes(remainingStops),
             intermediateStops: remainingStops,
             routeShortName: currentLineName,
-              routeType: currentLineName != null ? getRouteTypeForLine(currentLineName) : null,
+            routeType: currentLineName != null
+                ? getRouteTypeForLine(currentLineName)
+                : null,
           ),
         );
       } else if (remainingStops.length == 1 && segments.isEmpty) {
@@ -1981,7 +2098,9 @@ class DirectionService {
             durationMinutes: 0,
             intermediateStops: remainingStops,
             routeShortName: currentLineName,
-              routeType: currentLineName != null ? getRouteTypeForLine(currentLineName) : null,
+            routeType: currentLineName != null
+                ? getRouteTypeForLine(currentLineName)
+                : null,
           ),
         );
       }

@@ -2802,6 +2802,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               : routeShortName;
           final descriptionBus = row[2].trim();
           final typeId = row[3].trim();
+          // final agencyId = row[4].trim(); // skip parsing unused column for now
           final isExpressway =
               descriptionBus.contains('ทางด่วน') ||
               routeShortName.contains('E') ||
