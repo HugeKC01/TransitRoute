@@ -36,6 +36,16 @@ void main() {
   runApp(const MyApp());
 }
 
+class AppScrollBehavior extends MaterialScrollBehavior {
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+    PointerDeviceKind.touch,
+    PointerDeviceKind.mouse,
+    PointerDeviceKind.trackpad,
+    PointerDeviceKind.stylus,
+  };
+}
+
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
@@ -55,6 +65,7 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      scrollBehavior: AppScrollBehavior(),
       title: 'Flutter Demo',
       theme: ThemeData(
         useMaterial3: true,
@@ -1018,6 +1029,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           options: MapOptions(
             initialCenter: _currentCenter,
             initialZoom: _currentZoom,
+            interactionOptions: const InteractionOptions(
+              flags: InteractiveFlag.all,
+              scrollWheelVelocity: 0.015,
+            ),
             onMapEvent: (event) {
               final newZoom = event.camera.zoom;
               _currentCenter = event.camera.center;
