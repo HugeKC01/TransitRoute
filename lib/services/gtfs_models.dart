@@ -185,7 +185,6 @@ class Frequency {
   });
 }
 
-
 class BusRouteInfo {
   final String routeShortName;
   final String typeId;

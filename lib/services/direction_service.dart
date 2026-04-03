@@ -1515,12 +1515,18 @@ class DirectionService {
         route.tags.add('Cheapest');
       }
 
-      final hasRail = route.segments?.any((s) => s.mode == TravelMode.transit && (s.isTrain || s.isMetro)) ?? false;
+      final hasRail =
+          route.segments?.any(
+            (s) => s.mode == TravelMode.transit && (s.isTrain || s.isMetro),
+          ) ??
+          false;
       if (route.tags.contains('Rail priority') && !hasRail) {
         route.tags.remove('Rail priority');
       }
 
-      final hasBus = route.segments?.any((s) => s.mode == TravelMode.transit && s.isBus) ?? false;
+      final hasBus =
+          route.segments?.any((s) => s.mode == TravelMode.transit && s.isBus) ??
+          false;
       if (route.tags.contains('Bus priority') && !hasBus) {
         route.tags.remove('Bus priority');
       }

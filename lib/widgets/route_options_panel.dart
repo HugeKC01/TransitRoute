@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:route/services/direction_service.dart';
 import 'formatters.dart';
 
-
 class RouteOptionsPanel extends StatelessWidget {
   const RouteOptionsPanel({
     super.key,
@@ -308,19 +307,23 @@ class _RouteOptionCard extends StatelessWidget {
                                   children: [
                                     TextSpan(
                                       text: '${option.minutes}',
-                                      style: theme.textTheme.titleLarge?.copyWith(
-                                        fontWeight: FontWeight.w900,
-                                        color: applyHighlight
-                                            ? highlightColor
-                                            : theme.colorScheme.primary,
-                                      ),
+                                      style: theme.textTheme.titleLarge
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w900,
+                                            color: applyHighlight
+                                                ? highlightColor
+                                                : theme.colorScheme.primary,
+                                          ),
                                     ),
                                     TextSpan(
                                       text: ' min',
-                                      style: theme.textTheme.labelMedium?.copyWith(
-                                        fontWeight: FontWeight.w600,
-                                        color: theme.colorScheme.onSurfaceVariant,
-                                      ),
+                                      style: theme.textTheme.labelMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                            color: theme
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                          ),
                                     ),
                                   ],
                                 ),
@@ -341,18 +344,23 @@ class _RouteOptionCard extends StatelessWidget {
                                 TextSpan(
                                   children: [
                                     TextSpan(
-                                      text: '${option.fareBreakdown['total'] ?? 0}',
-                                      style: theme.textTheme.titleMedium?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                        color: theme.colorScheme.onSurface,
-                                      ),
+                                      text:
+                                          '${option.fareBreakdown['total'] ?? 0}',
+                                      style: theme.textTheme.titleMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                            color: theme.colorScheme.onSurface,
+                                          ),
                                     ),
                                     TextSpan(
                                       text: ' ฿',
-                                      style: theme.textTheme.labelMedium?.copyWith(
-                                        fontWeight: FontWeight.w600,
-                                        color: theme.colorScheme.onSurfaceVariant,
-                                      ),
+                                      style: theme.textTheme.labelMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                            color: theme
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                          ),
                                     ),
                                   ],
                                 ),
@@ -411,7 +419,11 @@ class _RouteOptionCard extends StatelessWidget {
                         scrollDirection: Axis.horizontal,
                         child: Row(
                           children: [
-                            for (int i = 0; i < transitSegments.length; i++) ...[
+                            for (
+                              int i = 0;
+                              i < transitSegments.length;
+                              i++
+                            ) ...[
                               if (i > 0)
                                 Padding(
                                   padding: const EdgeInsets.symmetric(
@@ -425,7 +437,9 @@ class _RouteOptionCard extends StatelessWidget {
                                 ),
                               Builder(
                                 builder: (context) {
-                                  final lineName = transitSegments[i].routeShortName ?? 'Unknown line';
+                                  final lineName =
+                                      transitSegments[i].routeShortName ??
+                                      'Unknown line';
                                   final color =
                                       lineColors[lineName] ??
                                       theme.colorScheme.primary;
@@ -434,7 +448,9 @@ class _RouteOptionCard extends StatelessWidget {
                                       ? Colors.black87
                                       : Colors.white;
 
-                                  IconData getTransportIcon(RouteSegment segment) {
+                                  IconData getTransportIcon(
+                                    RouteSegment segment,
+                                  ) {
                                     if (segment.mode == TravelMode.walk) {
                                       return Icons.directions_walk;
                                     }

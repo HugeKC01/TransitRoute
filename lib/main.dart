@@ -1383,51 +1383,139 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   }
 
   Widget _buildFilterMenu() {
+    final theme = Theme.of(context);
     return MenuAnchor(
-      alignmentOffset: const Offset(-80, 0),
+      alignmentOffset: const Offset(-180, 0),
+      style: MenuStyle(
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        ),
+        elevation: const WidgetStatePropertyAll(8),
+        padding: const WidgetStatePropertyAll(
+          EdgeInsets.symmetric(vertical: 8),
+        ),
+      ),
       menuChildren: [
-        CheckboxMenuButton(
-          value: _showTrainPins,
-          onChanged: (val) => setState(() => _showTrainPins = val ?? true),
-          child: const Text('Train'),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Text(
+            'Map Layers',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ),
-        CheckboxMenuButton(
-          value: _showMetroPins,
-          onChanged: (val) => setState(() => _showMetroPins = val ?? true),
-          child: const Text('Metro'),
+        const Divider(),
+        _buildFilterMenuItem(
+          'Train Station',
+          Icons.train,
+          Colors.orange,
+          _showTrainPins,
+          (val) => setState(() => _showTrainPins = val),
         ),
-        CheckboxMenuButton(
-          value: _showBusPins,
-          onChanged: (val) => setState(() => _showBusPins = val ?? true),
-          child: const Text('Bus'),
+        _buildFilterMenuItem(
+          'Metro Station',
+          Icons.subway,
+          Colors.blue,
+          _showMetroPins,
+          (val) => setState(() => _showMetroPins = val),
         ),
-        CheckboxMenuButton(
-          value: _showFerryPins,
-          onChanged: (val) => setState(() => _showFerryPins = val ?? true),
-          child: const Text('Ferry'),
+        _buildFilterMenuItem(
+          'Bus Stop',
+          Icons.directions_bus,
+          Colors.green,
+          _showBusPins,
+          (val) => setState(() => _showBusPins = val),
+        ),
+        _buildFilterMenuItem(
+          'Ferry Pier',
+          Icons.directions_boat,
+          Colors.teal,
+          _showFerryPins,
+          (val) => setState(() => _showFerryPins = val),
         ),
       ],
       builder: (context, controller, child) {
         return Material(
           elevation: 6,
-          color: Theme.of(context).colorScheme.surface,
+          color: theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(32),
-          child: IconButton(
-            icon: const Icon(Icons.layers),
-            tooltip: 'Filter Pins',
-            onPressed: () {
-              if (controller.isOpen) {
-                controller.close();
-              } else {
-                controller.open();
-              }
-            },
-            iconSize: 28,
-            padding: const EdgeInsets.all(12),
-            constraints: const BoxConstraints(minWidth: 56, minHeight: 56),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(32),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: IconButton(
+              icon: Icon(
+                Icons.layers_outlined,
+                color: controller.isOpen
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurface,
+              ),
+              tooltip: 'Map Layers',
+              onPressed: () {
+                if (controller.isOpen) {
+                  controller.close();
+                } else {
+                  controller.open();
+                }
+              },
+              iconSize: 28,
+              padding: const EdgeInsets.all(12),
+              constraints: const BoxConstraints(minWidth: 56, minHeight: 56),
+            ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildFilterMenuItem(
+    String title,
+    IconData icon,
+    Color color,
+    bool value,
+    ValueChanged<bool> onChanged,
+  ) {
+    final theme = Theme.of(context);
+    return MenuItemButton(
+      onPressed: () => onChanged(!value),
+      child: Container(
+        width: 200,
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, size: 20, color: color),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Switch(
+              value: value,
+              onChanged: onChanged,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ],
+        ),
+      ),
     );
   }
 
