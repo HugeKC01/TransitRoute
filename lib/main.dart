@@ -18,7 +18,6 @@ import 'package:route/services/transit_update_service.dart';
 
 import 'pages/more_page.dart';
 import 'pages/cards_page.dart';
-import 'pages/station_details_page.dart';
 import 'pages/transit_update_page.dart';
 import 'pages/transit_updates_list_page.dart';
 import 'pages/transport_lines_page.dart';
@@ -26,7 +25,6 @@ import 'pages/navigation_page.dart';
 import 'pages/graphic_map_page.dart';
 import 'widgets/route_details_sheet.dart';
 import 'widgets/route_options_panel.dart';
-import 'widgets/upcoming_departures.dart';
 
 import 'widgets/search_tabs.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -546,32 +544,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       }
       _headerCollapsed.value = false;
     });
-  }
-
-  void _pushStationDetailsPage(BuildContext context, gtfs.Stop stop) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (pageContext) => StationDetailsPage(
-          stop: stop,
-          lineName: _getLineName(stop.stopId),
-          lineColor: _getLineColor(stop.stopId),
-          transferStops: _directionService.getTransferStations(stop.stopId),
-          lineNameResolver: _getLineName,
-          lineColorResolver: _getLineColor,
-          onTransferStationSelected: (tStop) {
-            _pushStationDetailsPage(pageContext, tStop);
-          },
-          onSelectAsStart: () {
-            Navigator.of(pageContext).popUntil((r) => r.isFirst);
-            _assignStopSelection(stop, asStart: true);
-          },
-          onSelectAsDestination: () {
-            Navigator.of(pageContext).popUntil((r) => r.isFirst);
-            _assignStopSelection(stop, asStart: false);
-          },
-        ),
-      ),
-    );
   }
 
   void _showStopDetails(BuildContext context, gtfs.Stop stop) {
