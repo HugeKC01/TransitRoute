@@ -248,6 +248,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   LocationPoint? _customStartPoint;
   LocationPoint? _customDestPoint;
   List<DirectionOption> directionOptions = [];
+  DirectionOption? _viewingDetailsOption;
   int selectedDirectionIndex = 0;
 
   Future<void> _findDirection() async {
@@ -888,20 +889,67 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     if (directionOptions.isEmpty) {
       return const SizedBox.shrink();
     }
-    return RouteOptionsPanel(
-      options: directionOptions,
-      selectedIndex: selectedDirectionIndex,
-      onSelectOption: _selectRouteOption,
-      onViewDetails: (option) => showRouteDetailsSheet(
-        context: context,
-        option: option,
+
+    Widget content;
+    if (_viewingDetailsOption != null) {
+      content = RouteDetailsSheet(
+        key: const ValueKey('route_details'),
+        option: _viewingDetailsOption!,
+        onBack: () {
+          setState(() {
+            _viewingDetailsOption = null;
+          });
+        },
         lineNameResolver: _getLineName,
         lineColorResolver: _getLineColor,
         lineColors: lineColors,
-      ),
-      onStartNavigation: _openNavigation,
-      lineNameResolver: _getLineName,
-      lineColors: lineColors,
+      );
+    } else {
+      content = RouteOptionsPanel(
+        key: const ValueKey('route_options'),
+        options: directionOptions,
+        selectedIndex: selectedDirectionIndex,
+        onSelectOption: _selectRouteOption,
+        onViewDetails: (option) {
+          setState(() {
+            _viewingDetailsOption = option;
+          });
+        },
+        onStartNavigation: _openNavigation,
+        lineNameResolver: _getLineName,
+        lineColors: lineColors,
+      );
+    }
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      switchInCurve: Curves.easeInOutCubic,
+      switchOutCurve: Curves.easeInOutCubic,
+      transitionBuilder: (child, animation) {
+        final isDetails = child.key == const ValueKey('route_details');
+        return FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: isDetails
+                  ? const Offset(0.05, 0.0)
+                  : const Offset(-0.05, 0.0),
+              end: Offset.zero,
+            ).animate(animation),
+            child: child,
+          ),
+        );
+      },
+      layoutBuilder: (currentChild, previousChildren) {
+        return Stack(
+          alignment: Alignment.topCenter,
+          children: <Widget>[
+            ...previousChildren,
+            if (currentChild != null) currentChild,
+          ],
+        );
+      },
+      child: content,
     );
   }
 
@@ -1396,37 +1444,65 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         // Map fills the entire background
         Positioned.fill(child: _buildMap(context)),
 
-        // Floating options panel on the left (Desktop/Tablet)
-        AnimatedPositioned(
-          duration: const Duration(milliseconds: 350),
-          curve: Curves.easeInOutCubic,
-          left: hasRoutes ? 24 : -panelWidth - 32, // Slide in from the left
-          top: topInset + 100, // Below the floating header
+        // Content on the left side
+        Positioned(
+          top: topInset + 12.0,
           bottom: 24,
+          left: 24,
           width: panelWidth,
-          child: AnimatedOpacity(
-            duration: const Duration(milliseconds: 250),
-            opacity: hasRoutes ? 1.0 : 0.0,
-            child: Material(
-              elevation: 12,
-              color: theme.colorScheme.surface.withValues(
-                alpha: 0.95,
-              ), // Slight transparency
-              borderRadius: BorderRadius.circular(24),
-              clipBehavior: Clip.antiAlias,
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                child: ListView(
-                  padding: const EdgeInsets.only(bottom: 24, top: 12),
-                  children: [_buildRouteOptionsSection(context)],
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // The header
+              _buildHomeHeader(context, true),
+
+              // The floating options panel underneath
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 350),
+                  switchInCurve: Curves.easeInOutCubic,
+                  switchOutCurve: Curves.easeInOutCubic,
+                  transitionBuilder: (child, animation) {
+                    return SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(
+                          -1.2,
+                          0.0,
+                        ), // slide from left out of view
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: FadeTransition(opacity: animation, child: child),
+                    );
+                  },
+                  child: hasRoutes
+                      ? Padding(
+                          key: const ValueKey('route_options'),
+                          padding: const EdgeInsets.only(top: 16.0),
+                          child: Material(
+                            elevation: 12, // Slight transparency
+                            color: theme.colorScheme.surface.withValues(
+                              alpha: 0.95,
+                            ),
+                            borderRadius: BorderRadius.circular(24),
+                            clipBehavior: Clip.antiAlias,
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                              child: ListView(
+                                padding: const EdgeInsets.only(
+                                  bottom: 24,
+                                  top: 12,
+                                ),
+                                children: [_buildRouteOptionsSection(context)],
+                              ),
+                            ),
+                          ),
+                        )
+                      : const SizedBox.shrink(key: ValueKey('no_routes')),
                 ),
               ),
-            ),
+            ],
           ),
         ),
-
-        // Floating header overlay over everything
-        headerOverlay,
       ],
     );
   }
@@ -1874,7 +1950,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                       icon: Icons.trip_origin,
                       asStart: true,
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
                     _buildStopSearchField(
                       context,
                       label: 'Destination',
@@ -1890,7 +1966,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   _collapseHeaderButton(),
                   if (hasStart || hasDest)
                     Padding(
-                      padding: const EdgeInsets.only(top: 12),
+                      padding: const EdgeInsets.only(top: 8),
                       child: IconButton(
                         icon: const Icon(Icons.swap_vert),
                         style: IconButton.styleFrom(
@@ -1903,38 +1979,34 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
-                child: FilledButton.icon(
+                child: FilledButton(
                   style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
                   onPressed: hasBoth ? () => _findDirection() : null,
-                  icon: const Icon(Icons.route),
-                  label: Text(
-                    hasBoth ? 'Plan route' : 'Pick both stops',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
+                  child: const Icon(Icons.route),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Expanded(child: _buildTransitPreferenceChooser(context)),
               if (selectedStartStopId != null ||
                   selectedDestinationStopId != null)
-                TextButton.icon(
+                IconButton(
                   onPressed: _clearSelections,
-                  icon: const Icon(Icons.clear, size: 16),
-                  label: const Text('Clear'),
+                  icon: const Icon(Icons.delete_outline),
+                  tooltip: 'Clear',
                 ),
             ],
           ),
@@ -1944,43 +2016,38 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   }
 
   Widget _buildTransitPreferenceChooser(BuildContext context) {
-    final theme = Theme.of(context);
-    final options = ['Metro', 'Train', 'Bus', 'Ferry'];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Allowed transit types',
-          style: theme.textTheme.labelMedium?.copyWith(
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
-          ),
-        ),
-        const SizedBox(height: 6),
-        Wrap(
-          spacing: 8,
-          runSpacing: 4,
-          children: options.map((opt) {
-            final isSelected = allowedTransitTypes.contains(opt);
-            return FilterChip(
-              label: Text(opt),
-              selected: isSelected,
-              onSelected: (selected) {
-                setState(() {
-                  if (selected) {
-                    allowedTransitTypes.add(opt);
-                  } else {
-                    allowedTransitTypes.remove(opt);
-                  }
-                });
-                if (selectedStartStopId != null &&
-                    selectedDestinationStopId != null) {
-                  _findDirection();
-                }
-              },
-            );
-          }).toList(),
-        ),
-      ],
+    final options = [
+      {'type': 'Metro', 'icon': Icons.subway},
+      {'type': 'Train', 'icon': Icons.directions_railway},
+      {'type': 'Bus', 'icon': Icons.directions_bus},
+      {'type': 'Ferry', 'icon': Icons.directions_boat},
+    ];
+    return Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      children: options.map((opt) {
+        final type = opt['type'] as String;
+        final icon = opt['icon'] as IconData;
+        final isSelected = allowedTransitTypes.contains(type);
+        return FilterChip(
+          label: Icon(icon, size: 20),
+          showCheckmark: false,
+          selected: isSelected,
+          onSelected: (selected) {
+            setState(() {
+              if (selected) {
+                allowedTransitTypes.add(type);
+              } else {
+                allowedTransitTypes.remove(type);
+              }
+            });
+            if (selectedStartStopId != null &&
+                selectedDestinationStopId != null) {
+              _findDirection();
+            }
+          },
+        );
+      }).toList(),
     );
   }
 
@@ -2002,14 +2069,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: theme.textTheme.labelMedium?.copyWith(
-            color: textColor,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 8),
         SearchAnchor(
           searchController: controller,
           viewHintText: 'Search $label station',
@@ -3054,8 +3113,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           : null,
     );
   }
-
-
 
   Widget _buildHomeContent(BuildContext context, bool isWideLayout) {
     final headerOverlay = _buildHeaderOverlay(context, isWideLayout);

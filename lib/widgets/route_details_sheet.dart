@@ -2,45 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:route/services/direction_service.dart';
 import 'formatters.dart';
 
-
 import 'widget_types.dart';
-
-Future<void> showRouteDetailsSheet({
-  required BuildContext context,
-  required DirectionOption option,
-  required LineNameResolver lineNameResolver,
-  required LineColorResolver lineColorResolver,
-  required Map<String, Color> lineColors,
-}) {
-  return showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    backgroundColor: Theme.of(context).colorScheme.surface,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-    ),
-    builder: (sheetContext) {
-      return DraggableScrollableSheet(
-        initialChildSize: 0.85,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        expand: false,
-        builder: (context, controller) {
-          return SafeArea(
-            child: RouteDetailsSheet(
-              option: option,
-              lineNameResolver: lineNameResolver,
-              lineColorResolver: lineColorResolver,
-              lineColors: lineColors,
-              scrollController: controller,
-            ),
-          );
-        },
-      );
-    },
-  );
-}
 
 class RouteDetailsSheet extends StatelessWidget {
   const RouteDetailsSheet({
@@ -49,14 +11,25 @@ class RouteDetailsSheet extends StatelessWidget {
     required this.lineNameResolver,
     required this.lineColorResolver,
     required this.lineColors,
-    required this.scrollController,
+    required this.onBack,
   });
 
   final DirectionOption option;
   final LineNameResolver lineNameResolver;
   final LineColorResolver lineColorResolver;
   final Map<String, Color> lineColors;
-  final ScrollController scrollController;
+  final VoidCallback onBack;
+
+  static const List<String> _tagOrder = [
+    'Shortest',
+    'Fastest',
+    'Cheapest',
+    'Direct',
+    'Balanced',
+    'Low transfers',
+    'Fewest stops',
+    'Transfer',
+  ];
 
   Widget _buildSegmentHeader(
     BuildContext context,
@@ -227,131 +200,229 @@ class RouteDetailsSheet extends StatelessWidget {
     final theme = Theme.of(context);
     final totalFare = option.fareBreakdown['total'] ?? 0;
 
-    return ListView(
-      controller: scrollController,
+    final sortedTags = option.tags.toList()
+      ..sort((a, b) {
+        final ai = _tagOrder.indexOf(a);
+        final bi = _tagOrder.indexOf(b);
+        if (ai == -1 && bi == -1) return a.compareTo(b);
+        if (ai == -1) return 1;
+        if (bi == -1) return -1;
+        return ai.compareTo(bi);
+      });
+    final filteredTags = sortedTags;
+    final headlineTags = filteredTags.take(3).toList();
+    final remainingTags = filteredTags.length - headlineTags.length;
+
+    return Padding(
       padding: EdgeInsets.fromLTRB(
         24,
         8,
         24,
         24 + MediaQuery.of(context).viewInsets.bottom,
       ),
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Expanded(
-              child: Text(
-                option.label.isNotEmpty ? option.label : 'Trip Details',
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: onBack,
+                tooltip: 'Back to options',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                style: const ButtonStyle(
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
               ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                "฿$totalFare",
-                style: theme.textTheme.titleMedium?.copyWith(
-                  color: theme.colorScheme.onPrimaryContainer,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Icon(
-              Icons.schedule,
-              size: 18,
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              "${option.minutes} min",
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Icon(
-              Icons.route,
-              size: 18,
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              formatDistance(option.distanceMeters),
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 24),
-        const Divider(),
-        const SizedBox(height: 16),
-        Text(
-          'Journey',
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 16),
-        if (option.segments.isEmpty)
-          Text('No segments available.', style: theme.textTheme.bodyMedium)
-        else
-          ...List.generate(option.segments.length, (index) {
-            final segment = option.segments[index];
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildSegmentHeader(context, segment, index, theme),
-                if (segment.hasIssue)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 32, bottom: 8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.errorContainer,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
+              const SizedBox(width: 12),
+              Expanded(
+                child: headlineTags.isNotEmpty
+                    ? Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
                         children: [
-                          Icon(
-                            Icons.warning_amber_rounded,
-                            color: theme.colorScheme.error,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              segment.issueNotice ??
-                                  'Issue reported on this line',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.colorScheme.error,
-                                fontWeight: FontWeight.w600,
+                          ...headlineTags.map((tag) {
+                            final color = tag == 'Fastest'
+                                ? const Color(0xFF2E7D32)
+                                : tag == 'Cheapest'
+                                ? const Color(0xFFF9A825)
+                                : theme.colorScheme.primary;
+                            final icon = tag == 'Fastest'
+                                ? Icons.bolt
+                                : tag == 'Cheapest'
+                                ? Icons.savings
+                                : tag == 'Shortest'
+                                ? Icons.straighten
+                                : null;
+                            return _TagPill(
+                              label: tag,
+                              color: color,
+                              icon: icon,
+                            );
+                          }),
+                          if (remainingTags > 0)
+                            _TagPill(
+                              label: '+$remainingTags',
+                              color: theme.colorScheme.secondary,
+                            ),
+                        ],
+                      )
+                    : Text(
+                        option.label.isNotEmpty ? option.label : 'Trip Details',
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  "฿$totalFare",
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: theme.colorScheme.onPrimaryContainer,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Icon(
+                Icons.schedule,
+                size: 18,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                "${option.minutes} min",
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Icon(
+                Icons.route,
+                size: 18,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                formatDistance(option.distanceMeters),
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          const Divider(),
+          const SizedBox(height: 16),
+          Text(
+            'Journey',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (option.segments.isEmpty)
+            Text('No segments available.', style: theme.textTheme.bodyMedium)
+          else
+            ...List.generate(option.segments.length, (index) {
+              final segment = option.segments[index];
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildSegmentHeader(context, segment, index, theme),
+                  if (segment.hasIssue)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 32, bottom: 8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.errorContainer,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.warning_amber_rounded,
+                              color: theme.colorScheme.error,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                segment.issueNotice ??
+                                    'Issue reported on this line',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: theme.colorScheme.error,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                if (segment.mode == TravelMode.transit)
-                  _buildStopList(segment, theme),
-              ],
-            );
-          }),
-      ],
+                  if (segment.mode == TravelMode.transit)
+                    _buildStopList(segment, theme),
+                ],
+              );
+            }),
+        ],
+      ),
+    );
+  }
+}
+
+class _TagPill extends StatelessWidget {
+  const _TagPill({required this.label, required this.color, this.icon});
+
+  final String label;
+  final Color color;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 4),
+          ],
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

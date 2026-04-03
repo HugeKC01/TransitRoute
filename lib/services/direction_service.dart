@@ -267,7 +267,7 @@ class DirectionService {
         break;
       }
     }
-    
+
     if (result == null && _busRouteInfoMap.containsKey(lineName)) {
       result = '3';
     }
@@ -957,10 +957,19 @@ class DirectionService {
         if (trip != null) {
           final route = _routes.firstWhere(
             (r) => r.routeId == trip.routeId,
-            orElse: () => gtfs.Route(routeId: '', shortName: '', longName: '', type: '', agencyId: '', linePrefixes: []),
+            orElse: () => gtfs.Route(
+              routeId: '',
+              shortName: '',
+              longName: '',
+              type: '',
+              agencyId: '',
+              linePrefixes: [],
+            ),
           );
           if (route.routeId.isNotEmpty) {
-            defaultLineName = route.longName.isNotEmpty ? route.longName : route.routeId;
+            defaultLineName = route.longName.isNotEmpty
+                ? route.longName
+                : route.routeId;
           }
         }
 
@@ -972,7 +981,8 @@ class DirectionService {
           final a = entry.value[j]['stopId'] as String;
           final b = entry.value[j + 1]['stopId'] as String;
 
-          final lineName = entry.value[j]['lineName'] as String? ?? defaultLineName;
+          final lineName =
+              entry.value[j]['lineName'] as String? ?? defaultLineName;
 
           final stopA =
               _stopLookup[a] ??
@@ -986,6 +996,8 @@ class DirectionService {
                 (s) => s.stopId == b,
                 orElse: () => gtfs.Stop(stopId: b, name: b, lat: 0, lon: 0),
               );
+          // Ensure edges derived from trips are strictly directed (from stop i to stop i+1).
+          // Do not add the reverse edge (b -> a) to avoid incorrect reverse routing.
           final dist = geo.haversine(
             stopA.lat,
             stopA.lon,
@@ -1287,13 +1299,16 @@ class DirectionService {
       if (tripStops[i]['stopId'] == a) {
         for (int j = i + 1; j < tripStops.length; j++) {
           if (tripStops[j]['stopId'] == b) {
-            final span = j - i;
-            if (span < minSpan) {
-              minSpan = span;
-              bestI = i;
-              bestJ = j;
+            final seqI = tripStops[i]['stopSequence'] as int? ?? i;
+            final seqJ = tripStops[j]['stopSequence'] as int? ?? j;
+            if (seqI < seqJ) {
+              final span = j - i;
+              if (span < minSpan) {
+                minSpan = span;
+                bestI = i;
+                bestJ = j;
+              }
             }
-            break;
           }
         }
       }
@@ -1498,6 +1513,16 @@ class DirectionService {
     for (final route in taggedRoutes) {
       if (fares[route] == cheapestFare) {
         route.tags.add('Cheapest');
+      }
+
+      final hasRail = route.segments?.any((s) => s.mode == TravelMode.transit && (s.isTrain || s.isMetro)) ?? false;
+      if (route.tags.contains('Rail priority') && !hasRail) {
+        route.tags.remove('Rail priority');
+      }
+
+      final hasBus = route.segments?.any((s) => s.mode == TravelMode.transit && s.isBus) ?? false;
+      if (route.tags.contains('Bus priority') && !hasBus) {
+        route.tags.remove('Bus priority');
       }
     }
 
@@ -1724,7 +1749,8 @@ class DirectionService {
         if (railCostPenalty > 0 && !isNeighborBus)
           nodePenalty += railCostPenalty;
 
-        final Set<String> transitLines = _transitEdges[currentStop]?[neighbor] ?? {};
+        final Set<String> transitLines =
+            _transitEdges[currentStop]?[neighbor] ?? {};
         final bool hasTransitEdge = transitLines.isNotEmpty;
 
         List<String> validLines = [];
@@ -1734,7 +1760,8 @@ class DirectionService {
             validLines.add('WALK');
           }
         } else {
-          final neighborLinesStr = lineNameResolver(neighbor)?.split(', ') ?? [];
+          final neighborLinesStr =
+              lineNameResolver(neighbor)?.split(', ') ?? [];
           validLines.addAll(neighborLinesStr);
           validLines.add('WALK');
         }

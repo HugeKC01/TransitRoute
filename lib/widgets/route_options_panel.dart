@@ -58,29 +58,34 @@ class RouteOptionsPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisAlignment: MainAxisAlignment.start,
             children: [
-              Text(
-                'Available Routes',
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
               Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
+                  horizontal: 12,
+                  vertical: 6,
                 ),
                 decoration: BoxDecoration(
                   color: theme.colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(16),
                 ),
-                child: Text(
-                  '${options.length} options',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: theme.colorScheme.onPrimaryContainer,
-                    fontWeight: FontWeight.w600,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.route,
+                      size: 18,
+                      color: theme.colorScheme.onPrimaryContainer,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${options.length} Routes',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: theme.colorScheme.onPrimaryContainer,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -241,17 +246,7 @@ class _RouteOptionCard extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              label,
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: theme.colorScheme.onSurface,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            if (headlineTags.isNotEmpty) ...[
-                              const SizedBox(height: 6),
+                            if (headlineTags.isNotEmpty)
                               Wrap(
                                 spacing: 6,
                                 runSpacing: 6,
@@ -264,6 +259,13 @@ class _RouteOptionCard extends StatelessWidget {
                                           : tag == 'Cheapest'
                                           ? const Color(0xFFF9A825)
                                           : theme.colorScheme.primary,
+                                      icon: tag == 'Fastest'
+                                          ? Icons.bolt
+                                          : tag == 'Cheapest'
+                                          ? Icons.savings
+                                          : tag == 'Shortest'
+                                          ? Icons.straighten
+                                          : null,
                                     ),
                                   ),
                                   if (remainingTags > 0)
@@ -272,8 +274,17 @@ class _RouteOptionCard extends StatelessWidget {
                                       color: theme.colorScheme.secondary,
                                     ),
                                 ],
+                              )
+                            else
+                              Text(
+                                label,
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: theme.colorScheme.onSurface,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                            ],
                           ],
                         ),
                       ),
@@ -282,34 +293,71 @@ class _RouteOptionCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Row(
-                            crossAxisAlignment: CrossAxisAlignment.baseline,
-                            textBaseline: TextBaseline.alphabetic,
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
-                              Text(
-                                '${option.minutes}',
-                                style: theme.textTheme.headlineSmall?.copyWith(
-                                  fontWeight: FontWeight.w900,
-                                  color: applyHighlight
-                                      ? highlightColor
-                                      : theme.colorScheme.primary,
-                                ),
+                              Icon(
+                                Icons.schedule,
+                                size: 18,
+                                color: applyHighlight
+                                    ? highlightColor
+                                    : theme.colorScheme.primary,
                               ),
-                              const SizedBox(width: 2),
-                              Text(
-                                'min',
-                                style: theme.textTheme.labelMedium?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                  color: theme.colorScheme.onSurfaceVariant,
+                              const SizedBox(width: 6),
+                              Text.rich(
+                                TextSpan(
+                                  children: [
+                                    TextSpan(
+                                      text: '${option.minutes}',
+                                      style: theme.textTheme.titleLarge?.copyWith(
+                                        fontWeight: FontWeight.w900,
+                                        color: applyHighlight
+                                            ? highlightColor
+                                            : theme.colorScheme.primary,
+                                      ),
+                                    ),
+                                    TextSpan(
+                                      text: ' min',
+                                      style: theme.textTheme.labelMedium?.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                        color: theme.colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
-                          Text(
-                            '฿${option.fareBreakdown['total'] ?? 0}',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: theme.colorScheme.onSurface,
-                            ),
+                          const SizedBox(height: 4),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.payments_outlined,
+                                size: 16,
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                              const SizedBox(width: 6),
+                              Text.rich(
+                                TextSpan(
+                                  children: [
+                                    TextSpan(
+                                      text: '${option.fareBreakdown['total'] ?? 0}',
+                                      style: theme.textTheme.titleMedium?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        color: theme.colorScheme.onSurface,
+                                      ),
+                                    ),
+                                    TextSpan(
+                                      text: ' ฿',
+                                      style: theme.textTheme.labelMedium?.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                        color: theme.colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -401,19 +449,12 @@ class _RouteOptionCard extends StatelessWidget {
 
                                   return Container(
                                     padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 6,
+                                      horizontal: 8,
+                                      vertical: 4,
                                     ),
                                     decoration: BoxDecoration(
                                       color: color,
                                       borderRadius: BorderRadius.circular(8),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: color.withValues(alpha: 0.3),
-                                          blurRadius: 4,
-                                          offset: const Offset(0, 2),
-                                        ),
-                                      ],
                                     ),
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
@@ -423,11 +464,11 @@ class _RouteOptionCard extends StatelessWidget {
                                           size: 16,
                                           color: textColor,
                                         ),
-                                        const SizedBox(width: 6),
+                                        const SizedBox(width: 4),
                                         Text(
                                           lineName,
                                           style: TextStyle(
-                                            fontSize: 13,
+                                            fontSize: 12,
                                             fontWeight: FontWeight.bold,
                                             color: textColor,
                                           ),
@@ -494,16 +535,15 @@ class _RouteOptionCard extends StatelessWidget {
                               tooltip: 'Details',
                             ),
                             const SizedBox(width: 8),
-                            FilledButton.icon(
+                            IconButton.filled(
                               onPressed: onStartNavigation,
-                              icon: const Icon(Icons.navigation, size: 18),
-                              label: const Text('Go'),
-                              style: FilledButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                ),
-                                minimumSize: const Size(0, 40),
+                              icon: const Icon(Icons.navigation, size: 20),
+                              constraints: const BoxConstraints.tightFor(
+                                width: 40,
+                                height: 40,
                               ),
+                              padding: EdgeInsets.zero,
+                              tooltip: 'Go',
                             ),
                           ],
                         ),
@@ -520,28 +560,39 @@ class _RouteOptionCard extends StatelessWidget {
 }
 
 class _TagPill extends StatelessWidget {
-  const _TagPill({required this.label, required this.color});
+  const _TagPill({required this.label, required this.color, this.icon});
 
   final String label;
   final Color color;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+    final content = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: color,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 4),
+          ],
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ],
       ),
     );
+
+    return content;
   }
 }
