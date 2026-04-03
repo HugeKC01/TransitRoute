@@ -966,7 +966,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     // Responsive bottom offset that animates up if there are routes
     final zoomBottomOffset = isWide
         ? 24.0
-        : (hasRoutes ? screenHeight * 0.45 + 16.0 : viewPadding.bottom + 16.0);
+        : (hasRoutes ? screenHeight * 0.45 + 16.0 : viewPadding.bottom + 120.0);
     final showBusStops =
         _showBusPins &&
         busStops.isNotEmpty &&
@@ -3069,11 +3069,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
     final bodyContent = SafeArea(
       top: false,
-      bottom: !isWideLayout, // if wide, rail handles safe area horizontally
+      bottom: false, // map and other pages handle bottom insets natively
       child: body,
     );
 
     return Scaffold(
+      extendBody: true,
       backgroundColor: theme.colorScheme.surface,
       body: (isWideLayout && showNav)
           ? Row(
@@ -3107,7 +3108,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               ],
             )
           : bodyContent,
-      // floatingActionButton managed in Map layouts directly
       bottomNavigationBar: (!isWideLayout && showNav)
           ? _buildNavigationBar()
           : null,
@@ -3124,28 +3124,116 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   }
 
   Widget _buildNavigationBar() {
-    return NavigationBar(
-      selectedIndex: _selectedNavIndex,
-      onDestinationSelected: (index) {
-        setState(() => _selectedNavIndex = index);
-      },
-      destinations: const [
-        NavigationDestination(
-          icon: Icon(Icons.home_outlined),
-          selectedIcon: Icon(Icons.home_rounded),
-          label: 'Home',
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 32,
+        right: 32,
+        bottom: math.max(24.0, bottomPadding + 8.0),
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(40),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.1),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
-        NavigationDestination(
-          icon: Icon(Icons.campaign_outlined),
-          selectedIcon: Icon(Icons.campaign),
-          label: 'Updates',
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(40),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Container(
+              height: 72,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface.withValues(
+                  alpha: isDark ? 0.35 : 0.75,
+                ),
+                borderRadius: BorderRadius.circular(40),
+                border: Border.all(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.15),
+                  width: 1,
+                ),
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildNavItem(
+                      0,
+                      Icons.home_outlined,
+                      Icons.home_rounded,
+                      'Home',
+                    ),
+                    _buildNavItem(
+                      1,
+                      Icons.campaign_outlined,
+                      Icons.campaign,
+                      'Updates',
+                    ),
+                    _buildNavItem(2, Icons.more_horiz, Icons.more, 'More'),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
-        NavigationDestination(
-          icon: Icon(Icons.more_horiz),
-          selectedIcon: Icon(Icons.more),
-          label: 'More',
+      ),
+    );
+  }
+
+  Widget _buildNavItem(
+    int index,
+    IconData outlineIcon,
+    IconData filledIcon,
+    String label,
+  ) {
+    final isSelected = _selectedNavIndex == index;
+    final theme = Theme.of(context);
+    final color = isSelected
+        ? theme.colorScheme.primary
+        : theme.colorScheme.onSurfaceVariant;
+
+    return Expanded(
+      child: InkWell(
+        onTap: () {
+          setState(() => _selectedNavIndex = index);
+        },
+        borderRadius: BorderRadius.circular(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              transitionBuilder: (child, anim) =>
+                  ScaleTransition(scale: anim, child: child),
+              child: Icon(
+                isSelected ? filledIcon : outlineIcon,
+                key: ValueKey<bool>(isSelected),
+                color: color,
+                size: 26,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 

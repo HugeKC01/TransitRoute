@@ -190,12 +190,13 @@ class _TransitUpdatesListPageState extends State<TransitUpdatesListPage> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final topInset = MediaQuery.of(context).padding.top;
+    final bottomInset = MediaQuery.of(context).padding.bottom;
     final reports = _filteredReports;
 
     return RefreshIndicator(
       onRefresh: _handleRefresh,
       child: ListView(
-        padding: EdgeInsets.fromLTRB(16, topInset + 20, 16, 28),
+        padding: EdgeInsets.fromLTRB(16, topInset + 20, 16, bottomInset + 16),
         children: [
           Row(
             children: [

@@ -39,8 +39,10 @@ class MorePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final topInset = MediaQuery.of(context).padding.top;
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+
     return ListView(
-      padding: EdgeInsets.fromLTRB(16, topInset + 20, 16, 20),
+      padding: EdgeInsets.fromLTRB(16, topInset + 20, 16, bottomInset + 16),
       children: [
         // Dynamic profile card
         Card(
