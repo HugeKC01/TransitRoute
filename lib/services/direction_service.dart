@@ -63,6 +63,7 @@ class RouteSegment {
 
   // Transit-specific details
   final String? routeId;
+  final String? shapeId;
   final String? routeShortName;
   final String? routeType;
   String? instruction; // e.g., "Walk to BTS Siam" or "Take Sukhumvit Line"
@@ -83,6 +84,7 @@ class RouteSegment {
     required this.durationMinutes,
     this.fare = 0,
     this.routeId,
+    this.shapeId,
     this.routeShortName,
     this.routeType,
     this.instruction,
@@ -1910,6 +1912,47 @@ class DirectionService {
     final segments = <RouteSegment>[];
     int currentSegmentStartIndex = 0;
 
+    String? getShapeForSegment(List<gtfs.Stop> segStops, String? lineName) {
+      if (_cachedStopTimes == null || _cachedTrips == null || lineName == null || segStops.isEmpty) return null;
+      String? bestShape;
+      int bestMatchCount = -1;
+      
+      for (final entry in _cachedStopTimes!.entries) {
+        final tripId = entry.key;
+        final trip = _cachedTrips![tripId];
+        if (trip == null || trip.shapeId == null) continue;
+        
+        final tripStops = entry.value;
+        if (tripStops.isEmpty) continue;
+        
+        int matchCount = 0;
+        int currentTripIdx = 0;
+        
+        for (final stop in segStops) {
+          int foundIdx = -1;
+          for (int i = currentTripIdx; i < tripStops.length; i++) {
+            if (tripStops[i]['stopId'] == stop.stopId && tripStops[i]['lineName'] == lineName) {
+              foundIdx = i;
+              break;
+            }
+          }
+          if (foundIdx != -1) {
+            matchCount++;
+            currentTripIdx = foundIdx + 1;
+          }
+        }
+        
+        if (matchCount > bestMatchCount && matchCount > 1) {
+          bestMatchCount = matchCount;
+          bestShape = trip.shapeId;
+          if (bestMatchCount == segStops.length) {
+            break;
+          }
+        }
+      }
+      return bestShape;
+    }
+
     List<String> getLinesForStop(String stopId) {
       final lines = <String>{};
 
@@ -2016,6 +2059,7 @@ class DirectionService {
                   : 0,
               intermediateStops: subStops,
               routeShortName: currentLineName,
+              shapeId: getShapeForSegment(subStops, currentLineName),
               routeType: currentLineName != null
                   ? getRouteTypeForLine(currentLineName)
                   : null,
@@ -2092,6 +2136,7 @@ class DirectionService {
                     : 0,
                 intermediateStops: subStops,
                 routeShortName: currentLineName,
+                shapeId: getShapeForSegment(subStops, currentLineName),
                 routeType: currentLineName != null
                     ? getRouteTypeForLine(currentLineName)
                     : null,
@@ -2116,6 +2161,7 @@ class DirectionService {
             durationMinutes: _estimateRouteMinutes(remainingStops),
             intermediateStops: remainingStops,
             routeShortName: currentLineName,
+            shapeId: getShapeForSegment(remainingStops, currentLineName),
             routeType: currentLineName != null
                 ? getRouteTypeForLine(currentLineName)
                 : null,
@@ -2132,6 +2178,7 @@ class DirectionService {
             durationMinutes: 0,
             intermediateStops: remainingStops,
             routeShortName: currentLineName,
+            shapeId: getShapeForSegment(remainingStops, currentLineName),
             routeType: currentLineName != null
                 ? getRouteTypeForLine(currentLineName)
                 : null,

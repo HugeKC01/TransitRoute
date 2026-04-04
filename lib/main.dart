@@ -453,7 +453,62 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           } // Geometric fallback for buses
           if (!foundShape) {
             final targetId = segment.routeId ?? lineName.split(' ').first;
-            if (targetId.isNotEmpty) {
+            final exactShapeId = segment.shapeId;
+            if (exactShapeId != null && exactShapeId.isNotEmpty) {
+              final exactMatch = shapeSegments.where((s) => s.shapeId == exactShapeId).toList();
+              if (exactMatch.isNotEmpty) {
+                // If we exactly know the shape_id, force it, avoiding parallel routes
+                final shape = exactMatch.first;
+                int bestA = -1;
+                double bestDistA = 9999999;
+                int bestB = -1;
+                double bestDistB = 9999999;
+
+                for (int k = 0; k < shape.points.length; k++) {
+                  final pt = shape.points[k];
+                  final distA = const Distance().as(
+                    LengthUnit.Meter,
+                    pt,
+                    LatLng(route[i - 1].lat, route[i - 1].lon),
+                  );
+                  if (distA < bestDistA) {
+                    bestDistA = distA;
+                    bestA = k;
+                  }
+                  final distB = const Distance().as(
+                    LengthUnit.Meter,
+                    pt,
+                    LatLng(route[i].lat, route[i].lon),
+                  );
+                  if (distB < bestDistB) {
+                    bestDistB = distB;
+                    bestB = k;
+                  }
+                }
+
+                if (bestDistA < 500 && bestDistB < 500 && bestA != -1 && bestB != -1) {
+                  final isReversed = bestA > bestB;
+                  final startIdx = isReversed ? bestB : bestA;
+                  final endIdx = isReversed ? bestA : bestB;
+
+                  var shapePoints = shape.points.sublist(startIdx, endIdx + 1);
+                  if (isReversed) {
+                    shapePoints = shapePoints.reversed.toList();
+                  }
+
+                  polylines.add(
+                    Polyline(
+                      points: shapePoints,
+                      color: lineColor,
+                      strokeWidth: 6.0,
+                    ),
+                  );
+                  foundShape = true;
+                }
+              }
+            }
+
+            if (!foundShape && targetId.isNotEmpty) {
               final shapeOptions = shapeSegments.where(
                 (s) => s.routeId == targetId || s.shapeId.contains(targetId),
               );
