@@ -531,7 +531,85 @@ class DirectionService {
         );
       }
 
-      return merged.isNotEmpty ? merged : segments;
+      var finalSegments = merged.isNotEmpty ? merged : segments;
+      bool changed = true;
+      while (changed) {
+        changed = false;
+        for (int i = 0; i < finalSegments.length - 1; i++) {
+          if (finalSegments[i].mode == TravelMode.transit && finalSegments[i].routeShortName != null) {
+            
+            if (finalSegments[i + 1].mode == TravelMode.transit &&
+                finalSegments[i].routeShortName == finalSegments[i + 1].routeShortName) {
+              
+              final s1 = finalSegments[i];
+              final s2 = finalSegments[i + 1];
+
+              final combinedStops = <gtfs.Stop>[];
+              if (s1.intermediateStops != null) combinedStops.addAll(s1.intermediateStops!);
+              if (s2.intermediateStops != null) {
+                if (combinedStops.isNotEmpty && s2.intermediateStops!.isNotEmpty && combinedStops.last.stopId == s2.intermediateStops!.first.stopId) {
+                  combinedStops.addAll(s2.intermediateStops!.sublist(1));
+                } else {
+                  combinedStops.addAll(s2.intermediateStops!);
+                }
+              }
+
+              finalSegments[i] = RouteSegment(
+                mode: TravelMode.transit,
+                start: s1.start,
+                end: s2.end,
+                distanceMeters: s1.distanceMeters + s2.distanceMeters,
+                durationMinutes: s1.durationMinutes + s2.durationMinutes,
+                routeShortName: s1.routeShortName,
+                shapeId: s1.shapeId ?? s2.shapeId,
+                routeType: s1.routeType,
+                intermediateStops: combinedStops,
+              );
+              finalSegments.removeAt(i + 1);
+              changed = true;
+              break;
+            }
+
+            if (i + 2 < finalSegments.length &&
+                finalSegments[i + 1].mode == TravelMode.walk &&
+                finalSegments[i + 2].mode == TravelMode.transit &&
+                finalSegments[i].routeShortName == finalSegments[i + 2].routeShortName) {
+              
+              final s1 = finalSegments[i];
+              final walk = finalSegments[i + 1];
+              final s2 = finalSegments[i + 2];
+
+              final combinedStops = <gtfs.Stop>[];
+              if (s1.intermediateStops != null) combinedStops.addAll(s1.intermediateStops!);
+              if (s2.intermediateStops != null) {
+                if (combinedStops.isNotEmpty && s2.intermediateStops!.isNotEmpty && combinedStops.last.stopId == s2.intermediateStops!.first.stopId) {
+                  combinedStops.addAll(s2.intermediateStops!.sublist(1));
+                } else {
+                  combinedStops.addAll(s2.intermediateStops!);
+                }
+              }
+
+              finalSegments[i] = RouteSegment(
+                mode: TravelMode.transit,
+                start: s1.start,
+                end: s2.end,
+                distanceMeters: s1.distanceMeters + walk.distanceMeters + s2.distanceMeters,
+                durationMinutes: s1.durationMinutes + walk.durationMinutes + s2.durationMinutes,
+                routeShortName: s1.routeShortName,
+                shapeId: s1.shapeId ?? s2.shapeId,
+                routeType: s1.routeType,
+                intermediateStops: combinedStops,
+              );
+              finalSegments.removeAt(i + 1);
+              finalSegments.removeAt(i + 1);
+              changed = true;
+              break;
+            }
+          }
+        }
+      }
+
+      return finalSegments;
     }
 
     void addOption(List<gtfs.Stop> stops, Set<String> tags) {
@@ -1412,7 +1490,13 @@ class DirectionService {
       entry.tags.addAll(tags);
     }
 
-    final fewestStops = _bfsPath(start, dest);
+    final fewestStops = _dijkstraWeightedPath(
+      start,
+      dest,
+      distanceWeight: 0.1,
+      timeWeight: 0.1,
+      transferPenalty: 8000,
+    );
     addRoute(fewestStops, {'Fewest stops'});
 
     final shortestDistance = _dijkstraWeightedPath(
@@ -1640,48 +1724,14 @@ class DirectionService {
     return results;
   }
 
-  List<gtfs.Stop> _bfsPath(String start, String dest) {
-    final queue = <String>[start];
-    final prev = <String, String?>{start: null};
-    int head = 0;
-    while (head < queue.length) {
-      final current = queue[head++];
-      if (current == dest) break;
-      final neighbors =
-          _distanceGraph[current]?.keys ?? const Iterable<String>.empty();
-      for (final neighbor in neighbors) {
-        if (!prev.containsKey(neighbor)) {
-          prev[neighbor] = current;
-          queue.add(neighbor);
-        }
-      }
-    }
-    if (!prev.containsKey(dest)) return [];
-    final pathIds = <String>[];
-    String? cursor = dest;
-    while (cursor != null) {
-      pathIds.add(cursor);
-      cursor = prev[cursor];
-    }
-    final reversed = pathIds.reversed.toList();
-    return reversed
-        .map(
-          (id) =>
-              _stopLookup[id] ??
-              _allStops.firstWhere(
-                (stop) => stop.stopId == id,
-                orElse: () => gtfs.Stop(stopId: id, name: id, lat: 0, lon: 0),
-              ),
-        )
-        .toList();
-  }
+
 
   List<gtfs.Stop> _dijkstraWeightedPath(
     String start,
     String dest, {
     double distanceWeight = 1.0,
     double timeWeight = 1.0,
-    double transferPenalty = 0.0,
+    double transferPenalty = 1000.0,
     double busCostPenalty = 0.0,
     double railCostPenalty = 0.0,
   }) {
@@ -1812,6 +1862,13 @@ class DirectionService {
             if (p1 == p2 && currentLine != nLine) {
               cost += transferPenalty * 0.2;
             }
+          }
+
+          if (currentLine == 'WALK' && nLine == 'WALK') {
+            cost += 2000;
+          }
+          if (nLine == 'WALK') {
+            cost += baseEdgeCost * 3;
           }
 
           if (getModePriority(nLine) == 3) {
