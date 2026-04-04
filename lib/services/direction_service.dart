@@ -1101,7 +1101,7 @@ class DirectionService {
             // row[2] = description_bus, row[3] = type_id, row[4] = agency_id
             final tripId = 'BUS_$busLineId';
             int sequence = 1;
-            for (int j = 5; j < row.length; j++) {
+            for (int j = 6; j < row.length; j++) {
               final stopId = row[j].trim();
               if (stopId.isEmpty) continue;
               stopTimes.putIfAbsent(tripId, () => []).add({
@@ -1248,6 +1248,7 @@ class DirectionService {
               final routeShortName = row[1].trim();
               final headsign = row[2].trim(); // description_bus
               // row[3] = type_id, row[4] = agency_id
+              final shapeIdRaw = row[5].trim();
               final routeId = routeShortName.split(' ').first;
               final tripId = 'BUS_$busLineId';
               result[tripId] = gtfs.Trip(
@@ -1256,7 +1257,7 @@ class DirectionService {
                 serviceId: 'WKD',
                 headsign: headsign,
                 directionId: '0',
-                shapeId: null,
+                shapeId: shapeIdRaw.isNotEmpty ? shapeIdRaw : null,
                 shapeColor: null,
               );
             }

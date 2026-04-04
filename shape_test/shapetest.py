@@ -4,9 +4,17 @@ import numpy as np
 def match_shapes_to_custom_routes():
     print("Loading custom stops...")
     # 1. Load Custom Stops to get lat/lon for each stop_id
-    stops = pd.read_csv('bus_stop.txt', dtype=str)
-    stops['stop_lat'] = stops['stop_lat'].astype(float)
-    stops['stop_lon'] = stops['stop_lon'].astype(float)
+    stops = pd.read_csv('bus_stop.txt', dtype=str, on_bad_lines='skip')
+    
+    # Safely convert to float, turning text errors (like ' km.18') into NaN (Not a Number)
+    stops['stop_lat'] = pd.to_numeric(stops['stop_lat'], errors='coerce')
+    stops['stop_lon'] = pd.to_numeric(stops['stop_lon'], errors='coerce')
+    
+    # Drop any rows where the coordinates are missing or broken
+    stops = stops.dropna(subset=['stop_lat', 'stop_lon'])
+    
+    # Drop any duplicate stop_ids (keeps the first occurrence)
+    stops = stops.drop_duplicates(subset=['stop_id'])
     
     # Create a dictionary for fast coordinate lookup: { 'stop_id': (lat, lon) }
     stop_dict = stops.set_index('stop_id')[['stop_lat', 'stop_lon']].to_dict('index')

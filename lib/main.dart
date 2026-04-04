@@ -450,6 +450,66 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               foundShape = true;
               break;
             }
+          } // Geometric fallback for buses
+          if (!foundShape) {
+            final targetId = segment.routeId ?? lineName.split(' ').first;
+            if (targetId.isNotEmpty) {
+              final shapeOptions = shapeSegments.where(
+                (s) => s.routeId == targetId || s.shapeId.contains(targetId),
+              );
+              for (final shape in shapeOptions) {
+                int bestA = -1;
+                double bestDistA = 9999999;
+                int bestB = -1;
+                double bestDistB = 9999999;
+
+                for (int k = 0; k < shape.points.length; k++) {
+                  final pt = shape.points[k];
+                  final distA = const Distance().as(
+                    LengthUnit.Meter,
+                    pt,
+                    LatLng(route[i - 1].lat, route[i - 1].lon),
+                  );
+                  if (distA < bestDistA) {
+                    bestDistA = distA;
+                    bestA = k;
+                  }
+                  final distB = const Distance().as(
+                    LengthUnit.Meter,
+                    pt,
+                    LatLng(route[i].lat, route[i].lon),
+                  );
+                  if (distB < bestDistB) {
+                    bestDistB = distB;
+                    bestB = k;
+                  }
+                }
+
+                if (bestDistA < 500 &&
+                    bestDistB < 500 &&
+                    bestA != -1 &&
+                    bestB != -1) {
+                  final isReversed = bestA > bestB;
+                  final startIdx = isReversed ? bestB : bestA;
+                  final endIdx = isReversed ? bestA : bestB;
+
+                  var shapePoints = shape.points.sublist(startIdx, endIdx + 1);
+                  if (isReversed) {
+                    shapePoints = shapePoints.reversed.toList();
+                  }
+
+                  polylines.add(
+                    Polyline(
+                      points: shapePoints,
+                      color: lineColor,
+                      strokeWidth: 6.0,
+                    ),
+                  );
+                  foundShape = true;
+                  break;
+                }
+              }
+            }
           }
 
           if (!foundShape) {
@@ -1033,7 +1093,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                       // Fallback: if it's not strictly known, still show it unless we hide all maybe?
                       // Actually shapes in shapes.txt are just trains/metros.
                       // If we consider them "Metro" when not train:
-                      if (!isTrain && !isMetro && !_showMetroPins) return false;
+                      if (!isTrain && !isMetro) return false;
                       return true;
                     })
                     .map(
@@ -2482,7 +2542,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     try {
       final tripMap = await _directionService.loadTrips();
       final loadedShapes = await GtfsShapesService().loadSegments(
-        shapesAsset: 'assets/gtfs_data/shapes.txt',
+        shapesAssets: [
+          'assets/gtfs_data/shapes.txt',
+          'assets/gtfs_data/shapes_source.txt',
+        ],
         routeColors: {
           for (final r in routes)
             r.routeId: (r.color != null && r.color!.isNotEmpty)
@@ -2946,7 +3009,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             typeId: typeId,
             isExpressway: isExpressway,
           );
-          for (int j = 5; j < row.length; j++) {
+          for (int j = 6; j < row.length; j++) {
             final sId = row[j].trim();
             if (sId.isNotEmpty) {
               _stopToLinesMap.putIfAbsent(sId, () => {}).add(lineName);

@@ -23,12 +23,22 @@ class ShapeSegment {
 
 class GtfsShapesService {
   Future<List<ShapeSegment>> loadSegments({
-    required String shapesAsset,
+    required List<String> shapesAssets,
     required Map<String, Color> routeColors,
     String? tripsAsset,
     Map<String, gtfs.Trip>? tripMap,
   }) async {
-    final shapes = await _parseShapes(shapesAsset);
+    final shapes = <String, List<_SeqPoint>>{};
+    for (final asset in shapesAssets) {
+      final s = await _parseShapes(asset);
+      for (final entry in s.entries) {
+        shapes.putIfAbsent(entry.key, () => []).addAll(entry.value);
+      }
+    }
+    // Re-sort just in case
+    for (final key in shapes.keys) {
+      shapes[key]!.sort((a, b) => a.seq.compareTo(b.seq));
+    }
     Map<String, String> shapeToRoute = {};
     Map<String, Color> shapeToColor = {};
     if (tripMap != null) {
