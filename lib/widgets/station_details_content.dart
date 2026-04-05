@@ -229,30 +229,38 @@ class StationDetailsContent extends StatelessWidget {
                 if (lineName != null && lineName!.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 10),
-                    child: Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: lineName!.split(', ').map((singleLine) {
-                        final specificColor =
-                            lineColorByName?.call(singleLine) ?? lineColor;
-                        return Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: specificColor,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            singleLine,
-                            style: theme.textTheme.labelMedium?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        return Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: lineName!.split(', ').map((singleLine) {
+                            final specificColor =
+                                lineColorByName?.call(singleLine) ?? lineColor;
+                            return Container(
+                              constraints: BoxConstraints(
+                                maxWidth: constraints.maxWidth,
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: specificColor,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                singleLine,
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            );
+                          }).toList(),
                         );
-                      }).toList(),
+                      },
                     ),
                   ),
               ],
@@ -302,58 +310,70 @@ class StationDetailsContent extends StatelessWidget {
     ThemeData theme,
     ColorScheme scheme,
   ) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: transferStops.map((tStop) {
-        final tLineName =
-            lineNameResolver?.call(tStop.stopId) ?? 'Unknown Line';
-        final tLineColor = lineColorResolver?.call(tStop.stopId) ?? Colors.grey;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: transferStops.map((tStop) {
+            final tLineName =
+                lineNameResolver?.call(tStop.stopId) ?? 'Unknown Line';
+            final tLineColor =
+                lineColorResolver?.call(tStop.stopId) ?? Colors.grey;
 
-        final isSameName =
-            (tStop.name == stop.name) ||
-            (tStop.thaiName == stop.thaiName && stop.thaiName != null);
+            final isSameName =
+                (tStop.name == stop.name) ||
+                (tStop.thaiName == stop.thaiName && stop.thaiName != null);
 
-        return InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: () => onTransferStationSelected?.call(tStop),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+            return InkWell(
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: scheme.outlineVariant.withValues(alpha: 0.5),
+              onTap: () => onTransferStationSelected?.call(tStop),
+              child: Container(
+                constraints: BoxConstraints(maxWidth: constraints.maxWidth),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: scheme.outlineVariant.withValues(alpha: 0.5),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: tLineColor,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        isSameName
+                            ? tLineName
+                            : ((tStop.thaiName != null &&
+                                      tStop.thaiName!.trim().isNotEmpty)
+                                  ? tStop.thaiName!
+                                  : tStop.name),
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: tLineColor,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  isSameName
-                      ? tLineName
-                      : ((tStop.thaiName != null &&
-                                tStop.thaiName!.trim().isNotEmpty)
-                            ? tStop.thaiName!
-                            : tStop.name),
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
+            );
+          }).toList(),
         );
-      }).toList(),
+      },
     );
   }
 

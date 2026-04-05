@@ -1,213 +1,52 @@
-diff --git a/lib/main.dart b/lib/main.dart
-index 960e17c..4489beb 100644
---- a/lib/main.dart
-+++ b/lib/main.dart
-@@ -83,6 +83,12 @@ class MyHomePage extends StatefulWidget {
-   State<MyHomePage> createState() => _MyHomePageState();
- }
- 
-+class _ProjectionResult {
-+  final LatLng point;
-+  final double dist;
-+  _ProjectionResult(this.point, this.dist);
-+}
-+
- class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
-   final MapController _mapController = MapController();
-   late final SearchController _startSearchController;
-@@ -321,7 +327,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
-     for (final segment in segments) {
-       if (segment.mode == TravelMode.walk ||
-           segment.mode == TravelMode.bicycle ||
--          segment.mode == TravelMode.taxi) {
-+          segment.mode == TravelMode.taxi ||
-+          (segment.mode == TravelMode.transit && segment.roadPolyline != null)) {
-         List<LatLng> points = [];
-         if (segment.roadPolyline != null && segment.roadPolyline!.isNotEmpty) {
-           points = segment.roadPolyline!
-@@ -335,21 +342,40 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
-         }
- 
-         Color lineColor = Colors.grey.shade600;
-+        double width = 4.0;
-+        StrokePattern? pattern = const StrokePattern.dotted();
-+        
-         if (segment.mode == TravelMode.bicycle) {
-           lineColor = Colors.green.shade600;
--        }
--        if (segment.mode == TravelMode.taxi) {
-+        } else if (segment.mode == TravelMode.taxi) {
-           lineColor = Colors.orange.shade600;
-+        } else if (segment.mode == TravelMode.transit) {
-+          final lineName = segment.routeShortName ?? '';
-+          lineColor = _getPolylineColor(lineName);
-+          width = 6.0;
-+          pattern = null;
-         }
- 
-         polylines.add(
-           Polyline(
-             points: points,
-             color: lineColor,
--            strokeWidth: 4.0,
--            pattern: const StrokePattern.dotted(),
-+            strokeWidth: width,
-+            pattern: pattern ?? const StrokePattern.solid(),
-           ),
-         );
-+        
-+        // Also draw 90 degree offsets for bus stops towards the route line if it is a bus route
-+        if (segment.mode == TravelMode.transit && segment.intermediateStops != null) {
-+          for (final stop in segment.intermediateStops!) {
-+            _addOffsetConnectionLine(
-+              polylines: polylines,
-+              stopPoint: LatLng(stop.lat, stop.lon),
-+              routePoints: points,
-+              color: lineColor,
-+            );
-+          }
-+        }
-       } else {
-         final route = segment.intermediateStops;
-         if (route == null || route.length < 2) continue;
-@@ -425,6 +451,59 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
-     return polylines;
-   }
- 
-+  void _addOffsetConnectionLine({
-+    required List<Polyline> polylines,
-+    required LatLng stopPoint,
-+    required List<LatLng> routePoints,
-+    required Color color,
-+  }) {
-+    if (routePoints.isEmpty) return;
-+    
-+    // Find closest segment and its projection
-+    double bestDist = double.infinity;
-+    LatLng? bestProj;
-+    
-+    for (int i = 0; i < routePoints.length - 1; i++) {
-+      final p1 = routePoints[i];
-+      final p2 = routePoints[i + 1];
-+      
-+      final projInfo = __projectPointToSegment(stopPoint, p1, p2);
-+      if (projInfo.dist < bestDist) {
-+        bestDist = projInfo.dist;
-+        bestProj = projInfo.point;
-+      }
-+    }
-+    
-+    if (bestProj != null && bestDist > 0.00005) { // Only draw if > ~5 meters
-+      polylines.add(
-+        Polyline(
-+          points: [stopPoint, bestProj],
-+          color: color.withValues(alpha: 0.5),
-+          strokeWidth: 3.0,
-+        ),
-+      );
-+    }
-+  }
-+
-+  _ProjectionResult __projectPointToSegment(LatLng pt, LatLng v, LatLng w) {
-+    // Basic flat-earth projection (good enough for small distances)
-+    double l2 = math.pow(v.latitude - w.latitude, 2) + math.pow(v.longitude - w.longitude, 2).toDouble();
-+    if (l2 == 0.0) {
-+      double dist = math.sqrt(math.pow(pt.latitude - v.latitude, 2) + math.pow(pt.longitude - v.longitude, 2));
-+      return _ProjectionResult(v, dist);
-+    }
-+    
-+    double t = ((pt.latitude - v.latitude) * (w.latitude - v.latitude) + (pt.longitude - v.longitude) * (w.longitude - v.longitude)) / l2;
-+    t = math.max(0, math.min(1, t));
-+    
-+    final projLat = v.latitude + t * (w.latitude - v.latitude);
-+    final projLng = v.longitude + t * (w.longitude - v.longitude);
-+    final proj = LatLng(projLat, projLng);
-+    
-+    double dist = math.sqrt(math.pow(pt.latitude - projLat, 2) + math.pow(pt.longitude - projLng, 2));
-+    return _ProjectionResult(proj, dist);
-+  }
-+
-   void _assignStopSelection(gtfs.Stop stop, {required bool asStart}) {
-     setState(() {
-       if (asStart) {
-diff --git a/lib/services/direction_service.dart b/lib/services/direction_service.dart
-index ae4aba0..dac897a 100644
---- a/lib/services/direction_service.dart
-+++ b/lib/services/direction_service.dart
-@@ -592,6 +592,21 @@ class DirectionService {
-     return DirectionResult(options: options, selectionIndex: selectionIndex);
-   }
- 
-+  bool _isBusSegment(RouteSegment segment) {
-+    if (segment.mode != TravelMode.transit) return false;
-+    if (segment.routeShortName == 'BMTA Bus') return true;
-+    if (segment.intermediateStops != null &&
-+        segment.intermediateStops!.isNotEmpty) {
-+      final id = segment.intermediateStops!.first.stopId;
-+      if (id.startsWith('ST_') ||
-+          id.startsWith('STOP_') ||
-+          int.tryParse(id) != null) {
-+        return true;
-+      }
-+    }
-+    return false;
-+  }
-+
-   Future<void> _enrichSegmentsWithRoadRouting(
-     List<DirectionOption> options,
-   ) async {
-@@ -600,7 +615,8 @@ class DirectionService {
-       for (final segment in option.segments) {
-         if (segment.mode == TravelMode.walk ||
-             segment.mode == TravelMode.bicycle ||
--            segment.mode == TravelMode.taxi) {
-+            segment.mode == TravelMode.taxi ||
-+            _isBusSegment(segment)) {
-           futures.add(_fetchRoadRouting(segment));
-         }
-       }
-@@ -612,8 +628,28 @@ class DirectionService {
-     final profile = segment.mode == TravelMode.walk
-         ? 'walking'
-         : (segment.mode == TravelMode.bicycle ? 'cycling' : 'driving');
-+
-+    final List<String> coordsStrs = [];
-+    if (segment.mode == TravelMode.transit &&
-+        segment.intermediateStops != null &&
-+        segment.intermediateStops!.isNotEmpty) {
-+      final s = segment.intermediateStops!;
-+      int step = (s.length / 80).ceil();
-+      if (step < 1) step = 1;
-+      for (int i = 0; i < s.length; i += step) {
-+        coordsStrs.add('${s[i].lon},${s[i].lat}');
-+      }
-+      if ((s.length - 1) % step != 0) {
-+        coordsStrs.add('${s.last.lon},${s.last.lat}');
-+      }
-+    } else {
-+      coordsStrs.add('${segment.start.lon},${segment.start.lat}');
-+      coordsStrs.add('${segment.end.lon},${segment.end.lat}');
-+    }
-+    final coordsString = coordsStrs.join(';');
-+
-     final url =
--        'https://router.project-osrm.org/route/v1/$profile/${segment.start.lon},${segment.start.lat};${segment.end.lon},${segment.end.lat}?overview=full&geometries=geojson';
-+        'https://router.project-osrm.org/route/v1/$profile/$coordsString?overview=full&geometries=geojson';
-     try {
-       final response = await http
-           .get(Uri.parse(url))
-@@ -636,9 +672,11 @@ class DirectionService {
-             segment.roadPolyline = polyline;
-             final dist = data['routes'][0]['distance'];
-             final duration = data['routes'][0]['duration'];
--            if (dist != null) segment.distanceMeters = (dist as num).toDouble();
--            if (duration != null) {
--              segment.durationMinutes = ((duration as num) / 60).ceil();
-+            if (segment.mode != TravelMode.transit) {
-+              if (dist != null) segment.distanceMeters = (dist as num).toDouble();
-+              if (duration != null) {
-+                segment.durationMinutes = ((duration as num) / 60).ceil();
-+              }
-             }
-           }
-         }
+  1370	              ),
+  1371	            if (filteredRailStops.isNotEmpty)
+  1372	              MarkerLayer(
+  1373	                markers: filteredRailStops
+  1374	                    .map(
+  1375	                      (stop) => Marker(
+  1376	                        point: LatLng(stop.lat, stop.lon),
+  1377	                        width: (stop.stopId == startId || stop.stopId == destId)
+  1378	                            ? railSelectedSize
+  1379	                            : railBaseSize,
+  1380	                        height:
+  1381	                            (stop.stopId == startId || stop.stopId == destId)
+  1382	                            ? railSelectedSize
+  1383	                            : railBaseSize,
+  1384	                        child: GestureDetector(
+  1385	                          onTap: () => _showStopDetails(context, stop),
+  1386	                          child: Tooltip(
+  1387	                            message: _stopDisplayLabel(stop),
+  1388	                            child: Container(
+  1389	                              decoration: BoxDecoration(
+  1390	                                color: (stop.stopId == startId)
+  1391	                                    ? Colors.greenAccent.withValues(alpha: 0.85)
+  1392	                                    : (stop.stopId == destId)
+  1393	                                    ? Colors.redAccent.withValues(alpha: 0.85)
+  1394	                                    : (activeSegments.isNotEmpty &&
+  1395	                                          !routeStopIds.contains(stop.stopId))
+  1396	                                    ? Colors.grey.shade300
+  1397	                                    : Colors.white,
+  1398	                                shape: BoxShape.circle,
+  1399	                                border: Border.all(
+  1400	                                  color:
+  1401	                                      (activeSegments.isNotEmpty &&
+  1402	                                          !routeStopIds.contains(stop.stopId) &&
+  1403	                                          stop.stopId != startId &&
+  1404	                                          stop.stopId != destId)
+  1405	                                      ? Colors.grey.shade500
+  1406	                                      : _getLineColor(stop.stopId),
+  1407	                                  width:
+  1408	                                      (stop.stopId == startId ||
+  1409	                                          stop.stopId == destId)
+  1410	                                      ? railSelectedBorderWidth
+  1411	                                      : railBorderWidth,
+  1412	                                ),
+  1413	                              ),
+  1414	                            ),
+  1415	                          ),
+  1416	                        ),
+  1417	                      ),
+  1418	                    )
+  1419	                    .toList(),
+  1420	              ),
+  1421	            if (_customStartPoint != null)

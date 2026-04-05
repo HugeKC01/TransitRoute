@@ -69,6 +69,7 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/icons/
     - assets/gtfs_data/agency.txt
     - assets/gtfs_data/routes.txt
     - assets/gtfs_data/stops.txt
