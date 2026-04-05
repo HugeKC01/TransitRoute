@@ -31,6 +31,7 @@ class Route {
   final String type; // e.g., "BTS", "MRT", "Train", "Bus", "Ferry"
   final String? color;
   final String? textColor;
+  final String? routeIcon;
   final List<String> linePrefixes;
 
   Route({
@@ -41,6 +42,7 @@ class Route {
     required this.type,
     this.color,
     this.textColor,
+    this.routeIcon,
     required this.linePrefixes,
   });
 }

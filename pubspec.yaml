@@ -43,6 +43,7 @@ dependencies:
   location: ^8.0.1
   google_fonts: ^8.0.2
   collection: ^1.19.1
+  flutter_svg: ^2.2.4
   
 
 dev_dependencies:

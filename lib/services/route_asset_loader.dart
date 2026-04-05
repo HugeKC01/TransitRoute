@@ -20,6 +20,7 @@ class RouteAssetLoader {
       final idxType = header.indexOf('route_type');
       final idxColor = header.indexOf('route_color');
       final idxTextColor = header.indexOf('route_text_color');
+      final idxRouteIcon = header.indexOf('route_icon');
       final idxLinePrefixes = header.indexOf('line_prefixes');
       final routes = <gtfs.Route>[];
       for (int i = 1; i < lines.length; i++) {
@@ -55,6 +56,9 @@ class RouteAssetLoader {
                 : null,
             textColor: idxTextColor >= 0 && idxTextColor < row.length
                 ? _cleanHex(row[idxTextColor])
+                : null,
+            routeIcon: idxRouteIcon >= 0 && idxRouteIcon < row.length
+                ? (row[idxRouteIcon].trim().isNotEmpty ? row[idxRouteIcon].trim() : null)
                 : null,
             linePrefixes: linePrefixes,
           ),

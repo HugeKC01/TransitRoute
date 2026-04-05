@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:route/services/gtfs_models.dart' as gtfs;
 import 'package:route/widgets/station_timetable.dart';
 import 'package:route/widgets/upcoming_departures.dart';
@@ -14,6 +15,7 @@ class StationDetailsContent extends StatelessWidget {
   final String? Function(String stopId)? lineNameResolver;
   final Color Function(String stopId)? lineColorResolver;
   final Color Function(String lineName)? lineColorByName;
+  final String? Function(String lineName)? routeIconByName;
   final void Function(gtfs.Stop stop)? onTransferStationSelected;
   final bool isBottomSheet;
   final bool isSidePanel;
@@ -29,6 +31,7 @@ class StationDetailsContent extends StatelessWidget {
     this.lineNameResolver,
     this.lineColorResolver,
     this.lineColorByName,
+    this.routeIconByName,
     this.onTransferStationSelected,
     this.isBottomSheet = false,
     this.isSidePanel = false,
@@ -42,97 +45,96 @@ class StationDetailsContent extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    return SingleChildScrollView(
-      padding: EdgeInsets.fromLTRB(
-        16,
-        isBottomSheet ? 8 : 16,
-        16,
-        MediaQuery.of(context).padding.bottom + 24,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildHeroCard(context, theme, scheme),
-          const SizedBox(height: 16),
-          _buildQuickActionButtons(context),
-          const SizedBox(height: 24),
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildHeroCard(context, theme, scheme),
+        const SizedBox(height: 16),
+        _buildQuickActionButtons(context),
+        const SizedBox(height: 24),
 
-          if (isBottomSheet) ...[
-            _SectionHeader('Upcoming Departures'),
+        if (isBottomSheet) ...[
+          _SectionHeader('Upcoming Departures'),
+          const SizedBox(height: 12),
+          UpcomingDeparturesWidget(stopId: stop.stopId),
+          const SizedBox(height: 24),
+          if (transferStops.isNotEmpty) ...[
+            _SectionHeader('Transfers'),
             const SizedBox(height: 12),
-            UpcomingDeparturesWidget(stopId: stop.stopId),
+            _buildCompactTransfersList(context, theme, scheme),
             const SizedBox(height: 24),
-            if (transferStops.isNotEmpty) ...[
-              _SectionHeader('Transfers'),
-              const SizedBox(height: 12),
-              _buildCompactTransfersList(context, theme, scheme),
-              const SizedBox(height: 24),
-            ],
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.tonal(
-                onPressed: () {
-                  if (isBottomSheet) {
-                    Navigator.pop(context);
-                  }
-                  Navigator.of(context).push(
-                    PageRouteBuilder(
-                      opaque: false,
-                      transitionDuration: const Duration(milliseconds: 300),
-                      pageBuilder: (_, __, ___) => StationDetailsPage(
-                        stop: stop,
-                        lineColor: lineColor,
-                        lineName: lineName,
-                        onSelectAsStart: onSelectAsStart,
-                        onSelectAsDestination: onSelectAsDestination,
-                        transferStops: transferStops,
-                        lineNameResolver: lineNameResolver,
-                        lineColorResolver: lineColorResolver,
-                        lineColorByName: lineColorByName,
-                        onTransferStationSelected: onTransferStationSelected,
-                      ),
-                      transitionsBuilder:
-                          (context, animation, secondaryAnimation, child) {
-                            return FadeTransition(
-                              opacity: animation,
-                              child: child,
-                            );
-                          },
+          ],
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.tonal(
+              onPressed: () {
+                if (isBottomSheet && !isSidePanel) {
+                  Navigator.pop(context);
+                }
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => StationDetailsPage(
+                      stop: stop,
+                      lineColor: lineColor,
+                      lineName: lineName,
+                      onSelectAsStart: onSelectAsStart,
+                      onSelectAsDestination: onSelectAsDestination,
+                      transferStops: transferStops,
+                      lineNameResolver: lineNameResolver,
+                      lineColorResolver: lineColorResolver,
+                      lineColorByName: lineColorByName,
+                      routeIconByName: routeIconByName,
+                      onTransferStationSelected: onTransferStationSelected,
                     ),
-                  );
-                },
-                child: const Text('More Details'),
+                  ),
+                );
+              },
+              child: const Text('More Details'),
+            ),
+          ),
+        ] else ...[
+          if (stop.desc != null && stop.desc!.isNotEmpty) ...[
+            _SectionHeader('About'),
+            const SizedBox(height: 8),
+            Text(
+              stop.desc!,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
               ),
             ),
-          ] else ...[
-            if (stop.desc != null && stop.desc!.isNotEmpty) ...[
-              _SectionHeader('About'),
-              const SizedBox(height: 8),
-              Text(
-                stop.desc!,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 24),
-            ],
-            if (transferStops.isNotEmpty) ...[
-              _SectionHeader('Transfers'),
-              const SizedBox(height: 12),
-              _buildFullTransfersList(context, theme, scheme),
-              const SizedBox(height: 24),
-            ],
-            _SectionHeader('Timetable & Departures'),
-            const SizedBox(height: 12),
-            StationTimetableSection(stopId: stop.stopId),
             const SizedBox(height: 24),
-            _SectionHeader('Details'),
-            const SizedBox(height: 12),
-            _buildInfoChips(context, theme, scheme),
           ],
+          if (transferStops.isNotEmpty) ...[
+            _SectionHeader('Transfers'),
+            const SizedBox(height: 12),
+            _buildFullTransfersList(context, theme, scheme),
+            const SizedBox(height: 24),
+          ],
+          _SectionHeader('Timetable & Departures'),
+          const SizedBox(height: 12),
+          StationTimetableSection(stopId: stop.stopId),
+          const SizedBox(height: 24),
+          _SectionHeader('Details'),
+          const SizedBox(height: 12),
+          _buildInfoChips(context, theme, scheme),
         ],
-      ),
+      ],
     );
+
+    final padding = isSidePanel
+        ? const EdgeInsets.fromLTRB(16, 0, 16, 16)
+        : EdgeInsets.fromLTRB(
+            16,
+            isBottomSheet ? 8 : 16,
+            16,
+            MediaQuery.of(context).padding.bottom + 24,
+          );
+
+    if (isSidePanel) {
+      return Padding(padding: padding, child: content);
+    }
+
+    return SingleChildScrollView(padding: padding, child: content);
   }
 
   Widget _buildHeroCard(
@@ -143,9 +145,9 @@ class StationDetailsContent extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerHigh,
+        color: scheme.surface.withValues(alpha: 0.6),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5)),
+        border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.3)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -156,7 +158,29 @@ class StationDetailsContent extends StatelessWidget {
               color: lineColor.withValues(alpha: 0.15),
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.train, color: lineColor, size: 28),
+            child: Builder(
+              builder: (context) {
+                String? routeIcon;
+                if (lineName != null &&
+                    lineName!.isNotEmpty &&
+                    routeIconByName != null) {
+                  final lines = lineName!.split(', ');
+                  for (var line in lines) {
+                    routeIcon = routeIconByName!(line);
+                    if (routeIcon != null && routeIcon.isNotEmpty) break;
+                  }
+                }
+
+                if (routeIcon != null && routeIcon.isNotEmpty) {
+                  return SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: SvgPicture.asset(routeIcon, width: 28, height: 28),
+                  );
+                }
+                return Icon(Icons.train, color: lineColor, size: 28);
+              },
+            ),
           ),
           const SizedBox(width: 16),
           Expanded(

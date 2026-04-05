@@ -14,6 +14,7 @@ class StationDetailsPage extends StatelessWidget {
     this.lineNameResolver,
     this.lineColorResolver,
     this.lineColorByName,
+    this.routeIconByName,
     this.onTransferStationSelected,
   });
 
@@ -26,6 +27,7 @@ class StationDetailsPage extends StatelessWidget {
   final String? Function(String stopId)? lineNameResolver;
   final Color Function(String stopId)? lineColorResolver;
   final Color Function(String lineName)? lineColorByName;
+  final String? Function(String lineName)? routeIconByName;
   final void Function(gtfs.Stop stop)? onTransferStationSelected;
 
   @override
@@ -51,6 +53,7 @@ class StationDetailsPage extends StatelessWidget {
       lineNameResolver: lineNameResolver,
       lineColorResolver: lineColorResolver,
       lineColorByName: lineColorByName,
+      routeIconByName: routeIconByName,
       onTransferStationSelected: (tStop) {
         if (onTransferStationSelected != null) {
           onTransferStationSelected!(tStop);

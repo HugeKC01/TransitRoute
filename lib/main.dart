@@ -218,6 +218,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       final idxType = header.indexOf('route_type');
       final idxColor = header.indexOf('route_color');
       final idxTextColor = header.indexOf('route_text_color');
+      final idxRouteIcon = header.indexOf('route_icon');
       final idxLinePrefixes = header.indexOf('line_prefixes');
       for (var i = 1; i < lines.length; i++) {
         final line = lines[i].trimRight();
@@ -242,6 +243,11 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             type: row[idxType].trim(),
             color: idxColor >= 0 ? _cleanHex(row[idxColor]) : null,
             textColor: idxTextColor >= 0 ? _cleanHex(row[idxTextColor]) : null,
+            routeIcon: idxRouteIcon >= 0 && idxRouteIcon < row.length
+                ? (row[idxRouteIcon].trim().isNotEmpty
+                      ? row[idxRouteIcon].trim()
+                      : null)
+                : null,
             linePrefixes: linePrefixes,
           ),
         );
@@ -258,6 +264,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   LocationPoint? _customDestPoint;
   List<DirectionOption> directionOptions = [];
   DirectionOption? _viewingDetailsOption;
+  gtfs.Stop? _viewingStop;
   int selectedDirectionIndex = 0;
 
   Future<void> _findDirection() async {
@@ -330,6 +337,19 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       return lineColors[firstLine]!;
     }
     return Colors.purple;
+  }
+
+  String? _getRouteIcon(String lineName) {
+    if (lineName.isEmpty) return null;
+    final firstLine = lineName.split(', ').first;
+    try {
+      final route = allRoutes.firstWhere(
+        (r) => r.shortName == firstLine || r.longName == firstLine,
+      );
+      return route.routeIcon;
+    } catch (e) {
+      return null;
+    }
   }
 
   Polyline _linePolyline(LatLng from, LatLng to, Color color) {
@@ -705,54 +725,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   }
 
   void _showStopDetails(BuildContext context, gtfs.Stop stop) {
-    final lineName = _getLineName(stop.stopId);
-    final lineColor = _getLineColor(stop.stopId);
-    final transferStops = _directionService.getTransferStations(stop.stopId);
-    final parentContext = context;
-    final width = MediaQuery.of(context).size.width;
-    final isWide = width > 600;
-
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      elevation: 2,
-      constraints: isWide ? const BoxConstraints(maxWidth: 420) : null,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetContext) {
-        return ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * 0.85,
-          ),
-          child: StationDetailsContent(
-            stop: stop,
-            lineColor: lineColor,
-            lineName: lineName,
-            isBottomSheet: true,
-            transferStops: transferStops,
-            lineNameResolver: (id) => _getLineName(id),
-            lineColorResolver: (id) => _getLineColor(id),
-            lineColorByName: (name) => _getPolylineColor(name),
-            onSelectAsStart: () {
-              Navigator.pop(sheetContext);
-              _assignStopSelection(stop, asStart: true);
-            },
-            onSelectAsDestination: () {
-              Navigator.pop(sheetContext);
-              _assignStopSelection(stop, asStart: false);
-            },
-            onTransferStationSelected: (tStop) {
-              Navigator.pop(sheetContext);
-              _showStopDetails(parentContext, tStop);
-            },
-          ),
-        );
-      },
-    );
+    setState(() {
+      _viewingStop = stop;
+      _viewingDetailsOption = null;
+    });
   }
 
   void _assignCustomPointSelection(LatLng point, {required bool asStart}) {
@@ -1026,7 +1002,67 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     });
   }
 
-  Widget _buildRouteOptionsSection(BuildContext context) {
+  Widget _buildPanelContent(BuildContext context) {
+    if (_viewingStop != null) {
+      final stop = _viewingStop!;
+      final lineName = _getLineName(stop.stopId);
+      final lineColor = _getLineColor(stop.stopId);
+      final transferStops = _directionService.getTransferStations(stop.stopId);
+
+      return Stack(
+        key: const ValueKey('station_details'),
+        children: [
+          StationDetailsContent(
+            stop: stop,
+            lineColor: lineColor,
+            lineName: lineName,
+            isBottomSheet: true,
+            isSidePanel: true,
+            transferStops: transferStops,
+            lineNameResolver: (id) => _getLineName(id),
+            lineColorResolver: (id) => _getLineColor(id),
+            lineColorByName: (name) => _getPolylineColor(name),
+            routeIconByName: (name) => _getRouteIcon(name),
+            onSelectAsStart: () {
+              setState(() {
+                _viewingStop = null;
+              });
+              _assignStopSelection(stop, asStart: true);
+            },
+            onSelectAsDestination: () {
+              setState(() {
+                _viewingStop = null;
+              });
+              _assignStopSelection(stop, asStart: false);
+            },
+            onTransferStationSelected: (tStop) {
+              setState(() {
+                _viewingStop = tStop;
+              });
+              // Fit camera to the transfer station
+              final zoom = math.max(_mapController.camera.zoom, 14).toDouble();
+              _mapController.move(LatLng(tStop.lat, tStop.lon), zoom);
+            },
+          ),
+          Positioned(
+            top: 2,
+            right: 8,
+            child: IconButton(
+              icon: const Icon(Icons.close),
+              style: IconButton.styleFrom(
+                backgroundColor: Theme.of(
+                  context,
+                ).colorScheme.surface.withValues(alpha: 0.8),
+              ),
+              onPressed: () {
+                setState(() => _viewingStop = null);
+              },
+            ),
+          ),
+        ],
+      );
+    }
+
     if (directionOptions.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -1102,12 +1138,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
     final isWide = screenWidth > 600;
-    final hasRoutes = directionOptions.isNotEmpty;
+    final hasPanelContent = directionOptions.isNotEmpty || _viewingStop != null;
 
     // Responsive bottom offset that animates up if there are routes
     final zoomBottomOffset = isWide
         ? 24.0
-        : (hasRoutes ? screenHeight * 0.45 + 16.0 : viewPadding.bottom + 120.0);
+        : (hasPanelContent
+              ? screenHeight * 0.45 + 16.0
+              : viewPadding.bottom + 120.0);
     final showBusStops =
         _showBusPins &&
         busStops.isNotEmpty &&
@@ -1913,7 +1951,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
   Widget _buildWideLayout(BuildContext context, Widget headerOverlay) {
     final width = MediaQuery.of(context).size.width;
-    final hasRoutes = directionOptions.isNotEmpty;
+    final hasPanelContent = directionOptions.isNotEmpty || _viewingStop != null;
     // ensure the side panel is at least 320px wide so route options text does not overflow
     final panelWidth = math.max(340.0, math.min(400.0, width * 0.3));
     final theme = Theme.of(context);
@@ -1954,9 +1992,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                       child: FadeTransition(opacity: animation, child: child),
                     );
                   },
-                  child: hasRoutes
+                  child: hasPanelContent
                       ? Padding(
-                          key: const ValueKey('route_options'),
+                          key: const ValueKey('panel_content'),
                           padding: const EdgeInsets.only(top: 16.0),
                           child: Container(
                             decoration: BoxDecoration(
@@ -1986,15 +2024,15 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                                           alpha:
                                               theme.brightness ==
                                                   Brightness.dark
-                                              ? 0.4
-                                              : 0.6,
+                                              ? 0.75
+                                              : 0.90,
                                         ),
                                         theme.colorScheme.surface.withValues(
                                           alpha:
                                               theme.brightness ==
                                                   Brightness.dark
-                                              ? 0.2
-                                              : 0.4,
+                                              ? 0.60
+                                              : 0.80,
                                         ),
                                       ],
                                     ),
@@ -2003,8 +2041,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                                       color: Colors.white.withValues(
                                         alpha:
                                             theme.brightness == Brightness.dark
-                                            ? 0.15
-                                            : 0.4,
+                                            ? 0.2
+                                            : 0.5,
                                       ),
                                       width: 1.2,
                                     ),
@@ -2016,9 +2054,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                                         bottom: 24,
                                         top: 12,
                                       ),
-                                      children: [
-                                        _buildRouteOptionsSection(context),
-                                      ],
+                                      children: [_buildPanelContent(context)],
                                     ),
                                   ),
                                 ),
@@ -2026,7 +2062,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                             ),
                           ),
                         )
-                      : const SizedBox.shrink(key: ValueKey('no_routes')),
+                      : const SizedBox.shrink(key: ValueKey('no_content')),
                 ),
               ),
             ],
@@ -2037,11 +2073,11 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   }
 
   Widget _buildPhoneLayout(BuildContext context, Widget headerOverlay) {
-    final hasRoutes = directionOptions.isNotEmpty;
+    final hasPanelContent = directionOptions.isNotEmpty || _viewingStop != null;
     final theme = Theme.of(context);
 
-    // Dynamic initial sheet height when routes exist
-    final sheetInitialSize = hasRoutes ? 0.45 : 0.0;
+    // Dynamic initial sheet height when content exist
+    final sheetInitialSize = hasPanelContent ? 0.45 : 0.0;
 
     return Stack(
       children: [
@@ -2049,7 +2085,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         headerOverlay,
 
         // Drag sheet spanning full height but starting at initialSize
-        if (hasRoutes)
+        if (hasPanelContent)
           DraggableScrollableSheet(
             initialChildSize: sheetInitialSize,
             minChildSize: 0.25,
@@ -2058,7 +2094,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               final bottomPadding = MediaQuery.of(context).padding.bottom;
               return Container(
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.surface,
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(28),
                   ),
@@ -2074,26 +2109,63 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(28),
                   ),
-                  child: ListView(
-                    controller: controller,
-                    padding: EdgeInsets.only(bottom: bottomPadding + 24),
-                    children: [
-                      const SizedBox(height: 12),
-                      Center(
-                        child: Container(
-                          width: 48,
-                          height: 5,
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.outlineVariant.withValues(
-                              alpha: 0.5,
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            theme.colorScheme.surface.withValues(
+                              alpha: theme.brightness == Brightness.dark
+                                  ? 0.75
+                                  : 0.90,
                             ),
-                            borderRadius: BorderRadius.circular(2.5),
+                            theme.colorScheme.surface.withValues(
+                              alpha: theme.brightness == Brightness.dark
+                                  ? 0.60
+                                  : 0.80,
+                            ),
+                          ],
+                        ),
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(28),
+                        ),
+                        border: Border.all(
+                          color: Colors.white.withValues(
+                            alpha: theme.brightness == Brightness.dark
+                                ? 0.2
+                                : 0.5,
                           ),
+                          width: 1.2,
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      _buildRouteOptionsSection(context),
-                    ],
+                      child: Material(
+                        color: Colors.transparent,
+                        child: ListView(
+                          controller: controller,
+                          padding: EdgeInsets.only(bottom: bottomPadding + 24),
+                          children: [
+                            const SizedBox(height: 12),
+                            Center(
+                              child: Container(
+                                width: 48,
+                                height: 5,
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.onSurface.withValues(
+                                    alpha: 0.3,
+                                  ),
+                                  borderRadius: BorderRadius.circular(2.5),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            _buildPanelContent(context),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               );
@@ -2142,10 +2214,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                     end: Alignment.bottomRight,
                     colors: [
                       theme.colorScheme.surface.withValues(
-                        alpha: theme.brightness == Brightness.dark ? 0.75 : 0.90,
+                        alpha: theme.brightness == Brightness.dark
+                            ? 0.75
+                            : 0.90,
                       ),
                       theme.colorScheme.surface.withValues(
-                        alpha: theme.brightness == Brightness.dark ? 0.60 : 0.80,
+                        alpha: theme.brightness == Brightness.dark
+                            ? 0.60
+                            : 0.80,
                       ),
                     ],
                   ),
@@ -2314,7 +2390,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                 leading: Icon(Icons.search, color: theme.colorScheme.primary),
                 hintText: 'Where to?',
                 hintStyle: WidgetStatePropertyAll(
-                  TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.8), fontSize: 15)
+                  TextStyle(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                    fontSize: 15,
+                  ),
                 ),
                 padding: const WidgetStatePropertyAll(
                   EdgeInsets.symmetric(horizontal: 16),
@@ -2408,7 +2487,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             decoration: BoxDecoration(
               color: theme.colorScheme.surface.withValues(alpha: 0.75),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
+              border: Border.all(
+                color: theme.colorScheme.outline.withValues(alpha: 0.3),
+              ),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
@@ -2416,7 +2497,11 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                 Expanded(
                   child: Row(
                     children: [
-                      Icon(Icons.trip_origin, size: 16, color: theme.colorScheme.primary),
+                      Icon(
+                        Icons.trip_origin,
+                        size: 16,
+                        color: theme.colorScheme.primary,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -2430,9 +2515,17 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                       ),
                       const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 8),
-                        child: Icon(Icons.arrow_forward_ios, size: 12, color: Colors.grey),
+                        child: Icon(
+                          Icons.arrow_forward_ios,
+                          size: 12,
+                          color: Colors.grey,
+                        ),
                       ),
-                      Icon(Icons.flag, size: 16, color: theme.colorScheme.secondary),
+                      Icon(
+                        Icons.flag,
+                        size: 16,
+                        color: theme.colorScheme.secondary,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -2452,7 +2545,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   icon: const Icon(Icons.close, size: 18),
                   padding: EdgeInsets.zero,
                   visualDensity: VisualDensity.compact,
-                  constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+                  constraints: const BoxConstraints.tightFor(
+                    width: 32,
+                    height: 32,
+                  ),
                   onPressed: () => _clearSelections(preserveHeaderState: true),
                 ),
               ],
@@ -2526,7 +2622,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                         icon: const Icon(Icons.swap_vert, size: 22),
                         visualDensity: VisualDensity.compact,
                         style: IconButton.styleFrom(
-                          backgroundColor: theme.colorScheme.secondaryContainer.withValues(alpha: 0.5),
+                          backgroundColor: theme.colorScheme.secondaryContainer
+                              .withValues(alpha: 0.5),
                           shape: const CircleBorder(),
                         ),
                         onPressed: _swapStops,
@@ -2560,11 +2657,16 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.85),
+                  backgroundColor: theme.colorScheme.primary.withValues(
+                    alpha: 0.85,
+                  ),
                 ),
                 onPressed: () => _findDirection(),
                 icon: const Icon(Icons.route),
-                label: const Text('Find Routes', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                label: const Text(
+                  'Find Routes',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
               ),
             ),
         ],
@@ -2594,10 +2696,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           showCheckmark: false,
           selected: isSelected,
           backgroundColor: theme.colorScheme.surface.withValues(alpha: 0.6),
-          selectedColor: theme.colorScheme.primaryContainer.withValues(alpha: 0.8),
+          selectedColor: theme.colorScheme.primaryContainer.withValues(
+            alpha: 0.8,
+          ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
+            side: BorderSide(
+              color: theme.colorScheme.outline.withValues(alpha: 0.3),
+            ),
           ),
           onSelected: (selected) {
             setState(() {
@@ -2665,13 +2771,20 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           child: SearchBar(
             controller: ctrl,
             constraints: const BoxConstraints(minHeight: 48, maxHeight: 48),
-            leading: Icon(icon, size: 20, color: iconColor ?? theme.colorScheme.onSurfaceVariant),
+            leading: Icon(
+              icon,
+              size: 20,
+              color: iconColor ?? theme.colorScheme.onSurfaceVariant,
+            ),
             hintText: 'Search $label',
             hintStyle: WidgetStatePropertyAll(
-              TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.8), fontSize: 14)
+              TextStyle(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                fontSize: 14,
+              ),
             ),
             textStyle: WidgetStatePropertyAll(
-              TextStyle(color: theme.colorScheme.onSurface, fontSize: 15)
+              TextStyle(color: theme.colorScheme.onSurface, fontSize: 15),
             ),
             padding: const WidgetStatePropertyAll(
               EdgeInsets.symmetric(horizontal: 12),
