@@ -1057,6 +1057,9 @@ class DirectionService {
           (a, b) =>
               (a['stopSequence'] as int).compareTo(b['stopSequence'] as int),
         );
+        for (int j = 0; j < entry.value.length; j++) {
+          entry.value[j]['lineName'] ??= defaultLineName;
+        }
         for (int j = 0; j < entry.value.length - 1; j++) {
           final a = entry.value[j]['stopId'] as String;
           final b = entry.value[j + 1]['stopId'] as String;
