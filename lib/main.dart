@@ -2142,17 +2142,17 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                     end: Alignment.bottomRight,
                     colors: [
                       theme.colorScheme.surface.withValues(
-                        alpha: theme.brightness == Brightness.dark ? 0.4 : 0.6,
+                        alpha: theme.brightness == Brightness.dark ? 0.75 : 0.90,
                       ),
                       theme.colorScheme.surface.withValues(
-                        alpha: theme.brightness == Brightness.dark ? 0.2 : 0.4,
+                        alpha: theme.brightness == Brightness.dark ? 0.60 : 0.80,
                       ),
                     ],
                   ),
                   borderRadius: BorderRadius.circular(24),
                   border: Border.all(
                     color: Colors.white.withValues(
-                      alpha: theme.brightness == Brightness.dark ? 0.15 : 0.4,
+                      alpha: theme.brightness == Brightness.dark ? 0.2 : 0.5,
                     ),
                     width: 1.2,
                   ),
@@ -2314,20 +2314,20 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                 leading: Icon(Icons.search, color: theme.colorScheme.primary),
                 hintText: 'Where to?',
                 hintStyle: WidgetStatePropertyAll(
-                  TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.6), fontSize: 15)
+                  TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.8), fontSize: 15)
                 ),
                 padding: const WidgetStatePropertyAll(
                   EdgeInsets.symmetric(horizontal: 16),
                 ),
                 elevation: const WidgetStatePropertyAll<double>(0),
                 backgroundColor: WidgetStatePropertyAll(
-                  theme.colorScheme.surface.withValues(alpha: 0.4),
+                  theme.colorScheme.surface.withValues(alpha: 0.75),
                 ),
                 shape: WidgetStatePropertyAll(
                   RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                     side: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.2),
+                      color: Colors.white.withValues(alpha: 0.3),
                     ),
                   ),
                 ),
@@ -2406,9 +2406,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         Expanded(
           child: Container(
             decoration: BoxDecoration(
-              color: theme.colorScheme.surface.withValues(alpha: 0.3),
+              color: theme.colorScheme.surface.withValues(alpha: 0.75),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.15)),
+              border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
@@ -2593,11 +2593,11 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           padding: EdgeInsets.zero,
           showCheckmark: false,
           selected: isSelected,
-          backgroundColor: theme.colorScheme.surface.withValues(alpha: 0.3),
-          selectedColor: theme.colorScheme.primaryContainer.withValues(alpha: 0.6),
+          backgroundColor: theme.colorScheme.surface.withValues(alpha: 0.6),
+          selectedColor: theme.colorScheme.primaryContainer.withValues(alpha: 0.8),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.15)),
+            side: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
           ),
           onSelected: (selected) {
             setState(() {
@@ -2668,7 +2668,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             leading: Icon(icon, size: 20, color: iconColor ?? theme.colorScheme.onSurfaceVariant),
             hintText: 'Search $label',
             hintStyle: WidgetStatePropertyAll(
-              TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.6), fontSize: 14)
+              TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.8), fontSize: 14)
             ),
             textStyle: WidgetStatePropertyAll(
               TextStyle(color: theme.colorScheme.onSurface, fontSize: 15)
@@ -2678,13 +2678,13 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             ),
             elevation: const WidgetStatePropertyAll<double>(0),
             backgroundColor: WidgetStatePropertyAll(
-              theme.colorScheme.surface.withValues(alpha: 0.3),
+              theme.colorScheme.surface.withValues(alpha: 0.75),
             ),
             shape: WidgetStatePropertyAll(
               RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
                 side: BorderSide(
-                  color: theme.colorScheme.outline.withValues(alpha: 0.15),
+                  color: theme.colorScheme.outline.withValues(alpha: 0.3),
                 ),
               ),
             ),
