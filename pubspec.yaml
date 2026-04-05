@@ -91,6 +91,8 @@ flutter:
     - assets/gtfs_data/frequencies.txt
     - assets/gtfs_data/bus_route_stop.txt
     - assets/gtfs_data/shapes_source.txt
+    - assets/gtfs_data/ferry_trips.txt
+    - assets/gtfs_data/brt_trips.txt
   # To add assets to your application, add an assets section, like this:
 
     

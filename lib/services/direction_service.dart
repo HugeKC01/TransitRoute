@@ -1345,6 +1345,41 @@ class DirectionService {
         }
       } catch (_) {}
 
+      // Add shapes for ferry and BRT
+      final auxAssets = [
+        'assets/gtfs_data/ferry_trips.txt',
+        'assets/gtfs_data/brt_trips.txt'
+      ];
+      for (final asset in auxAssets) {
+        try {
+          final content = await rootBundle.loadString(asset);
+          final auxLines = const LineSplitter().convert(content);
+          if (auxLines.length > 1) {
+            for (int i = 1; i < auxLines.length; i++) {
+              final line = auxLines[i].trimRight();
+              if (line.isEmpty) continue;
+              final row = parseCsvLine(line);
+              if (row.length >= 2) {
+                final tripId = row[0].trim();
+                final shapeId = row[1].trim();
+                if (tripId.isNotEmpty && shapeId.isNotEmpty && result.containsKey(tripId)) {
+                  final oldTrip = result[tripId]!;
+                  result[tripId] = gtfs.Trip(
+                    tripId: oldTrip.tripId,
+                    routeId: oldTrip.routeId,
+                    serviceId: oldTrip.serviceId,
+                    headsign: oldTrip.headsign,
+                    directionId: oldTrip.directionId,
+                    shapeId: shapeId,
+                    shapeColor: oldTrip.shapeColor,
+                  );
+                }
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
       _cachedTrips = result;
       return result;
     } catch (_) {

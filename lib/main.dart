@@ -371,14 +371,41 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           pattern = null;
         }
 
-        polylines.add(
-          Polyline(
-            points: points,
-            color: lineColor,
-            strokeWidth: width,
-            pattern: pattern ?? const StrokePattern.solid(),
-          ),
-        );
+        bool isTrainSegment = false;
+        if (segment.mode == TravelMode.transit) {
+          final rId = (segment.routeShortName ?? '').split(', ').first.replaceAll('\uFEFF', '').toUpperCase();
+          final route = allRoutes.where((r) => r.routeId.replaceAll('\uFEFF', '').toUpperCase() == rId || r.shortName.replaceAll('\uFEFF', '').toUpperCase() == rId || r.longName.replaceAll('\uFEFF', '').toUpperCase() == rId).firstOrNull;
+          if (route?.type == '2') {
+             isTrainSegment = true;
+          }
+        }
+
+        if (isTrainSegment) {
+          polylines.add(
+            Polyline(
+              points: points,
+              color: const Color(0xFF6B4226),
+              strokeWidth: 7.0,
+            ),
+          );
+          polylines.add(
+            Polyline(
+              points: points,
+              color: Colors.white,
+              strokeWidth: 4.0,
+              pattern: StrokePattern.dashed(segments: [10.0, 10.0]),
+            ),
+          );
+        } else {
+          polylines.add(
+            Polyline(
+              points: points,
+              color: lineColor,
+              strokeWidth: width,
+              pattern: pattern ?? const StrokePattern.solid(),
+            ),
+          );
+        }
 
         // Also draw 90 degree offsets for bus stops towards the route line if it is a bus route
         if (segment.mode == TravelMode.transit &&
@@ -1151,16 +1178,45 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                       if (!isTrain && !isMetro) return false;
                       return true;
                     })
-                    .map(
-                      (s) => Polyline(
-                        points: s.points,
-                        color: activeSegments.isNotEmpty
-                            ? Colors.grey.withValues(alpha: 0.5)
-                            : s.color,
-                        strokeWidth: activeSegments.isNotEmpty ? 4.0 : 6.0,
-                      ),
-                    )
-                    .toList(),
+                    .expand((s) {
+                      final isTrain = _isShapeTrain(s);
+
+                      if (activeSegments.isNotEmpty) {
+                        return [
+                          Polyline(
+                            points: s.points,
+                            color: Colors.grey.withValues(alpha: 0.5),
+                            strokeWidth: 4.0,
+                          ),
+                        ];
+                      }
+
+                      if (isTrain) {
+                        return [
+                          // Base thick brown line
+                          Polyline(
+                            points: s.points,
+                            color: const Color(0xFF6B4226), // Dark Brown
+                            strokeWidth: 7.0,
+                          ),
+                          // Top dashed white line
+                          Polyline(
+                            points: s.points,
+                            color: Colors.white,
+                            strokeWidth: 4.0,
+                            pattern: StrokePattern.dashed(segments: [10.0, 10.0]),
+                          ),
+                        ];
+                      }
+
+                      return [
+                        Polyline(
+                          points: s.points,
+                          color: s.color,
+                          strokeWidth: 6.0,
+                        ),
+                      ];
+                    }).toList(),
               ),
             if (showBusStops)
               MarkerLayer(
