@@ -2306,18 +2306,30 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         Expanded(
           child: SearchAnchor(
             searchController: _collapsedSearchController,
-            viewHintText: 'Search station',
+            viewHintText: 'Where to?',
             builder: (context, controller) {
               return SearchBar(
                 controller: controller,
-                leading: const Icon(Icons.search),
-                hintText: 'Search station',
-                padding: const WidgetStatePropertyAll(
-                  EdgeInsets.symmetric(horizontal: 12),
+                constraints: const BoxConstraints(minHeight: 48, maxHeight: 48),
+                leading: Icon(Icons.search, color: theme.colorScheme.primary),
+                hintText: 'Where to?',
+                hintStyle: WidgetStatePropertyAll(
+                  TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.6), fontSize: 15)
                 ),
-                elevation: const WidgetStatePropertyAll<double>(1),
+                padding: const WidgetStatePropertyAll(
+                  EdgeInsets.symmetric(horizontal: 16),
+                ),
+                elevation: const WidgetStatePropertyAll<double>(0),
                 backgroundColor: WidgetStatePropertyAll(
-                  theme.colorScheme.surfaceContainerLow,
+                  theme.colorScheme.surface.withValues(alpha: 0.4),
+                ),
+                shape: WidgetStatePropertyAll(
+                  RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(
+                      color: Colors.white.withValues(alpha: 0.2),
+                    ),
+                  ),
                 ),
                 onTap: controller.openView,
                 onChanged: (value) {
@@ -2329,8 +2341,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                 trailing: [
                   if (controller.text.isNotEmpty)
                     IconButton(
+                      visualDensity: VisualDensity.compact,
                       tooltip: 'Clear search',
-                      icon: const Icon(Icons.close),
+                      icon: const Icon(Icons.close, size: 20),
                       onPressed: () {
                         setState(controller.clear);
                       },
@@ -2387,43 +2400,48 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     String destLabel,
   ) {
     final theme = Theme.of(context);
-    final labelStyle = theme.textTheme.labelSmall?.copyWith(
-      color: theme.colorScheme.onSurfaceVariant,
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0.3,
-    );
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Expanded(
           child: Container(
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: theme.colorScheme.outlineVariant),
+              color: theme.colorScheme.surface.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.15)),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
                     children: [
-                      Text('Origin', style: labelStyle),
-                      Text(
-                        startLabel,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
+                      Icon(Icons.trip_origin, size: 16, color: theme.colorScheme.primary),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          startLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 6),
-                      Text('Destination', style: labelStyle),
-                      Text(
-                        destLabel,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8),
+                        child: Icon(Icons.arrow_forward_ios, size: 12, color: Colors.grey),
+                      ),
+                      Icon(Icons.flag, size: 16, color: theme.colorScheme.secondary),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          destLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ],
@@ -2431,13 +2449,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                 ),
                 IconButton(
                   tooltip: 'Clear selections',
-                  icon: const Icon(Icons.close),
+                  icon: const Icon(Icons.close, size: 18),
                   padding: EdgeInsets.zero,
                   visualDensity: VisualDensity.compact,
-                  constraints: const BoxConstraints.tightFor(
-                    width: 36,
-                    height: 36,
-                  ),
+                  constraints: const BoxConstraints.tightFor(width: 32, height: 32),
                   onPressed: () => _clearSelections(preserveHeaderState: true),
                 ),
               ],
@@ -2472,23 +2487,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     final hasDest = dest != null || _customDestPoint != null;
     final hasBoth = hasStart && hasDest;
     return Container(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
                 child: Column(
@@ -2497,6 +2501,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                       context,
                       label: 'Origin',
                       icon: Icons.trip_origin,
+                      iconColor: theme.colorScheme.primary,
                       asStart: true,
                     ),
                     const SizedBox(height: 8),
@@ -2504,12 +2509,13 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                       context,
                       label: 'Destination',
                       icon: Icons.flag,
+                      iconColor: theme.colorScheme.secondary,
                       asStart: false,
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               Column(
                 children: [
                   _collapseHeaderButton(),
@@ -2517,31 +2523,16 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: IconButton(
-                        icon: const Icon(Icons.swap_vert),
+                        icon: const Icon(Icons.swap_vert, size: 22),
+                        visualDensity: VisualDensity.compact,
                         style: IconButton.styleFrom(
-                          backgroundColor: theme.colorScheme.secondaryContainer,
+                          backgroundColor: theme.colorScheme.secondaryContainer.withValues(alpha: 0.5),
+                          shape: const CircleBorder(),
                         ),
                         onPressed: _swapStops,
                       ),
                     ),
                 ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  onPressed: hasBoth ? () => _findDirection() : null,
-                  child: const Icon(Icons.route),
-                ),
               ),
             ],
           ),
@@ -2554,17 +2545,35 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   selectedDestinationStopId != null)
                 IconButton(
                   onPressed: _clearSelections,
-                  icon: const Icon(Icons.delete_outline),
+                  icon: const Icon(Icons.delete_outline, size: 20),
+                  visualDensity: VisualDensity.compact,
                   tooltip: 'Clear',
                 ),
             ],
           ),
+          if (hasBoth)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.85),
+                ),
+                onPressed: () => _findDirection(),
+                icon: const Icon(Icons.route),
+                label: const Text('Find Routes', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              ),
+            ),
         ],
       ),
     );
   }
 
   Widget _buildTransitPreferenceChooser(BuildContext context) {
+    final theme = Theme.of(context);
     final options = [
       {'type': 'Metro', 'icon': Icons.subway},
       {'type': 'Train', 'icon': Icons.directions_railway},
@@ -2572,16 +2581,24 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       {'type': 'Ferry', 'icon': Icons.directions_boat},
     ];
     return Wrap(
-      spacing: 8,
+      spacing: 6,
       runSpacing: 4,
       children: options.map((opt) {
         final type = opt['type'] as String;
         final icon = opt['icon'] as IconData;
         final isSelected = allowedTransitTypes.contains(type);
         return FilterChip(
-          label: Icon(icon, size: 20),
+          label: Icon(icon, size: 18),
+          visualDensity: VisualDensity.compact,
+          padding: EdgeInsets.zero,
           showCheckmark: false,
           selected: isSelected,
+          backgroundColor: theme.colorScheme.surface.withValues(alpha: 0.3),
+          selectedColor: theme.colorScheme.primaryContainer.withValues(alpha: 0.6),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.15)),
+          ),
           onSelected: (selected) {
             setState(() {
               if (selected) {
@@ -2604,119 +2621,119 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     BuildContext context, {
     required String label,
     required IconData icon,
+    Color? iconColor,
     required bool asStart,
     Widget? trailingAction,
   }) {
     final theme = Theme.of(context);
     final controller = asStart ? _startSearchController : _destSearchController;
-    final selectedId = asStart
-        ? selectedStartStopId
-        : selectedDestinationStopId;
-    final selectedStop = selectedId != null ? stopLookup[selectedId] : null;
-    final textColor = theme.colorScheme.onSurfaceVariant;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SearchAnchor(
-          searchController: controller,
-          viewHintText: 'Search $label station',
-          builder: (context, ctrl) {
-            final trailingWidgets = <Widget>[];
-            if (ctrl.text.isNotEmpty) {
-              trailingWidgets.add(
-                IconButton(
-                  tooltip: 'Clear $label field',
-                  icon: const Icon(Icons.close),
-                  onPressed: () {
-                    setState(() {
-                      ctrl.clear();
-                      if (asStart) {
-                        selectedStartStopId = null;
-                        _customStartPoint = null;
-                      } else {
-                        selectedDestinationStopId = null;
-                        _customDestPoint = null;
-                      }
-                      directionOptions = [];
-                      selectedDirectionIndex = 0;
-                      _headerCollapsed.value = false;
-                    });
-                  },
-                ),
-              );
-            }
-            if (trailingAction != null) {
-              trailingWidgets.add(trailingAction);
-            }
-            return SearchBar(
-              controller: ctrl,
-              leading: Icon(icon),
-              hintText: 'Search $label station',
-              padding: const WidgetStatePropertyAll(
-                EdgeInsets.symmetric(horizontal: 12),
-              ),
-              elevation: const WidgetStatePropertyAll<double>(0),
-              backgroundColor: WidgetStatePropertyAll(
-                theme.colorScheme.surfaceContainerHighest,
-              ),
-              onTap: ctrl.openView,
-              onChanged: (value) {
-                if (!ctrl.isOpen) {
-                  ctrl.openView();
-                }
-                setState(() {});
+    return SearchAnchor(
+      searchController: controller,
+      viewHintText: 'Search $label',
+      builder: (context, ctrl) {
+        final trailingWidgets = <Widget>[];
+        if (ctrl.text.isNotEmpty) {
+          trailingWidgets.add(
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              tooltip: 'Clear $label',
+              icon: const Icon(Icons.close, size: 18),
+              onPressed: () {
+                setState(() {
+                  ctrl.clear();
+                  if (asStart) {
+                    selectedStartStopId = null;
+                    _customStartPoint = null;
+                  } else {
+                    selectedDestinationStopId = null;
+                    _customDestPoint = null;
+                  }
+                  directionOptions = [];
+                  selectedDirectionIndex = 0;
+                  _headerCollapsed.value = false;
+                });
               },
-              trailing: trailingWidgets,
-            );
-          },
-          suggestionsBuilder: (context, ctrl) {
-            if (ctrl.text.isEmpty) {
-              return [
-                ServiceTabs(
-                  allStops: allStops,
-                  busStops: busStops,
-                  linePrefixes: linePrefixes,
-                  lineColors: lineColors,
-                  getLineName: _getLineName,
-                  getLineNames: _getLineNames,
-                  getServicePriority: _getServicePriority,
-                  onSelect: (stop) {
-                    ctrl.closeView(stop.name);
-                    _selectStopFromSearch(stop, asStart: asStart);
-                  },
+            ),
+          );
+        }
+        if (trailingAction != null) {
+          trailingWidgets.add(trailingAction);
+        }
+        return SizedBox(
+          height: 48,
+          child: SearchBar(
+            controller: ctrl,
+            constraints: const BoxConstraints(minHeight: 48, maxHeight: 48),
+            leading: Icon(icon, size: 20, color: iconColor ?? theme.colorScheme.onSurfaceVariant),
+            hintText: 'Search $label',
+            hintStyle: WidgetStatePropertyAll(
+              TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.6), fontSize: 14)
+            ),
+            textStyle: WidgetStatePropertyAll(
+              TextStyle(color: theme.colorScheme.onSurface, fontSize: 15)
+            ),
+            padding: const WidgetStatePropertyAll(
+              EdgeInsets.symmetric(horizontal: 12),
+            ),
+            elevation: const WidgetStatePropertyAll<double>(0),
+            backgroundColor: WidgetStatePropertyAll(
+              theme.colorScheme.surface.withValues(alpha: 0.3),
+            ),
+            shape: WidgetStatePropertyAll(
+              RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(
+                  color: theme.colorScheme.outline.withValues(alpha: 0.15),
                 ),
-              ];
-            }
-
-            final results = _filterStops(ctrl.text);
-            if (results.isEmpty) {
-              return [
-                const ListTile(
-                  leading: Icon(Icons.search_off),
-                  title: Text('No stations found'),
-                ),
-              ];
-            }
-            return results.map(
-              (stop) => _buildSearchSuggestionTile(stop, () {
-                ctrl.closeView(stop.name);
-                _selectStopFromSearch(stop, asStart: asStart);
-              }),
-            );
-          },
-        ),
-        if (selectedStop != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Text(
-              'ID: ${selectedStop.stopId}',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: textColor.withValues(alpha: 0.7),
               ),
             ),
+            onTap: ctrl.openView,
+            onChanged: (value) {
+              if (!ctrl.isOpen) {
+                ctrl.openView();
+              }
+              setState(() {});
+            },
+            trailing: trailingWidgets,
           ),
-      ],
+        );
+      },
+      suggestionsBuilder: (context, ctrl) {
+        if (ctrl.text.isEmpty) {
+          return [
+            ServiceTabs(
+              allStops: allStops,
+              busStops: busStops,
+              linePrefixes: linePrefixes,
+              lineColors: lineColors,
+              getLineName: _getLineName,
+              getLineNames: _getLineNames,
+              getServicePriority: _getServicePriority,
+              onSelect: (stop) {
+                ctrl.closeView(stop.name);
+                _selectStopFromSearch(stop, asStart: asStart);
+              },
+            ),
+          ];
+        }
+
+        final results = _filterStops(ctrl.text);
+        if (results.isEmpty) {
+          return [
+            const ListTile(
+              leading: Icon(Icons.search_off),
+              title: Text('No stations found'),
+            ),
+          ];
+        }
+        return results.map(
+          (stop) => _buildSearchSuggestionTile(stop, () {
+            ctrl.closeView(stop.name);
+            _selectStopFromSearch(stop, asStart: asStart);
+          }),
+        );
+      },
     );
   }
 
