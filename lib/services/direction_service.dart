@@ -108,8 +108,9 @@ class RouteSegment {
       final id = intermediateStops!.first.stopId.trim();
       if (id.startsWith('ST_') ||
           id.startsWith('STOP_') ||
-          int.tryParse(id) != null)
+          int.tryParse(id) != null) {
         return true;
+      }
     }
     return false;
   }
@@ -1794,7 +1795,7 @@ class DirectionService {
       (a, b) => a.cost.compareTo(b.cost),
     );
 
-    final startState = "${start}|START";
+    final startState = "$start|START";
     distance[startState] = 0.0;
     queue.add(_DijkstraNode(start, "START", 0.0));
 
@@ -1807,7 +1808,7 @@ class DirectionService {
       final currentLine = currentNode.lineName;
       final currentDist = currentNode.cost;
 
-      final currentState = "${currentStop}|${currentLine}";
+      final currentState = "$currentStop|$currentLine";
       if (currentDist > (distance[currentState] ?? double.infinity)) continue;
 
       if (currentStop == dest) {
@@ -1843,8 +1844,9 @@ class DirectionService {
 
         double nodePenalty = 0.0;
         if (busCostPenalty > 0 && isNeighborBus) nodePenalty += busCostPenalty;
-        if (railCostPenalty > 0 && !isNeighborBus)
+        if (railCostPenalty > 0 && !isNeighborBus) {
           nodePenalty += railCostPenalty;
+        }
 
         final Set<String> transitLines =
             _transitEdges[currentStop]?[neighbor] ?? {};
@@ -1913,7 +1915,7 @@ class DirectionService {
             cost += 50;
           }
 
-          final nextState = "${neighbor}|${nLine}";
+          final nextState = "$neighbor|$nLine";
           if (cost < (distance[nextState] ?? double.infinity)) {
             distance[nextState] = cost;
             previous[nextState] = currentState;

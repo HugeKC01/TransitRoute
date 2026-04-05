@@ -67,11 +67,17 @@ class GtfsShapesService {
       final pointNames = seqPoints.map((sp) => sp.name).toList();
       String? routeId = shapeToRoute[shapeId];
       if (routeId == null) {
-        if (shapeId.startsWith('EASTERN')) routeId = 'SE';
-        else if (shapeId.startsWith('NORTH&NORTHEST')) routeId = 'SNNE';
-        else if (shapeId.startsWith('SOUTHERN')) routeId = 'SS';
-        else if (shapeId.startsWith('MAEKLONG')) routeId = 'SM';
-        else if (shapeId.startsWith('THONBURI')) routeId = 'ST';
+        if (shapeId.startsWith('EASTERN')) {
+          routeId = 'SE';
+        } else if (shapeId.startsWith('NORTH&NORTHEST')) {
+          routeId = 'SNNE';
+        } else if (shapeId.startsWith('SOUTHERN')) { 
+          routeId = 'SS';
+        } else if (shapeId.startsWith('MAEKLONG')) { 
+          routeId = 'SM';
+        } else if (shapeId.startsWith('THONBURI')) { 
+          routeId = 'ST';
+        }
       }
       final color =
           shapeToColor[shapeId] ??

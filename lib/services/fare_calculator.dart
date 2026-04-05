@@ -211,8 +211,9 @@ class FareCalculator {
   // คำนวณค่ารถเมล์ (Bus)
   // ─────────────────────────────────────────────
   int getBusFare(double distanceMeters, String routeShortName) {
-    if (routeShortName == 'BRT')
+    if (routeShortName == 'BRT') {
       return 15; // handled elsewhere but just in case
+    }
 
     final info = _busRouteInfoMap[routeShortName];
     if (info == null) return 8; // fallback to standard
@@ -231,29 +232,31 @@ class FareCalculator {
         fare = 15;
       }
     } else if (typeId == 'eurotwo') {
-      if (km >= 24)
+      if (km >= 24) {
         fare = 25;
-      else if (km >= 20)
+      } else if (km >= 20) {
         fare = 23;
-      else if (km >= 16)
+      } else if (km >= 16) {
         fare = 21;
-      else if (km >= 12)
+      } else if (km >= 12) {
         fare = 19;
-      else if (km >= 8)
+      } else if (km >= 8) {
         fare = 17;
-      else if (km >= 4)
+      } else if (km >= 4) {
         fare = 15;
-      else
+      } else {
         fare = 13;
+      }
     } else if (typeId == 'ngv 489' ||
         typeId == 'ngv489' ||
         typeId == 'ngv_489') {
-      if (km >= 16)
+      if (km >= 16) {
         fare = 25;
-      else if (km >= 4)
+      } else if (km >= 4) {
         fare = 20;
-      else
+      } else {
         fare = 15;
+      }
     } else {
       // Standard OR Stadard
       fare = 8;

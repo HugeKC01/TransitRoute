@@ -373,10 +373,21 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
         bool isTrainSegment = false;
         if (segment.mode == TravelMode.transit) {
-          final rId = (segment.routeShortName ?? '').split(', ').first.replaceAll('\uFEFF', '').toUpperCase();
-          final route = allRoutes.where((r) => r.routeId.replaceAll('\uFEFF', '').toUpperCase() == rId || r.shortName.replaceAll('\uFEFF', '').toUpperCase() == rId || r.longName.replaceAll('\uFEFF', '').toUpperCase() == rId).firstOrNull;
+          final rId = (segment.routeShortName ?? '')
+              .split(', ')
+              .first
+              .replaceAll('\uFEFF', '')
+              .toUpperCase();
+          final route = allRoutes
+              .where(
+                (r) =>
+                    r.routeId.replaceAll('\uFEFF', '').toUpperCase() == rId ||
+                    r.shortName.replaceAll('\uFEFF', '').toUpperCase() == rId ||
+                    r.longName.replaceAll('\uFEFF', '').toUpperCase() == rId,
+              )
+              .firstOrNull;
           if (route?.type == '2') {
-             isTrainSegment = true;
+            isTrainSegment = true;
           }
         }
 
@@ -482,7 +493,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             final targetId = segment.routeId ?? lineName.split(' ').first;
             final exactShapeId = segment.shapeId;
             if (exactShapeId != null && exactShapeId.isNotEmpty) {
-              final exactMatch = shapeSegments.where((s) => s.shapeId == exactShapeId).toList();
+              final exactMatch = shapeSegments
+                  .where((s) => s.shapeId == exactShapeId)
+                  .toList();
               if (exactMatch.isNotEmpty) {
                 // If we exactly know the shape_id, force it, avoiding parallel routes
                 final shape = exactMatch.first;
@@ -513,7 +526,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   }
                 }
 
-                if (bestDistA < 500 && bestDistB < 500 && bestA != -1 && bestB != -1) {
+                if (bestDistA < 500 &&
+                    bestDistB < 500 &&
+                    bestA != -1 &&
+                    bestB != -1) {
                   final isReversed = bestA > bestB;
                   final startIdx = isReversed ? bestB : bestA;
                   final endIdx = isReversed ? bestA : bestB;
@@ -1204,7 +1220,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                             points: s.points,
                             color: Colors.white,
                             strokeWidth: 4.0,
-                            pattern: StrokePattern.dashed(segments: [10.0, 10.0]),
+                            pattern: StrokePattern.dashed(
+                              segments: [10.0, 10.0],
+                            ),
                           ),
                         ];
                       }
@@ -1216,7 +1234,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                           strokeWidth: 6.0,
                         ),
                       ];
-                    }).toList(),
+                    })
+                    .toList(),
               ),
             if (showBusStops)
               MarkerLayer(
@@ -1451,84 +1470,161 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              _buildFilterMenu(),
+              _buildFilterMenu(isWide),
               const SizedBox(height: 16),
-              Material(
-                elevation: 6,
-                color: Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(32),
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(32),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.08),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.add),
-                        tooltip: 'Zoom in',
-                        onPressed: () => _adjustMapZoom(0.75),
-                        iconSize: 28,
-                        padding: const EdgeInsets.all(12),
-                        constraints: const BoxConstraints(
-                          minWidth: 56,
-                          minHeight: 48,
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(32),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.15),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(32),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Theme.of(context).colorScheme.surface.withValues(
+                              alpha:
+                                  Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? 0.4
+                                  : 0.6,
+                            ),
+                            Theme.of(context).colorScheme.surface.withValues(
+                              alpha:
+                                  Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? 0.2
+                                  : 0.4,
+                            ),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(32),
+                        border: Border.all(
+                          color: Colors.white.withValues(
+                            alpha:
+                                Theme.of(context).brightness == Brightness.dark
+                                ? 0.15
+                                : 0.4,
+                          ),
+                          width: 1.2,
                         ),
                       ),
-                      Container(
-                        width: 36,
-                        height: 1,
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.outline.withValues(alpha: 0.2),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.remove),
-                        tooltip: 'Zoom out',
-                        onPressed: () => _adjustMapZoom(-0.75),
-                        iconSize: 28,
-                        padding: const EdgeInsets.all(12),
-                        constraints: const BoxConstraints(
-                          minWidth: 56,
-                          minHeight: 48,
+                      child: Material(
+                        color: Colors.transparent,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.add),
+                              tooltip: 'Zoom in',
+                              onPressed: () => _adjustMapZoom(0.75),
+                              iconSize: 28,
+                              padding: const EdgeInsets.all(12),
+                              constraints: const BoxConstraints(
+                                minWidth: 56,
+                                minHeight: 48,
+                              ),
+                            ),
+                            Container(
+                              width: 36,
+                              height: 1,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .outlineVariant
+                                  .withValues(alpha: 0.3),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.remove),
+                              tooltip: 'Zoom out',
+                              onPressed: () => _adjustMapZoom(-0.75),
+                              iconSize: 28,
+                              padding: const EdgeInsets.all(12),
+                              constraints: const BoxConstraints(
+                                minWidth: 56,
+                                minHeight: 48,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),
               const SizedBox(height: 16),
-              Material(
-                elevation: 6,
-                color: Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(32),
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(32),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.08),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(32),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.15),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(32),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Theme.of(context).colorScheme.surface.withValues(
+                              alpha:
+                                  Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? 0.4
+                                  : 0.6,
+                            ),
+                            Theme.of(context).colorScheme.surface.withValues(
+                              alpha:
+                                  Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? 0.2
+                                  : 0.4,
+                            ),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(32),
+                        border: Border.all(
+                          color: Colors.white.withValues(
+                            alpha:
+                                Theme.of(context).brightness == Brightness.dark
+                                ? 0.15
+                                : 0.4,
+                          ),
+                          width: 1.2,
+                        ),
                       ),
-                    ],
-                  ),
-                  child: IconButton(
-                    icon: const Icon(Icons.my_location),
-                    tooltip: 'Current Location',
-                    onPressed: _goToMyLocation,
-                    iconSize: 28,
-                    padding: const EdgeInsets.all(12),
-                    constraints: const BoxConstraints(
-                      minWidth: 56,
-                      minHeight: 56,
+                      child: Material(
+                        color: Colors.transparent,
+                        child: IconButton(
+                          icon: const Icon(Icons.my_location),
+                          tooltip: 'Current Location',
+                          onPressed: _goToMyLocation,
+                          iconSize: 28,
+                          padding: const EdgeInsets.all(12),
+                          constraints: const BoxConstraints(
+                            minWidth: 56,
+                            minHeight: 56,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -1540,8 +1636,210 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildFilterMenu() {
+  Widget _buildFilterMenu(bool isWide) {
     final theme = Theme.of(context);
+    final items = [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        child: Text(
+          'Map Layers',
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+      const Divider(),
+      _buildFilterMenuItem(
+        'Train Station',
+        Icons.train,
+        Colors.orange,
+        _showTrainPins,
+        (val) => setState(() => _showTrainPins = val),
+      ),
+      _buildFilterMenuItem(
+        'Metro Station',
+        Icons.subway,
+        Colors.blue,
+        _showMetroPins,
+        (val) => setState(() => _showMetroPins = val),
+      ),
+      _buildFilterMenuItem(
+        'Bus Stop',
+        Icons.directions_bus,
+        Colors.green,
+        _showBusPins,
+        (val) => setState(() => _showBusPins = val),
+      ),
+      _buildFilterMenuItem(
+        'Ferry Pier',
+        Icons.directions_boat,
+        Colors.teal,
+        _showFerryPins,
+        (val) => setState(() => _showFerryPins = val),
+      ),
+    ];
+
+    Widget buildButton(bool isOpen, VoidCallback onPressed) {
+      return Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(32),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.15),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(32),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    theme.colorScheme.surface.withValues(
+                      alpha: theme.brightness == Brightness.dark ? 0.4 : 0.6,
+                    ),
+                    theme.colorScheme.surface.withValues(
+                      alpha: theme.brightness == Brightness.dark ? 0.2 : 0.4,
+                    ),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(32),
+                border: Border.all(
+                  color: Colors.white.withValues(
+                    alpha: theme.brightness == Brightness.dark ? 0.15 : 0.4,
+                  ),
+                  width: 1.2,
+                ),
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: IconButton(
+                  icon: Icon(
+                    Icons.layers_outlined,
+                    color: isOpen
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.onSurface,
+                  ),
+                  tooltip: 'Map Layers',
+                  onPressed: onPressed,
+                  iconSize: 28,
+                  padding: const EdgeInsets.all(12),
+                  constraints: const BoxConstraints(
+                    minWidth: 56,
+                    minHeight: 56,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (!isWide) {
+      return buildButton(false, () {
+        showModalBottomSheet(
+          context: context,
+          backgroundColor: theme.colorScheme.surface,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          builder: (bottomSheetContext) {
+            return StatefulBuilder(
+              builder: (ctx, setSheetState) {
+                // Rebuild sheet using the latest map states.
+                return SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 48,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.outlineVariant
+                                  .withValues(alpha: 0.5),
+                              borderRadius: BorderRadius.circular(2.5),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Map Layers',
+                              style: theme.textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const Divider(),
+                        _buildFilterMenuItem(
+                          'Train Station',
+                          Icons.train,
+                          Colors.orange,
+                          _showTrainPins,
+                          (val) {
+                            setState(() => _showTrainPins = val);
+                            setSheetState(() {});
+                          },
+                          fullWidth: true,
+                        ),
+                        _buildFilterMenuItem(
+                          'Metro Station',
+                          Icons.subway,
+                          Colors.blue,
+                          _showMetroPins,
+                          (val) {
+                            setState(() => _showMetroPins = val);
+                            setSheetState(() {});
+                          },
+                          fullWidth: true,
+                        ),
+                        _buildFilterMenuItem(
+                          'Bus Stop',
+                          Icons.directions_bus,
+                          Colors.green,
+                          _showBusPins,
+                          (val) {
+                            setState(() => _showBusPins = val);
+                            setSheetState(() {});
+                          },
+                          fullWidth: true,
+                        ),
+                        _buildFilterMenuItem(
+                          'Ferry Pier',
+                          Icons.directions_boat,
+                          Colors.teal,
+                          _showFerryPins,
+                          (val) {
+                            setState(() => _showFerryPins = val);
+                            setSheetState(() {});
+                          },
+                          fullWidth: true,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        );
+      });
+    }
+
     return MenuAnchor(
       alignmentOffset: const Offset(-180, 0),
       style: MenuStyle(
@@ -1553,83 +1851,15 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           EdgeInsets.symmetric(vertical: 8),
         ),
       ),
-      menuChildren: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-          child: Text(
-            'Map Layers',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        const Divider(),
-        _buildFilterMenuItem(
-          'Train Station',
-          Icons.train,
-          Colors.orange,
-          _showTrainPins,
-          (val) => setState(() => _showTrainPins = val),
-        ),
-        _buildFilterMenuItem(
-          'Metro Station',
-          Icons.subway,
-          Colors.blue,
-          _showMetroPins,
-          (val) => setState(() => _showMetroPins = val),
-        ),
-        _buildFilterMenuItem(
-          'Bus Stop',
-          Icons.directions_bus,
-          Colors.green,
-          _showBusPins,
-          (val) => setState(() => _showBusPins = val),
-        ),
-        _buildFilterMenuItem(
-          'Ferry Pier',
-          Icons.directions_boat,
-          Colors.teal,
-          _showFerryPins,
-          (val) => setState(() => _showFerryPins = val),
-        ),
-      ],
+      menuChildren: items,
       builder: (context, controller, child) {
-        return Material(
-          elevation: 6,
-          color: theme.colorScheme.surface,
-          borderRadius: BorderRadius.circular(32),
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(32),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: IconButton(
-              icon: Icon(
-                Icons.layers_outlined,
-                color: controller.isOpen
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.onSurface,
-              ),
-              tooltip: 'Map Layers',
-              onPressed: () {
-                if (controller.isOpen) {
-                  controller.close();
-                } else {
-                  controller.open();
-                }
-              },
-              iconSize: 28,
-              padding: const EdgeInsets.all(12),
-              constraints: const BoxConstraints(minWidth: 56, minHeight: 56),
-            ),
-          ),
-        );
+        return buildButton(controller.isOpen, () {
+          if (controller.isOpen) {
+            controller.close();
+          } else {
+            controller.open();
+          }
+        });
       },
     );
   }
@@ -1639,42 +1869,46 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     IconData icon,
     Color color,
     bool value,
-    ValueChanged<bool> onChanged,
-  ) {
+    ValueChanged<bool> onChanged, {
+    bool fullWidth = false,
+  }) {
     final theme = Theme.of(context);
-    return MenuItemButton(
-      onPressed: () => onChanged(!value),
-      child: Container(
-        width: 200,
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(icon, size: 20, color: color),
+    final content = Container(
+      width: fullWidth ? double.infinity : 200,
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(8),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                title,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+            child: Icon(icon, size: 20, color: color),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              title,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
               ),
             ),
-            Switch(
-              value: value,
-              onChanged: onChanged,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-          ],
-        ),
+          ),
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ],
       ),
     );
+
+    if (fullWidth) {
+      return InkWell(onTap: () => onChanged(!value), child: content);
+    }
+
+    return MenuItemButton(onPressed: () => onChanged(!value), child: content);
   }
 
   Widget _buildWideLayout(BuildContext context, Widget headerOverlay) {
@@ -1724,21 +1958,70 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                       ? Padding(
                           key: const ValueKey('route_options'),
                           padding: const EdgeInsets.only(top: 16.0),
-                          child: Material(
-                            elevation: 12, // Slight transparency
-                            color: theme.colorScheme.surface.withValues(
-                              alpha: 0.95,
-                            ),
-                            borderRadius: BorderRadius.circular(24),
-                            clipBehavior: Clip.antiAlias,
-                            child: BackdropFilter(
-                              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                              child: ListView(
-                                padding: const EdgeInsets.only(
-                                  bottom: 24,
-                                  top: 12,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(24),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.15),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 8),
                                 ),
-                                children: [_buildRouteOptionsSection(context)],
+                              ],
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(24),
+                              child: BackdropFilter(
+                                filter: ImageFilter.blur(
+                                  sigmaX: 20,
+                                  sigmaY: 20,
+                                ),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [
+                                        theme.colorScheme.surface.withValues(
+                                          alpha:
+                                              theme.brightness ==
+                                                  Brightness.dark
+                                              ? 0.4
+                                              : 0.6,
+                                        ),
+                                        theme.colorScheme.surface.withValues(
+                                          alpha:
+                                              theme.brightness ==
+                                                  Brightness.dark
+                                              ? 0.2
+                                              : 0.4,
+                                        ),
+                                      ],
+                                    ),
+                                    borderRadius: BorderRadius.circular(24),
+                                    border: Border.all(
+                                      color: Colors.white.withValues(
+                                        alpha:
+                                            theme.brightness == Brightness.dark
+                                            ? 0.15
+                                            : 0.4,
+                                      ),
+                                      width: 1.2,
+                                    ),
+                                  ),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: ListView(
+                                      padding: const EdgeInsets.only(
+                                        bottom: 24,
+                                        top: 12,
+                                      ),
+                                      children: [
+                                        _buildRouteOptionsSection(context),
+                                      ],
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
                           ),
@@ -1842,8 +2125,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.1),
-                blurRadius: 16,
+                color: Colors.black.withValues(alpha: 0.15),
+                blurRadius: 20,
                 offset: const Offset(0, 8),
               ),
             ],
@@ -1851,9 +2134,29 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(24),
             child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+              filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
               child: Container(
-                color: theme.colorScheme.surface.withValues(alpha: 0.85),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      theme.colorScheme.surface.withValues(
+                        alpha: theme.brightness == Brightness.dark ? 0.4 : 0.6,
+                      ),
+                      theme.colorScheme.surface.withValues(
+                        alpha: theme.brightness == Brightness.dark ? 0.2 : 0.4,
+                      ),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: Colors.white.withValues(
+                      alpha: theme.brightness == Brightness.dark ? 0.15 : 0.4,
+                    ),
+                    width: 1.2,
+                  ),
+                ),
                 child: Material(
                   type: MaterialType.transparency,
                   child: AnimatedSize(
@@ -2653,9 +2956,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     try {
       final tripMap = await _directionService.loadTrips();
       final loadedShapes = await GtfsShapesService().loadSegments(
-        shapesAssets: [
-          'assets/gtfs_data/shapes.txt',
-        ],
+        shapesAssets: ['assets/gtfs_data/shapes.txt'],
         routeColors: {
           for (final r in routes)
             r.routeId: (r.color != null && r.color!.isNotEmpty)
@@ -2673,7 +2974,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       });
       shapes = mutableShapes;
 
-      // Load heavy shapes asynchronously so it doesn't block initial launch 
+      // Load heavy shapes asynchronously so it doesn't block initial launch
       // or zoom out the map too far.
       Future.microtask(() async {
         try {
@@ -3400,42 +3701,51 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
     return Padding(
       padding: EdgeInsets.only(
-        left: 32,
-        right: 32,
-        bottom: math.max(24.0, bottomPadding + 8.0),
+        left: 20,
+        right: 20,
+        bottom: math.max(16.0, bottomPadding + 8.0),
       ),
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(40),
+          borderRadius: BorderRadius.circular(50),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.1),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
+              color: Colors.black.withValues(alpha: 0.15),
+              blurRadius: 30,
+              offset: const Offset(0, 10),
             ),
           ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(40),
+          borderRadius: BorderRadius.circular(50),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
             child: Container(
-              height: 72,
+              height: 70,
               padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
-                color: theme.colorScheme.surface.withValues(
-                  alpha: isDark ? 0.35 : 0.75,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    theme.colorScheme.surface.withValues(
+                      alpha: isDark ? 0.4 : 0.6,
+                    ),
+                    theme.colorScheme.surface.withValues(
+                      alpha: isDark ? 0.2 : 0.4,
+                    ),
+                  ],
                 ),
-                borderRadius: BorderRadius.circular(40),
+                borderRadius: BorderRadius.circular(50),
                 border: Border.all(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.15),
-                  width: 1,
+                  color: Colors.white.withValues(alpha: isDark ? 0.15 : 0.4),
+                  width: 1.5,
                 ),
               ),
               child: Material(
                 color: Colors.transparent,
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
                     _buildNavItem(
                       0,
@@ -3468,38 +3778,66 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   ) {
     final isSelected = _selectedNavIndex == index;
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     final color = isSelected
         ? theme.colorScheme.primary
         : theme.colorScheme.onSurfaceVariant;
 
     return Expanded(
-      child: InkWell(
+      child: GestureDetector(
         onTap: () {
           setState(() => _selectedNavIndex = index);
         },
-        borderRadius: BorderRadius.circular(24),
+        behavior: HitTestBehavior.opaque,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 250),
-              transitionBuilder: (child, anim) =>
-                  ScaleTransition(scale: anim, child: child),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOutCubic,
+              padding: EdgeInsets.symmetric(
+                horizontal: isSelected ? 20 : 12,
+                vertical: 6,
+              ),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? theme.colorScheme.surface.withValues(
+                        alpha: isDark ? 0.3 : 0.8,
+                      )
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(30),
+                border: Border.all(
+                  color: isSelected
+                      ? Colors.white.withValues(alpha: isDark ? 0.15 : 0.6)
+                      : Colors.transparent,
+                  width: 1,
+                ),
+                boxShadow: isSelected
+                    ? [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.1),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ]
+                    : [],
+              ),
               child: Icon(
                 isSelected ? filledIcon : outlineIcon,
-                key: ValueKey<bool>(isSelected),
                 color: color,
                 size: 26,
               ),
             ),
             const SizedBox(height: 4),
-            Text(
-              label,
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 300),
               style: TextStyle(
                 color: color,
                 fontSize: 11,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
               ),
+              child: Text(label),
             ),
           ],
         ),
