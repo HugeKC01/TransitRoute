@@ -2655,7 +2655,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       final loadedShapes = await GtfsShapesService().loadSegments(
         shapesAssets: [
           'assets/gtfs_data/shapes.txt',
-          'assets/gtfs_data/shapes_source.txt',
         ],
         routeColors: {
           for (final r in routes)
@@ -2673,6 +2672,28 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         return aTop.compareTo(bTop);
       });
       shapes = mutableShapes;
+
+      // Load heavy shapes asynchronously so it doesn't block initial launch 
+      // or zoom out the map too far.
+      Future.microtask(() async {
+        try {
+          final heavyShapes = await GtfsShapesService().loadSegments(
+            shapesAssets: ['assets/gtfs_data/shapes_source.txt'],
+            routeColors: {
+              for (final r in routes)
+                r.routeId: (r.color != null && r.color!.isNotEmpty)
+                    ? Color(int.parse('0xFF${r.color!}'))
+                    : Colors.purple,
+            },
+            tripMap: tripMap,
+          );
+          if (mounted) {
+            setState(() {
+              shapeSegments.addAll(heavyShapes);
+            });
+          }
+        } catch (_) {}
+      });
     } catch (_) {}
 
     stops.sort((a, b) {
