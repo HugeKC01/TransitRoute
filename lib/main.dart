@@ -1370,80 +1370,103 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               ),
             if (filteredRailStops.isNotEmpty)
               MarkerLayer(
-                markers: filteredRailStops                      .map(
-                        (stop) {
-                          final lineName = _getLineName(stop.stopId);
-                          final routeIcon = lineName != null ? _getRouteIcon(lineName) : null;
-                          final isSelected = stop.stopId == startId || stop.stopId == destId;
-                          final dim = activeSegments.isNotEmpty &&
-                              !routeStopIds.contains(stop.stopId) &&
-                              !isSelected;
+                markers: filteredRailStops.map((stop) {
+                  final lineName = _getLineName(stop.stopId);
+                  final routeIcon = lineName != null
+                      ? _getRouteIcon(lineName)
+                      : null;
+                  final isSelected =
+                      stop.stopId == startId || stop.stopId == destId;
+                  final dim =
+                      activeSegments.isNotEmpty &&
+                      !routeStopIds.contains(stop.stopId) &&
+                      !isSelected;
 
-                          return Marker(
-                            point: LatLng(stop.lat, stop.lon),
-                            width: isSelected ? railSelectedSize * 1.5 : railBaseSize * 1.5,
-                            height: isSelected ? railSelectedSize * 1.5 : railBaseSize * 1.5,
-                            child: GestureDetector(
-                              onTap: () => _showStopDetails(context, stop),
-                              child: Tooltip(
-                                message: _stopDisplayLabel(stop),
-                                child: routeIcon != null && routeIcon.isNotEmpty && _currentZoom >= 12
-                                    ? Container(
-                                        decoration: BoxDecoration(
-                                          color: stop.stopId == startId
-                                              ? Colors.greenAccent.withValues(alpha: 0.85)
-                                              : stop.stopId == destId
-                                              ? Colors.redAccent.withValues(alpha: 0.85)
-                                              : Colors.white,
-                                          shape: BoxShape.circle,
-                                          border: Border.all(
-                                            color: dim ? Colors.grey.shade500 : _getLineColor(stop.stopId),
-                                            width: isSelected ? railSelectedBorderWidth : railBorderWidth,
-                                          ),
-                                        ),
-                                        child: ClipOval(
-                                          child: Opacity(
-                                            opacity: dim ? 0.4 : 1.0,
-                                            child: Padding(
-                                              padding: EdgeInsets.all(isSelected ? 3.0 : 2.0),
-                                              child: SvgPicture.asset(routeIcon, fit: BoxFit.contain),
-                                            ),
-                                          ),
-                                        ),
-                                      )
-                                    : Container(
-                              decoration: BoxDecoration(
-                                color: (stop.stopId == startId)
-                                    ? Colors.greenAccent.withValues(alpha: 0.85)
-                                    : (stop.stopId == destId)
-                                    ? Colors.redAccent.withValues(alpha: 0.85)
-                                    : (activeSegments.isNotEmpty &&
-                                          !routeStopIds.contains(stop.stopId))
-                                    ? Colors.grey.shade300
-                                    : Colors.white,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color:
-                                      (activeSegments.isNotEmpty &&
-                                          !routeStopIds.contains(stop.stopId) &&
-                                          stop.stopId != startId &&
-                                          stop.stopId != destId)
-                                      ? Colors.grey.shade500
-                                      : _getLineColor(stop.stopId),
-                                  width:
-                                      (stop.stopId == startId ||
-                                          stop.stopId == destId)
-                                      ? railSelectedBorderWidth
-                                      : railBorderWidth,
+                  return Marker(
+                    point: LatLng(stop.lat, stop.lon),
+                    width: isSelected
+                        ? railSelectedSize * 1.5
+                        : railBaseSize * 1.5,
+                    height: isSelected
+                        ? railSelectedSize * 1.5
+                        : railBaseSize * 1.5,
+                    child: GestureDetector(
+                      onTap: () => _showStopDetails(context, stop),
+                      child: Tooltip(
+                        message: _stopDisplayLabel(stop),
+                        child:
+                            routeIcon != null &&
+                                routeIcon.isNotEmpty &&
+                                _currentZoom >= 12
+                            ? Container(
+                                decoration: BoxDecoration(
+                                  color: stop.stopId == startId
+                                      ? Colors.greenAccent.withValues(
+                                          alpha: 0.85,
+                                        )
+                                      : stop.stopId == destId
+                                      ? Colors.redAccent.withValues(alpha: 0.85)
+                                      : Colors.white,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: dim
+                                        ? Colors.grey.shade500
+                                        : _getLineColor(stop.stopId),
+                                    width: isSelected
+                                        ? railSelectedBorderWidth
+                                        : railBorderWidth,
+                                  ),
+                                ),
+                                child: ClipOval(
+                                  child: Opacity(
+                                    opacity: dim ? 0.4 : 1.0,
+                                    child: Padding(
+                                      padding: EdgeInsets.all(
+                                        isSelected ? 3.0 : 2.0,
+                                      ),
+                                      child: SvgPicture.asset(
+                                        routeIcon,
+                                        fit: BoxFit.contain,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : Container(
+                                decoration: BoxDecoration(
+                                  color: (stop.stopId == startId)
+                                      ? Colors.greenAccent.withValues(
+                                          alpha: 0.85,
+                                        )
+                                      : (stop.stopId == destId)
+                                      ? Colors.redAccent.withValues(alpha: 0.85)
+                                      : (activeSegments.isNotEmpty &&
+                                            !routeStopIds.contains(stop.stopId))
+                                      ? Colors.grey.shade300
+                                      : Colors.white,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color:
+                                        (activeSegments.isNotEmpty &&
+                                            !routeStopIds.contains(
+                                              stop.stopId,
+                                            ) &&
+                                            stop.stopId != startId &&
+                                            stop.stopId != destId)
+                                        ? Colors.grey.shade500
+                                        : _getLineColor(stop.stopId),
+                                    width:
+                                        (stop.stopId == startId ||
+                                            stop.stopId == destId)
+                                        ? railSelectedBorderWidth
+                                        : railBorderWidth,
                                   ),
                                 ),
                               ),
-                            ),
-                          ),
-                        );
-                      },
-                    )
-                    .toList(),
+                      ),
+                    ),
+                  );
+                }).toList(),
               ),
             if (_customStartPoint != null)
               MarkerLayer(

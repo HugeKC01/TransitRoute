@@ -58,7 +58,9 @@ class RouteAssetLoader {
                 ? _cleanHex(row[idxTextColor])
                 : null,
             routeIcon: idxRouteIcon >= 0 && idxRouteIcon < row.length
-                ? (row[idxRouteIcon].trim().isNotEmpty ? row[idxRouteIcon].trim() : null)
+                ? (row[idxRouteIcon].trim().isNotEmpty
+                      ? row[idxRouteIcon].trim()
+                      : null)
                 : null,
             linePrefixes: linePrefixes,
           ),

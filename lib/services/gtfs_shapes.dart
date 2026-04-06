@@ -71,11 +71,11 @@ class GtfsShapesService {
           routeId = 'SE';
         } else if (shapeId.startsWith('NORTH&NORTHEST')) {
           routeId = 'SNNE';
-        } else if (shapeId.startsWith('SOUTHERN')) { 
+        } else if (shapeId.startsWith('SOUTHERN')) {
           routeId = 'SS';
-        } else if (shapeId.startsWith('MAEKLONG')) { 
+        } else if (shapeId.startsWith('MAEKLONG')) {
           routeId = 'SM';
-        } else if (shapeId.startsWith('THONBURI')) { 
+        } else if (shapeId.startsWith('THONBURI')) {
           routeId = 'ST';
         }
       }

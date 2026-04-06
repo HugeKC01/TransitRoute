@@ -252,7 +252,9 @@ class StationDetailsContent extends StatelessWidget {
                               child: Text(
                                 singleLine,
                                 style: theme.textTheme.labelMedium?.copyWith(
-                                  color: Colors.white,
+                                  color: specificColor.computeLuminance() > 0.5
+                                      ? Colors.black87
+                                      : Colors.white,
                                   fontWeight: FontWeight.bold,
                                 ),
                                 overflow: TextOverflow.ellipsis,

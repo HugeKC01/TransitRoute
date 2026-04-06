@@ -537,18 +537,23 @@ class DirectionService {
       while (changed) {
         changed = false;
         for (int i = 0; i < finalSegments.length - 1; i++) {
-          if (finalSegments[i].mode == TravelMode.transit && finalSegments[i].routeShortName != null) {
-            
+          if (finalSegments[i].mode == TravelMode.transit &&
+              finalSegments[i].routeShortName != null) {
             if (finalSegments[i + 1].mode == TravelMode.transit &&
-                finalSegments[i].routeShortName == finalSegments[i + 1].routeShortName) {
-              
+                finalSegments[i].routeShortName ==
+                    finalSegments[i + 1].routeShortName) {
               final s1 = finalSegments[i];
               final s2 = finalSegments[i + 1];
 
               final combinedStops = <gtfs.Stop>[];
-              if (s1.intermediateStops != null) combinedStops.addAll(s1.intermediateStops!);
+              if (s1.intermediateStops != null) {
+                combinedStops.addAll(s1.intermediateStops!);
+              }
               if (s2.intermediateStops != null) {
-                if (combinedStops.isNotEmpty && s2.intermediateStops!.isNotEmpty && combinedStops.last.stopId == s2.intermediateStops!.first.stopId) {
+                if (combinedStops.isNotEmpty &&
+                    s2.intermediateStops!.isNotEmpty &&
+                    combinedStops.last.stopId ==
+                        s2.intermediateStops!.first.stopId) {
                   combinedStops.addAll(s2.intermediateStops!.sublist(1));
                 } else {
                   combinedStops.addAll(s2.intermediateStops!);
@@ -574,16 +579,21 @@ class DirectionService {
             if (i + 2 < finalSegments.length &&
                 finalSegments[i + 1].mode == TravelMode.walk &&
                 finalSegments[i + 2].mode == TravelMode.transit &&
-                finalSegments[i].routeShortName == finalSegments[i + 2].routeShortName) {
-              
+                finalSegments[i].routeShortName ==
+                    finalSegments[i + 2].routeShortName) {
               final s1 = finalSegments[i];
               final walk = finalSegments[i + 1];
               final s2 = finalSegments[i + 2];
 
               final combinedStops = <gtfs.Stop>[];
-              if (s1.intermediateStops != null) combinedStops.addAll(s1.intermediateStops!);
+              if (s1.intermediateStops != null) {
+                combinedStops.addAll(s1.intermediateStops!);
+              }
               if (s2.intermediateStops != null) {
-                if (combinedStops.isNotEmpty && s2.intermediateStops!.isNotEmpty && combinedStops.last.stopId == s2.intermediateStops!.first.stopId) {
+                if (combinedStops.isNotEmpty &&
+                    s2.intermediateStops!.isNotEmpty &&
+                    combinedStops.last.stopId ==
+                        s2.intermediateStops!.first.stopId) {
                   combinedStops.addAll(s2.intermediateStops!.sublist(1));
                 } else {
                   combinedStops.addAll(s2.intermediateStops!);
@@ -594,8 +604,12 @@ class DirectionService {
                 mode: TravelMode.transit,
                 start: s1.start,
                 end: s2.end,
-                distanceMeters: s1.distanceMeters + walk.distanceMeters + s2.distanceMeters,
-                durationMinutes: s1.durationMinutes + walk.durationMinutes + s2.durationMinutes,
+                distanceMeters:
+                    s1.distanceMeters + walk.distanceMeters + s2.distanceMeters,
+                durationMinutes:
+                    s1.durationMinutes +
+                    walk.durationMinutes +
+                    s2.durationMinutes,
                 routeShortName: s1.routeShortName,
                 shapeId: s1.shapeId ?? s2.shapeId,
                 routeType: s1.routeType,
@@ -1352,7 +1366,7 @@ class DirectionService {
       // Add shapes for ferry and BRT
       final auxAssets = [
         'assets/gtfs_data/ferry_trips.txt',
-        'assets/gtfs_data/brt_trips.txt'
+        'assets/gtfs_data/brt_trips.txt',
       ];
       for (final asset in auxAssets) {
         try {
@@ -1366,7 +1380,9 @@ class DirectionService {
               if (row.length >= 2) {
                 final tripId = row[0].trim();
                 final shapeId = row[1].trim();
-                if (tripId.isNotEmpty && shapeId.isNotEmpty && result.containsKey(tripId)) {
+                if (tripId.isNotEmpty &&
+                    shapeId.isNotEmpty &&
+                    result.containsKey(tripId)) {
                   final oldTrip = result[tripId]!;
                   result[tripId] = gtfs.Trip(
                     tripId: oldTrip.tripId,
@@ -1763,8 +1779,6 @@ class DirectionService {
     return results;
   }
 
-
-
   List<gtfs.Stop> _dijkstraWeightedPath(
     String start,
     String dest, {
@@ -2010,25 +2024,31 @@ class DirectionService {
     int currentSegmentStartIndex = 0;
 
     String? getShapeForSegment(List<gtfs.Stop> segStops, String? lineName) {
-      if (_cachedStopTimes == null || _cachedTrips == null || lineName == null || segStops.isEmpty) return null;
+      if (_cachedStopTimes == null ||
+          _cachedTrips == null ||
+          lineName == null ||
+          segStops.isEmpty) {
+        return null;
+      }
       String? bestShape;
       int bestMatchCount = -1;
-      
+
       for (final entry in _cachedStopTimes!.entries) {
         final tripId = entry.key;
         final trip = _cachedTrips![tripId];
         if (trip == null || trip.shapeId == null) continue;
-        
+
         final tripStops = entry.value;
         if (tripStops.isEmpty) continue;
-        
+
         int matchCount = 0;
         int currentTripIdx = 0;
-        
+
         for (final stop in segStops) {
           int foundIdx = -1;
           for (int i = currentTripIdx; i < tripStops.length; i++) {
-            if (tripStops[i]['stopId'] == stop.stopId && tripStops[i]['lineName'] == lineName) {
+            if (tripStops[i]['stopId'] == stop.stopId &&
+                tripStops[i]['lineName'] == lineName) {
               foundIdx = i;
               break;
             }
@@ -2038,7 +2058,7 @@ class DirectionService {
             currentTripIdx = foundIdx + 1;
           }
         }
-        
+
         if (matchCount > bestMatchCount && matchCount > 1) {
           bestMatchCount = matchCount;
           bestShape = trip.shapeId;
