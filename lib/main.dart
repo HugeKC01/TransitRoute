@@ -1044,21 +1044,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               final zoom = math.max(_mapController.camera.zoom, 14).toDouble();
               _mapController.move(LatLng(tStop.lat, tStop.lon), zoom);
             },
-          ),
-          Positioned(
-            top: 2,
-            right: 8,
-            child: IconButton(
-              icon: const Icon(Icons.close),
-              style: IconButton.styleFrom(
-                backgroundColor: Theme.of(
-                  context,
-                ).colorScheme.surface.withValues(alpha: 0.8),
-              ),
-              onPressed: () {
-                setState(() => _viewingStop = null);
-              },
-            ),
+            onClose: () {
+              setState(() => _viewingStop = null);
+            },
           ),
         ],
       );

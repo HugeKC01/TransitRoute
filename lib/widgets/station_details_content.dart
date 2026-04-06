@@ -17,6 +17,7 @@ class StationDetailsContent extends StatelessWidget {
   final Color Function(String lineName)? lineColorByName;
   final String? Function(String lineName)? routeIconByName;
   final void Function(gtfs.Stop stop)? onTransferStationSelected;
+  final VoidCallback? onClose;
   final bool isBottomSheet;
   final bool isSidePanel;
 
@@ -33,6 +34,7 @@ class StationDetailsContent extends StatelessWidget {
     this.lineColorByName,
     this.routeIconByName,
     this.onTransferStationSelected,
+    this.onClose,
     this.isBottomSheet = false,
     this.isSidePanel = false,
   });
@@ -149,125 +151,176 @@ class StationDetailsContent extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.3)),
       ),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: lineColor.withValues(alpha: 0.15),
-              shape: BoxShape.circle,
-            ),
-            child: Builder(
-              builder: (context) {
-                String? routeIcon;
-                if (lineName != null &&
-                    lineName!.isNotEmpty &&
-                    routeIconByName != null) {
-                  final lines = lineName!.split(', ');
-                  for (var line in lines) {
-                    routeIcon = routeIconByName!(line);
-                    if (routeIcon != null && routeIcon.isNotEmpty) break;
-                  }
-                }
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: lineColor.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Builder(
+                  builder: (context) {
+                    String? routeIcon;
+                    if (lineName != null &&
+                        lineName!.isNotEmpty &&
+                        routeIconByName != null) {
+                      final lines = lineName!.split(', ');
+                      for (var line in lines) {
+                        routeIcon = routeIconByName!(line);
+                        if (routeIcon != null && routeIcon.isNotEmpty) break;
+                      }
+                    }
 
-                if (routeIcon != null && routeIcon.isNotEmpty) {
-                  return SizedBox(
-                    width: 28,
-                    height: 28,
-                    child: SvgPicture.asset(routeIcon, width: 28, height: 28),
-                  );
-                }
-                return Icon(Icons.train, color: lineColor, size: 28);
-              },
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+                    if (routeIcon != null && routeIcon.isNotEmpty) {
+                      return SizedBox(
+                        width: 28,
+                        height: 28,
+                        child: SvgPicture.asset(
+                          routeIcon,
+                          width: 28,
+                          height: 28,
+                        ),
+                      );
+                    }
+                    return Icon(Icons.train, color: lineColor, size: 28);
+                  },
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
-                      child: Text(
-                        _hasThaiName ? stop.thaiName! : stop.name,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _hasThaiName ? stop.thaiName! : stop.name,
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          if (_hasThaiName)
+                            Text(
+                              stop.name,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
+                        ],
                       ),
                     ),
-                    if (stop.code != null && stop.code!.isNotEmpty)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: scheme.surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: scheme.outlineVariant),
-                        ),
-                        child: Text(
-                          stop.code!,
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                            fontWeight: FontWeight.bold,
+                    if (onClose != null)
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: onClose,
+                        style: IconButton.styleFrom(
+                          backgroundColor: scheme.surface.withValues(
+                            alpha: 0.8,
                           ),
+                          padding: const EdgeInsets.all(8),
+                          visualDensity: VisualDensity.compact,
                         ),
                       ),
                   ],
                 ),
-                if (_hasThaiName)
-                  Text(
-                    stop.name,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                if (lineName != null && lineName!.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 10),
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        return Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: lineName!.split(', ').map((singleLine) {
-                            final specificColor =
-                                lineColorByName?.call(singleLine) ?? lineColor;
-                            return Container(
-                              constraints: BoxConstraints(
-                                maxWidth: constraints.maxWidth,
-                              ),
+              ),
+            ],
+          ),
+          if ((stop.code != null && stop.code!.isNotEmpty) ||
+              (lineName != null && lineName!.isNotEmpty))
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 52,
+                    child: (stop.code != null && stop.code!.isNotEmpty)
+                        ? Align(
+                            alignment: Alignment.topCenter,
+                            child: Container(
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
+                                horizontal: 8,
                                 vertical: 4,
                               ),
                               decoration: BoxDecoration(
-                                color: specificColor,
+                                color: lineColor,
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
-                                singleLine,
+                                stop.code!,
                                 style: theme.textTheme.labelMedium?.copyWith(
-                                  color: specificColor.computeLuminance() > 0.5
+                                  color: lineColor.computeLuminance() > 0.5
                                       ? Colors.black87
                                       : Colors.white,
                                   fontWeight: FontWeight.bold,
                                 ),
+                                textAlign: TextAlign.center,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                            );
-                          }).toList(),
-                        );
-                      },
-                    ),
+                            ),
+                          )
+                        : null,
                   ),
-              ],
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: (lineName != null && lineName!.isNotEmpty)
+                        ? LayoutBuilder(
+                            builder: (context, constraints) {
+                              return Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: lineName!.split(', ').map((
+                                  singleLine,
+                                ) {
+                                  final specificColor =
+                                      lineColorByName?.call(singleLine) ??
+                                      lineColor;
+                                  return Container(
+                                    constraints: BoxConstraints(
+                                      maxWidth: constraints.maxWidth,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: specificColor,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      singleLine,
+                                      style: theme.textTheme.labelMedium
+                                          ?.copyWith(
+                                            color:
+                                                specificColor
+                                                        .computeLuminance() >
+                                                    0.5
+                                                ? Colors.black87
+                                                : Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  );
+                                }).toList(),
+                              );
+                            },
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                ],
+              ),
             ),
-          ),
         ],
       ),
     );
