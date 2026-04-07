@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'package:collection/collection.dart';
 
-import 'package:flutter/services.dart';
 import 'package:route/services/gtfs_sync_service.dart';
 import 'package:http/http.dart' as http;
 
@@ -939,7 +938,9 @@ class DirectionService {
         }
       }
     }
-    await Future.wait(routingTasks);
+    try {
+      await Future.wait(routingTasks).timeout(const Duration(seconds: 1));
+    } catch (_) {}
   }
 
   Future<void> _fetchRoadRouting(RouteSegment segment) async {
@@ -1837,7 +1838,7 @@ class DirectionService {
     int iterations = 0;
 
     while (queue.isNotEmpty) {
-      if (++iterations % 500 == 0) {
+      if (++iterations % 2000 == 0) {
         await Future.delayed(Duration.zero);
       }
 
@@ -1854,7 +1855,7 @@ class DirectionService {
           bestDestCost = currentDist;
           bestDestState = currentState;
         }
-        continue;
+        break;
       }
 
       final neighborIds = <String>{};

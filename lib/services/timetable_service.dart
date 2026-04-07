@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:route/services/gtfs_sync_service.dart';
 
 class TimetableEntry {
@@ -45,20 +44,17 @@ class TimetableEntry {
 }
 
 class TimetableService {
-  static Future<List<TimetableEntry>> getTimetableForStop(
-    String stopId, {
-    String? serviceId,
-  }) async {
-    final entries = <TimetableEntry>[];
+  static bool _isLoaded = false;
+  static final Map<String, Map<String, String>> _tripMap = {};
+  static List<String> _fixedTimetableLines = [];
+  static final Map<String, List<Map<String, dynamic>>> _frequencies = {};
+  static List<String> _stopTimesLines = [];
+  static List<String> _busStopTimesLines = [];
+  static List<String> _ferryStopTimesLines = [];
 
-    // Determine today's service ID if not provided
-    final now = DateTime.now();
-    final isSat = now.weekday == DateTime.saturday;
-    final isSun = now.weekday == DateTime.sunday;
-    final isWkd = !isSat && !isSun;
+  static Future<void> _loadData() async {
+    if (_isLoaded) return;
 
-    // Read trips to map tripId -> routeId, headsign, and serviceId
-    final tripMap = <String, Map<String, String>>{};
     try {
       final tripContent = await gtfsSyncService.getGtfsFile(
         'assets/gtfs_data/trips.txt',
@@ -81,14 +77,13 @@ class TimetableService {
             final svcId = (serviceIdx != -1 && row.length > serviceIdx)
                 ? row[serviceIdx].trim()
                 : '';
-
             var hSign = (headsignIdx != -1 && row.length > headsignIdx)
                 ? row[headsignIdx].trim()
                 : '';
             if (tId.startsWith('F_')) {
               hSign = 'Ferry';
             }
-            tripMap[tId] = {
+            _tripMap[tId] = {
               'route_id': rId,
               'headsign': hSign,
               'service_id': svcId,
@@ -96,16 +91,79 @@ class TimetableService {
           }
         }
       }
-    } catch (e) {
-      debugPrint("Error: $e");
-    }
+    } catch (_) {}
 
-    // 1. Read fixed_timetables.txt
     try {
       final fixedContent = await gtfsSyncService.getGtfsFile(
         'assets/gtfs_data/fixed_timetables.txt',
       );
-      final lines = const LineSplitter().convert(fixedContent);
+      _fixedTimetableLines = const LineSplitter().convert(fixedContent);
+    } catch (_) {}
+
+    try {
+      final freqContent = await gtfsSyncService.getGtfsFile(
+        'assets/gtfs_data/frequencies.txt',
+      );
+      final lines = const LineSplitter().convert(freqContent);
+      if (lines.length > 1) {
+        final header = lines[0].split(',');
+        final tripIdx = header.indexOf('trip_id');
+        final startIdx = header.indexOf('start_time');
+        final endIdx = header.indexOf('end_time');
+        final headwayIdx = header.indexOf('headway_secs');
+
+        for (int i = 1; i < lines.length; i++) {
+          final row = lines[i].split(',');
+          if (row.length > startIdx) {
+            final tId = row[tripIdx].trim();
+            _frequencies.putIfAbsent(tId, () => []).add({
+              'start_time': row[startIdx].trim(),
+              'end_time': row[endIdx].trim(),
+              'headway_secs': int.tryParse(row[headwayIdx].trim()) ?? 0,
+            });
+          }
+        }
+      }
+    } catch (_) {}
+
+    try {
+      final content1 = await gtfsSyncService.getGtfsFile(
+        'assets/gtfs_data/stop_times.txt',
+      );
+      _stopTimesLines = const LineSplitter().convert(content1);
+    } catch (_) {}
+    try {
+      final content2 = await gtfsSyncService.getGtfsFile(
+        'assets/gtfs_data/bus_stop_times.txt',
+      );
+      _busStopTimesLines = const LineSplitter().convert(content2);
+    } catch (_) {}
+    try {
+      final content3 = await gtfsSyncService.getGtfsFile(
+        'assets/gtfs_data/ferry_stop_times.txt',
+      );
+      _ferryStopTimesLines = const LineSplitter().convert(content3);
+    } catch (_) {}
+
+    _isLoaded = true;
+  }
+
+  static Future<List<TimetableEntry>> getTimetableForStop(
+    String stopId, {
+    String? serviceId,
+  }) async {
+    await _loadData();
+    final entries = <TimetableEntry>[];
+
+    // Determine today's service ID if not provided
+    final now = DateTime.now();
+    final isSat = now.weekday == DateTime.saturday;
+    final isSun = now.weekday == DateTime.sunday;
+    final isWkd = !isSat && !isSun;
+
+    // 1. Read fixed_timetables.txt
+    try {
+      final lines = _fixedTimetableLines;
       if (lines.length > 1) {
         final header = lines[0].split(',');
         final tripIdx = header.indexOf('trip_id');
@@ -121,7 +179,7 @@ class TimetableService {
               if (sId == stopId) {
                 final tId = row[tripIdx].trim();
                 final tInfo =
-                    tripMap[tId] ??
+                    _tripMap[tId] ??
                     {'route_id': '', 'headsign': '', 'service_id': ''};
 
                 // Check calendar service logic
@@ -169,41 +227,9 @@ class TimetableService {
       debugPrint("Error: $e");
     }
 
-    // Read frequencies
-    final frequencies = <String, List<Map<String, dynamic>>>{};
-    try {
-      final freqContent = await gtfsSyncService.getGtfsFile(
-        'assets/gtfs_data/frequencies.txt',
-      );
-      final lines = const LineSplitter().convert(freqContent);
-      if (lines.length > 1) {
-        final header = lines[0].split(',');
-        final tripIdx = header.indexOf('trip_id');
-        final startIdx = header.indexOf('start_time');
-        final endIdx = header.indexOf('end_time');
-        final headwayIdx = header.indexOf('headway_secs');
-
-        for (int i = 1; i < lines.length; i++) {
-          final row = lines[i].split(',');
-          if (row.length > startIdx) {
-            final tId = row[tripIdx].trim();
-            frequencies.putIfAbsent(tId, () => []).add({
-              'start_time': row[startIdx].trim(),
-              'end_time': row[endIdx].trim(),
-              'headway_secs': int.tryParse(row[headwayIdx].trim()) ?? 0,
-            });
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint("Error: $e");
-    }
-
-    // Helper to read stop times from a specific file
-    Future<void> readStopTimes(String assetPath) async {
+    // Helper to read stop times from memory
+    void readStopTimes(List<String> lines) {
       try {
-        final stContent = await gtfsSyncService.getGtfsFile(assetPath);
-        final lines = const LineSplitter().convert(stContent);
         if (lines.length <= 1) return;
 
         final header = lines[0].split(',');
@@ -223,7 +249,7 @@ class TimetableService {
               }
 
               final tInfo =
-                  tripMap[tId] ??
+                  _tripMap[tId] ??
                   {'route_id': '', 'headsign': '', 'service_id': ''};
 
               // Check calendar service logic for frequencies
@@ -247,8 +273,8 @@ class TimetableService {
                 continue;
               }
 
-              if (frequencies.containsKey(tId)) {
-                for (var freq in frequencies[tId]!) {
+              if (_frequencies.containsKey(tId)) {
+                for (var freq in _frequencies[tId]!) {
                   entries.add(
                     TimetableEntry(
                       tripId: tId,
@@ -271,9 +297,9 @@ class TimetableService {
       }
     }
 
-    await readStopTimes('assets/gtfs_data/stop_times.txt');
-    await readStopTimes('assets/gtfs_data/bus_stop_times.txt');
-    await readStopTimes('assets/gtfs_data/ferry_stop_times.txt');
+    readStopTimes(_stopTimesLines);
+    readStopTimes(_busStopTimesLines);
+    readStopTimes(_ferryStopTimesLines);
 
     // Remove duplicates based on exact same frequency or time for same trip
     final uniqueEntries = <String, TimetableEntry>{};
