@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:route/services/gtfs_sync_service.dart';
 
@@ -13,6 +14,38 @@ class Profile {
     required this.joinedDate,
     required this.profileImageUrl,
   });
+
+  Profile copyWith({
+    String? username,
+    String? name,
+    String? joinedDate,
+    String? profileImageUrl,
+  }) {
+    return Profile(
+      username: username ?? this.username,
+      name: name ?? this.name,
+      joinedDate: joinedDate ?? this.joinedDate,
+      profileImageUrl: profileImageUrl ?? this.profileImageUrl,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'username': username,
+      'name': name,
+      'joinedDate': joinedDate,
+      'profileImageUrl': profileImageUrl,
+    };
+  }
+
+  factory Profile.fromJson(Map<String, dynamic> json) {
+    return Profile(
+      username: json['username'] ?? '',
+      name: json['name'] ?? '',
+      joinedDate: json['joinedDate'] ?? '',
+      profileImageUrl: json['profileImageUrl'] ?? '',
+    );
+  }
 }
 
 class MorePage extends StatelessWidget {
@@ -23,6 +56,7 @@ class MorePage extends StatelessWidget {
     required this.onOpenGraphicMap,
     required this.onOpenCards,
     required this.profile,
+    required this.onProfileUpdated,
     required this.currentAccentColor,
     required this.onAccentColorChanged,
   });
@@ -32,9 +66,20 @@ class MorePage extends StatelessWidget {
   final VoidCallback onOpenGraphicMap;
   final VoidCallback onOpenCards;
   final Profile profile;
+  final ValueChanged<Profile> onProfileUpdated;
 
   final Color currentAccentColor;
   final ValueChanged<Color> onAccentColorChanged;
+
+  void _showEditProfileDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => _EditProfileDialog(
+        currentProfile: profile,
+        onProfileUpdated: onProfileUpdated,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -58,7 +103,8 @@ class MorePage extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 32,
-                  backgroundImage: NetworkImage(profile.profileImageUrl),
+                  backgroundImage: profile.profileImageUrl.isNotEmpty ? NetworkImage(profile.profileImageUrl) : null,
+                  child: profile.profileImageUrl.isEmpty ? const Icon(Icons.person, size: 32) : null,
                 ),
                 const SizedBox(width: 18),
                 Expanded(
@@ -98,6 +144,11 @@ class MorePage extends StatelessWidget {
                       ),
                     ],
                   ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined),
+                  color: theme.colorScheme.outline,
+                  onPressed: () => _showEditProfileDialog(context),
                 ),
               ],
             ),
@@ -392,9 +443,9 @@ class _GtfsVersionTileState extends State<_GtfsVersionTile> {
     final message = await gtfsSyncService.manualUpdateCheck();
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
       setState(() {
         _isChecking = false;
       });
@@ -416,6 +467,90 @@ class _GtfsVersionTileState extends State<_GtfsVersionTile> {
             )
           : const Icon(Icons.chevron_right),
       onTap: _handleCheckUpdates,
+    );
+  }
+}
+
+class _EditProfileDialog extends StatefulWidget {
+  final Profile currentProfile;
+  final ValueChanged<Profile> onProfileUpdated;
+
+  const _EditProfileDialog({
+    required this.currentProfile,
+    required this.onProfileUpdated,
+  });
+
+  @override
+  State<_EditProfileDialog> createState() => _EditProfileDialogState();
+}
+
+class _EditProfileDialogState extends State<_EditProfileDialog> {
+  late final TextEditingController _usernameController;
+  late final TextEditingController _nameController;
+  late final TextEditingController _avatarUrlController;
+
+  @override
+  void initState() {
+    super.initState();
+    _usernameController = TextEditingController(
+      text: widget.currentProfile.username,
+    );
+    _nameController = TextEditingController(text: widget.currentProfile.name);
+    _avatarUrlController = TextEditingController(
+      text: widget.currentProfile.profileImageUrl,
+    );
+  }
+
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _nameController.dispose();
+    _avatarUrlController.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final newProfile = widget.currentProfile.copyWith(
+      username: _usernameController.text.trim(),
+      name: _nameController.text.trim(),
+      profileImageUrl: _avatarUrlController.text.trim(),
+    );
+    widget.onProfileUpdated(newProfile);
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Edit Profile'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _usernameController,
+              decoration: const InputDecoration(labelText: 'Username'),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _nameController,
+              decoration: const InputDecoration(labelText: 'Name'),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _avatarUrlController,
+              decoration: const InputDecoration(labelText: 'Avatar URL'),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _save, child: const Text('Save')),
+      ],
     );
   }
 }

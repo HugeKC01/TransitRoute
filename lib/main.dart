@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'widgets/station_details_content.dart';
 
 import 'package:flutter_map/flutter_map.dart';
@@ -20,7 +22,6 @@ import 'package:route/services/transit_update_service.dart';
 
 import 'pages/more_page.dart';
 import 'pages/cards_page.dart';
-import 'pages/transit_update_page.dart';
 import 'pages/transit_updates_list_page.dart';
 import 'pages/transport_lines_page.dart';
 import 'pages/navigation_page.dart';
@@ -154,19 +155,89 @@ class _ProjectionResult {
   _ProjectionResult(this.point, this.dist);
 }
 
+
+class FavoritePin {
+  final String label;
+  final LatLng point;
+  FavoritePin(this.label, this.point);
+  Map<String, dynamic> toJson() => {
+    'label': label,
+    'lat': point.latitude,
+    'lng': point.longitude,
+  };
+  factory FavoritePin.fromJson(Map<String, dynamic> json) => FavoritePin(
+    json['label'] as String,
+    LatLng(json['lat'] as double, json['lng'] as double),
+  );
+}
+
 class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   final MapController _mapController = MapController();
+
+  List<FavoritePin> _favoritePins = [];
+
+  Future<void> _loadFavoritePins() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonStr = prefs.getString('favorite_pins');
+    if (jsonStr != null) {
+      try {
+        final List<dynamic> decoded = jsonDecode(jsonStr);
+        setState(() {
+          _favoritePins = decoded.map((e) => FavoritePin.fromJson(e as Map<String, dynamic>)).toList();
+        });
+      } catch (e) {
+        debugPrint('Failed to load favorite pins: $e');
+      }
+    }
+  }
+
+  Future<void> _saveFavoritePins() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonStr = jsonEncode(_favoritePins.map((e) => e.toJson()).toList());
+    await prefs.setString('favorite_pins', jsonStr);
+  }
+
   late final SearchController _startSearchController;
   static bool _hasShownWelcome = false;
   late final SearchController _destSearchController;
   late final SearchController _collapsedSearchController;
   int _selectedNavIndex = 0;
-  final Profile _profile = const Profile(
-    username: 'hugekc',
-    name: 'Kittichai Chaimongkol',
-    joinedDate: 'Jan 2024',
-    profileImageUrl: 'https://randomuser.me/api/portraits/men/32.jpg',
+  Profile _profile = const Profile(
+    username: 'User',
+    name: 'John Doe',
+    joinedDate: '',
+    profileImageUrl: '',
   );
+
+  Future<void> _loadProfile() async {
+    final prefs = await SharedPreferences.getInstance();
+    final profileJson = prefs.getString('user_profile');
+    if (profileJson != null) {
+      try {
+        final decoded = jsonDecode(profileJson);
+        setState(() {
+          _profile = Profile.fromJson(decoded);
+        });
+      } catch (e) {
+        debugPrint('Failed to load profile: $e');
+      }
+    } else {
+      final now = DateTime.now();
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      final joined = '${months[now.month - 1]} ${now.year}';
+      _profile = _profile.copyWith(joinedDate: joined);
+      _saveProfile(_profile);
+    }
+  }
+
+  Future<void> _saveProfile(Profile newProfile) async {
+    setState(() {
+      _profile = newProfile;
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('user_profile', jsonEncode(newProfile.toJson()));
+  }
+
   // Combined stops used for search/routing (rail + bus)
   List<gtfs.Stop> allStops = [];
   // Rail-only stops for the default rail marker layer
@@ -813,6 +884,42 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     }
   }
 
+  
+  void _promptSaveFavorite(LatLng point) {
+    String label = '';
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Save Favorite Pin'),
+          content: TextField(
+            autofocus: true,
+            decoration: const InputDecoration(labelText: 'Label'),
+            onChanged: (val) => label = val,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (label.isNotEmpty) {
+                  setState(() {
+                    _favoritePins.add(FavoritePin(label, point));
+                  });
+                  _saveFavoritePins();
+                }
+                Navigator.pop(context);
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _showDroppedPinDetails(BuildContext context, LatLng point) {
     showModalBottomSheet<void>(
       context: context,
@@ -949,6 +1056,15 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   ],
                 ),
                 const SizedBox(height: 20),
+                quickAction(
+                  icon: Icons.favorite_border,
+                  title: 'Save to Favorites',
+                  subtitle: 'Save this location as a favorite pin',
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _promptSaveFavorite(point);
+                  },
+                ),
                 quickAction(
                   icon: Icons.trip_origin,
                   title: 'Set as origin',
@@ -3082,6 +3198,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    _loadFavoritePins();
+    _loadProfile();
     _startSearchController = SearchController();
     _destSearchController = SearchController();
     _collapsedSearchController = SearchController();
@@ -3824,9 +3942,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   }
 
   void _openTransitUpdatePage() {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (context) => const TransitUpdatePage()));
+    setState(() {
+      _selectedNavIndex = 1;
+    });
   }
 
   void _openGraphicMap() {
@@ -3882,7 +4000,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     } else if (_selectedNavIndex == 1) {
       body = TransitUpdatesListPage(
         initialReports: TransitUpdateService().activeReports,
-        loadReports: () async => TransitUpdateService().activeReports,
+        loadReports: () async => TransitUpdateService().fetchAndSyncReports(),
+        allStops: allStops,
+        stopToLinesMap: _stopToLinesMap,
       );
     } else {
       body = MorePage(
@@ -3891,6 +4011,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         onOpenGraphicMap: _openGraphicMap,
         onOpenCards: _openCardsPage,
         profile: _profile,
+        onProfileUpdated: _saveProfile,
         currentAccentColor: widget.currentAccentColor,
         onAccentColorChanged: widget.onAccentColorChanged,
       );
