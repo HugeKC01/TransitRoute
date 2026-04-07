@@ -131,17 +131,9 @@ class MorePage extends StatelessWidget {
               ),
               Divider(height: 1, color: theme.colorScheme.outlineVariant),
               ListTile(
-                leading: const Icon(Icons.map_outlined),
-                title: const Text('Transit System Map'),
-                subtitle: const Text('View graphic BTS/MRT connection map'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: onOpenGraphicMap,
-              ),
-              Divider(height: 1, color: theme.colorScheme.outlineVariant),
-              ListTile(
                 leading: const Icon(Icons.credit_card_outlined),
                 title: const Text('My Transit Cards'),
-                subtitle: const Text('Manage cards and view promotions'),
+                subtitle: const Text('Manage cards'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: onOpenCards,
               ),

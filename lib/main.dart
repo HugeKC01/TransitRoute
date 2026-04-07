@@ -34,12 +34,9 @@ import 'package:firebase_core/firebase_core.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Initialize Firebase (make sure to run `flutterfire configure`!)
   await Firebase.initializeApp();
-  
-  // Start syncing GTFS data in the background
-  gtfsSyncService.initAndSync();
 
   runApp(const MyApp());
 }
@@ -63,6 +60,30 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   Color _accentColor = Colors.blue;
+  bool _isReady = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeApp();
+  }
+
+  Future<void> _initializeApp() async {
+    // Wait for the GTFS packages to download or verify before showing the app
+    try {
+      // 5-second timeout to ensure the app still launches when completely offline
+      await gtfsSyncService.initAndSync().timeout(const Duration(seconds: 5));
+    } catch (e) {
+      // Proceed gracefully: we are either offline or it timed out,
+      // the app will just fall back to the last downloaded files or the bundled assets.
+    }
+
+    if (mounted) {
+      setState(() {
+        _isReady = true;
+      });
+    }
+  }
 
   void _updateAccentColor(Color color) {
     setState(() {
@@ -80,11 +101,33 @@ class _MyAppState extends State<MyApp> {
         textTheme: GoogleFonts.googleSansTextTheme(),
         colorScheme: ColorScheme.fromSeed(seedColor: _accentColor),
       ),
-      home: MyHomePage(
-        title: 'Route Transit',
-        currentAccentColor: _accentColor,
-        onAccentColorChanged: _updateAccentColor,
-      ),
+      home: _isReady
+          ? MyHomePage(
+              title: 'Route Transit',
+              currentAccentColor: _accentColor,
+              onAccentColorChanged: _updateAccentColor,
+            )
+          : Scaffold(
+              body: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(color: _accentColor),
+                    const SizedBox(height: 24),
+                    Text(
+                      'Loading Transit Data...',
+                      style: GoogleFonts.googleSans(
+                        textStyle: TextStyle(
+                          color: _accentColor,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
     );
   }
 }
@@ -114,6 +157,7 @@ class _ProjectionResult {
 class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   final MapController _mapController = MapController();
   late final SearchController _startSearchController;
+  static bool _hasShownWelcome = false;
   late final SearchController _destSearchController;
   late final SearchController _collapsedSearchController;
   int _selectedNavIndex = 0;
@@ -3209,6 +3253,42 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         _didFitRails = true;
       }
     }
+
+    if (!_hasShownWelcome) {
+      _hasShownWelcome = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _showWelcomeDialog();
+        }
+      });
+    }
+  }
+
+  void _showWelcomeDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Welcome / ยินดีต้อนรับ'),
+          content: const Text(
+            'This application is a prototype developed as part of a final project by a KMUTT student.\n\n'
+            'Please note that the data in this app currently covers only Bangkok, Thailand, and may be inaccurate or incomplete data.\n\n'
+            '---\n\n'
+            'แอปพลิเคชันนี้เป็นต้นแบบที่พัฒนาขึ้นโดยเป็นส่วนหนึ่งของโครงงานก่อนจบการศึกษาของนักศึกษามหาวิทยาลัยเทคโนโลยีพระจอมเกล้าธนบุรี (KMUTT)\n\n'
+            'ข้อมูลในแอปนี้ครอบคลุมเฉพาะพื้นที่กรุงเทพมหานคร และอาจมีความคลาดเคลื่อนหรือไม่สมบูรณ์ของข้อมูล',
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Acknowledge / รับทราบ'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 
   // _loadStops is now replaced by _loadRoutesAndStops
