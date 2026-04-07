@@ -61,6 +61,7 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
   change_app_package_name: ^1.1.0
+  flutter_launcher_icons: "^0.14.4"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -129,3 +130,12 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/transit-white-01.png" # The fallback flat icon (used for iOS and older Androids)
+  
+  # --- Add this section for Android Adaptive Icons ---
+  adaptive_icon_background: "#FFFFFF" # You can use a hex color OR a path like "assets/bg.png"
+  adaptive_icon_foreground: "assets/transit-01.png"
