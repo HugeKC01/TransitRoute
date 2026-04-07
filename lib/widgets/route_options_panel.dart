@@ -12,6 +12,8 @@ class RouteOptionsPanel extends StatelessWidget {
     required this.onStartNavigation,
     required this.lineNameResolver,
     required this.lineColors,
+    required this.selectedSortMode,
+    required this.onSortModeChanged,
   });
 
   final List<DirectionOption> options;
@@ -21,6 +23,8 @@ class RouteOptionsPanel extends StatelessWidget {
   final ValueChanged<DirectionOption> onStartNavigation;
   final LineNameResolver lineNameResolver;
   final Map<String, Color> lineColors;
+  final String selectedSortMode;
+  final ValueChanged<String?> onSortModeChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -57,7 +61,7 @@ class RouteOptionsPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(
@@ -86,6 +90,46 @@ class RouteOptionsPanel extends StatelessWidget {
                     ),
                   ],
                 ),
+              ),
+              Row(
+                children: [
+                  Text(
+                    'Sort by:',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  DropdownButton<String>(
+                    value: selectedSortMode,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    icon: Icon(
+                      Icons.sort,
+                      size: 18,
+                      color: theme.colorScheme.primary,
+                    ),
+                    underline: const SizedBox.shrink(),
+                    onChanged: onSortModeChanged,
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'Default',
+                        child: Text('Default'),
+                      ),
+                      DropdownMenuItem(value: 'Price', child: Text('Price')),
+                      DropdownMenuItem(
+                        value: 'Distance',
+                        child: Text('Distance'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Fastest',
+                        child: Text('Fastest'),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ],
           ),

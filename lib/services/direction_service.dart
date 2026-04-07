@@ -644,10 +644,12 @@ class DirectionService {
       entry.tags.addAll(tags);
     }
 
-    final multiRoutes = _computeMultiModeRoutes(startStopId, destStopId);
+    final multiRoutes = await _computeMultiModeRoutes(startStopId, destStopId);
     for (final route in multiRoutes) {
       addOption(route.stops, route.tags);
     }
+
+    await Future.delayed(const Duration(milliseconds: 10));
 
     final selectedTrip = _findDirectTrip(
       stopTimes: stopTimes,
@@ -660,7 +662,9 @@ class DirectionService {
       addOption(selectedTrip, {'Direct'});
     }
 
-    final transferRoutes = _generateTransferRoutes(
+    await Future.delayed(const Duration(milliseconds: 10));
+
+    final transferRoutes = await _generateTransferRoutes(
       stopTimes: stopTimes,
       tripMap: tripMap,
       routeIdToPrefixes: routeIdToPrefixes,
@@ -1529,7 +1533,10 @@ class DirectionService {
     return stopsList;
   }
 
-  List<_TaggedRoute> _computeMultiModeRoutes(String start, String dest) {
+  Future<List<_TaggedRoute>> _computeMultiModeRoutes(
+    String start,
+    String dest,
+  ) async {
     final nodes = {..._distanceGraph.keys, ..._timeGraph.keys};
     if (!nodes.contains(start) || !nodes.contains(dest)) {
       return [];
@@ -1546,7 +1553,8 @@ class DirectionService {
       entry.tags.addAll(tags);
     }
 
-    final fewestStops = _dijkstraWeightedPath(
+    await Future.delayed(Duration.zero);
+    final fewestStops = await _dijkstraWeightedPath(
       start,
       dest,
       distanceWeight: 0.1,
@@ -1555,7 +1563,8 @@ class DirectionService {
     );
     addRoute(fewestStops, {'Fewest stops'});
 
-    final shortestDistance = _dijkstraWeightedPath(
+    await Future.delayed(Duration.zero);
+    final shortestDistance = await _dijkstraWeightedPath(
       start,
       dest,
       distanceWeight: 1.0,
@@ -1563,7 +1572,8 @@ class DirectionService {
     );
     addRoute(shortestDistance, {'Shortest'});
 
-    final fastest = _dijkstraWeightedPath(
+    await Future.delayed(Duration.zero);
+    final fastest = await _dijkstraWeightedPath(
       start,
       dest,
       distanceWeight: 0.1,
@@ -1571,7 +1581,8 @@ class DirectionService {
     );
     addRoute(fastest, {'Fastest'});
 
-    final balanced = _dijkstraWeightedPath(
+    await Future.delayed(Duration.zero);
+    final balanced = await _dijkstraWeightedPath(
       start,
       dest,
       distanceWeight: 1.0,
@@ -1579,7 +1590,8 @@ class DirectionService {
     );
     addRoute(balanced, {'Balanced'});
 
-    final lowTransfers = _dijkstraWeightedPath(
+    await Future.delayed(Duration.zero);
+    final lowTransfers = await _dijkstraWeightedPath(
       start,
       dest,
       distanceWeight: 1.0,
@@ -1588,7 +1600,8 @@ class DirectionService {
     );
     addRoute(lowTransfers, {'Low transfers'});
 
-    final speedPriority = _dijkstraWeightedPath(
+    await Future.delayed(Duration.zero);
+    final speedPriority = await _dijkstraWeightedPath(
       start,
       dest,
       distanceWeight: 0.3,
@@ -1596,7 +1609,8 @@ class DirectionService {
     );
     addRoute(speedPriority, {'Speed priority'});
 
-    final distancePriority = _dijkstraWeightedPath(
+    await Future.delayed(Duration.zero);
+    final distancePriority = await _dijkstraWeightedPath(
       start,
       dest,
       distanceWeight: 1.2,
@@ -1604,7 +1618,8 @@ class DirectionService {
     );
     addRoute(distancePriority, {'Distance priority'});
 
-    final busPriority = _dijkstraWeightedPath(
+    await Future.delayed(Duration.zero);
+    final busPriority = await _dijkstraWeightedPath(
       start,
       dest,
       distanceWeight: 1.0,
@@ -1613,7 +1628,8 @@ class DirectionService {
     );
     addRoute(busPriority, {'Bus priority'});
 
-    final railPriority = _dijkstraWeightedPath(
+    await Future.delayed(Duration.zero);
+    final railPriority = await _dijkstraWeightedPath(
       start,
       dest,
       distanceWeight: 1.0,
@@ -1678,13 +1694,13 @@ class DirectionService {
     return taggedRoutes;
   }
 
-  List<_TaggedRoute> _generateTransferRoutes({
+  Future<List<_TaggedRoute>> _generateTransferRoutes({
     required Map<String, List<Map<String, dynamic>>> stopTimes,
     required Map<String, gtfs.Trip> tripMap,
     required Map<String, List<String>> routeIdToPrefixes,
     required String startStopId,
     required String destStopId,
-  }) {
+  }) async {
     final List<_TaggedRoute> results = [];
     if (startStopId == destStopId) return results;
 
@@ -1743,6 +1759,7 @@ class DirectionService {
     }
 
     for (final hubGroup in _transferHubs) {
+      await Future.delayed(Duration.zero);
       for (final hubA in hubGroup) {
         final seg1 = findSegmentBetween(startStopId, hubA, startRouteIds);
         if (seg1 == null) continue;
@@ -1780,7 +1797,7 @@ class DirectionService {
     return results;
   }
 
-  List<gtfs.Stop> _dijkstraWeightedPath(
+  Future<List<gtfs.Stop>> _dijkstraWeightedPath(
     String start,
     String dest, {
     double distanceWeight = 1.0,
@@ -1788,7 +1805,7 @@ class DirectionService {
     double transferPenalty = 1000.0,
     double busCostPenalty = 0.0,
     double railCostPenalty = 0.0,
-  }) {
+  }) async {
     final nodes = {..._distanceGraph.keys, ..._timeGraph.keys};
     if (!nodes.contains(start) || !nodes.contains(dest)) {
       return [];
@@ -1817,7 +1834,13 @@ class DirectionService {
     String? bestDestState;
     double bestDestCost = double.infinity;
 
+    int iterations = 0;
+
     while (queue.isNotEmpty) {
+      if (++iterations % 500 == 0) {
+        await Future.delayed(Duration.zero);
+      }
+
       final currentNode = queue.removeFirst();
       final currentStop = currentNode.stopId;
       final currentLine = currentNode.lineName;

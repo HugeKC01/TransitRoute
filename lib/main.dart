@@ -155,7 +155,6 @@ class _ProjectionResult {
   _ProjectionResult(this.point, this.dist);
 }
 
-
 class FavoritePin {
   final String label;
   final LatLng point;
@@ -183,7 +182,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       try {
         final List<dynamic> decoded = jsonDecode(jsonStr);
         setState(() {
-          _favoritePins = decoded.map((e) => FavoritePin.fromJson(e as Map<String, dynamic>)).toList();
+          _favoritePins = decoded
+              .map((e) => FavoritePin.fromJson(e as Map<String, dynamic>))
+              .toList();
         });
       } catch (e) {
         debugPrint('Failed to load favorite pins: $e');
@@ -223,7 +224,20 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       }
     } else {
       final now = DateTime.now();
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+      ];
       final joined = '${months[now.month - 1]} ${now.year}';
       _profile = _profile.copyWith(joinedDate: joined);
       _saveProfile(_profile);
@@ -263,6 +277,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   Map<String, String> ferryZones = {};
 
   String routingMode = 'Fastest';
+  String _selectedSortMode = 'Default';
   List<String> allowedTransitTypes = ['Metro', 'Train', 'Bus', 'Ferry'];
   final ValueNotifier<bool> _headerCollapsed = ValueNotifier<bool>(false);
   double _currentZoom = 12.0;
@@ -387,6 +402,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   String? selectedDestinationStopId;
   LocationPoint? _customStartPoint;
   LocationPoint? _customDestPoint;
+  bool _isLoadingRoute = false;
   List<DirectionOption> directionOptions = [];
   DirectionOption? _viewingDetailsOption;
   gtfs.Stop? _viewingStop;
@@ -418,25 +434,43 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
     if (startOpt == null || destOpt == null) return;
 
-    final result = await _directionService.findDirections(
-      routingMode: routingMode,
-      allowedTransitTypes: allowedTransitTypes,
-      startPoint: startOpt,
-      destPoint: destOpt,
-    );
     setState(() {
-      directionOptions = List<DirectionOption>.from(result.options);
-      if (directionOptions.isEmpty) {
-        selectedDirectionIndex = 0;
-        _headerCollapsed.value = false;
-      } else {
-        selectedDirectionIndex = result.selectionIndex.clamp(
-          0,
-          directionOptions.length - 1,
-        );
-        _headerCollapsed.value = true;
-      }
+      _isLoadingRoute = true;
+      directionOptions.clear();
     });
+
+    // Give the UI a moment to show the loading indicator before heavy computation
+    await Future.delayed(const Duration(milliseconds: 50));
+
+    try {
+      final result = await _directionService.findDirections(
+        routingMode: routingMode,
+        allowedTransitTypes: allowedTransitTypes,
+        startPoint: startOpt,
+        destPoint: destOpt,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _isLoadingRoute = false;
+        directionOptions = List<DirectionOption>.from(result.options);
+        if (directionOptions.isEmpty) {
+          selectedDirectionIndex = 0;
+          _headerCollapsed.value = false;
+        } else {
+          _sortDirectionOptions();
+          selectedDirectionIndex = 0;
+          _headerCollapsed.value = true;
+        }
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingRoute = false;
+        });
+      }
+    }
   }
 
   Color _getLineColor(String stopId) {
@@ -884,7 +918,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     }
   }
 
-  
   void _promptSaveFavorite(LatLng point) {
     String label = '';
     showDialog(
@@ -1147,28 +1180,59 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     });
   }
 
+  void _sortDirectionOptions() {
+    if (directionOptions.isEmpty) return;
+
+    directionOptions.sort((a, b) {
+      if (_selectedSortMode == 'Price') {
+        final aFare = a.fareBreakdown['total'] ?? 0;
+        final bFare = b.fareBreakdown['total'] ?? 0;
+        if (aFare != bFare) return aFare.compareTo(bFare);
+        return a.minutes.compareTo(b.minutes);
+      } else if (_selectedSortMode == 'Distance') {
+        if (a.distanceMeters != b.distanceMeters) {
+          return a.distanceMeters.compareTo(b.distanceMeters);
+        }
+        return a.minutes.compareTo(b.minutes);
+      } else if (_selectedSortMode == 'Fastest') {
+        if (a.minutes != b.minutes) {
+          return a.minutes.compareTo(b.minutes);
+        }
+        return a.distanceMeters.compareTo(b.distanceMeters);
+      } else {
+        // Default: Fewest Transfer > Rail Priority > cheapest > fastest > other
+        final aTransfers = a.segments
+            .where((s) => s.mode == TravelMode.transit)
+            .length;
+        final bTransfers = b.segments
+            .where((s) => s.mode == TravelMode.transit)
+            .length;
+
+        // Lower is better for transfers
+        if (aTransfers != bTransfers) return aTransfers.compareTo(bTransfers);
+
+        // Rail Priority
+        final aHasRail = a.tags.contains('Rail priority') ? 0 : 1;
+        final bHasRail = b.tags.contains('Rail priority') ? 0 : 1;
+        if (aHasRail != bHasRail) return aHasRail.compareTo(bHasRail);
+
+        // Cheapest
+        final aFare = a.fareBreakdown['total'] ?? 0;
+        final bFare = b.fareBreakdown['total'] ?? 0;
+        if (aFare != bFare) return aFare.compareTo(bFare);
+
+        // Fastest
+        if (a.minutes != b.minutes) return a.minutes.compareTo(b.minutes);
+
+        return a.distanceMeters.compareTo(b.distanceMeters);
+      }
+    });
+  }
+
   void _selectRouteOption(int index) {
     if (index < 0 || index >= directionOptions.length) return;
-    const order = ['Shortest', 'Fastest', 'Cheapest'];
-    final selectedOption = directionOptions[index];
-    String? nextMode;
-    for (final candidate in order) {
-      if (selectedOption.tags.contains(candidate)) {
-        nextMode = candidate;
-        break;
-      }
-    }
-    final reordered = <DirectionOption>[selectedOption];
-    for (int i = 0; i < directionOptions.length; i++) {
-      if (i == index) continue;
-      reordered.add(directionOptions[i]);
-    }
     setState(() {
-      directionOptions = reordered;
-      selectedDirectionIndex = 0;
-      if (nextMode != null) {
-        routingMode = nextMode;
-      }
+      selectedDirectionIndex = index;
     });
   }
 
@@ -1245,6 +1309,16 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         options: directionOptions,
         selectedIndex: selectedDirectionIndex,
         onSelectOption: _selectRouteOption,
+        selectedSortMode: _selectedSortMode,
+        onSortModeChanged: (newMode) {
+          if (newMode != null) {
+            setState(() {
+              _selectedSortMode = newMode;
+              _sortDirectionOptions();
+              selectedDirectionIndex = 0;
+            });
+          }
+        },
         onViewDetails: (option) {
           setState(() {
             _viewingDetailsOption = option;
@@ -2869,11 +2943,23 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                     alpha: 0.85,
                   ),
                 ),
-                onPressed: () => _findDirection(),
-                icon: const Icon(Icons.route),
-                label: const Text(
-                  'Find Routes',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                onPressed: _isLoadingRoute ? null : () => _findDirection(),
+                icon: _isLoadingRoute
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.route),
+                label: Text(
+                  _isLoadingRoute ? 'Finding Routes...' : 'Find Routes',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
                 ),
               ),
             ),
