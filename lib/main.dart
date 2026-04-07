@@ -8,7 +8,8 @@ import 'widgets/station_details_content.dart';
 
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart';
+import 'package:route/services/gtfs_sync_service.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:location/location.dart';
 import 'package:route/services/direction_service.dart';
@@ -29,9 +30,17 @@ import 'widgets/route_options_panel.dart';
 
 import 'widgets/search_tabs.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_core/firebase_core.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize Firebase (make sure to run `flutterfire configure`!)
+  await Firebase.initializeApp();
+  
+  // Start syncing GTFS data in the background
+  gtfsSyncService.initAndSync();
+
   runApp(const MyApp());
 }
 
@@ -65,14 +74,14 @@ class _MyAppState extends State<MyApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       scrollBehavior: AppScrollBehavior(),
-      title: 'Flutter Demo',
+      title: 'Route Transit',
       theme: ThemeData(
         useMaterial3: true,
         textTheme: GoogleFonts.googleSansTextTheme(),
         colorScheme: ColorScheme.fromSeed(seedColor: _accentColor),
       ),
       home: MyHomePage(
-        title: 'Flutter Demo Home Page',
+        title: 'Route Transit',
         currentAccentColor: _accentColor,
         onAccentColorChanged: _updateAccentColor,
       ),
@@ -207,7 +216,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
   Future<List<gtfs.Route>> _parseRoutesFromAsset(String assetPath) async {
     try {
-      final content = await rootBundle.loadString(assetPath);
+      final content = await gtfsSyncService.getGtfsFile(assetPath);
       final lines = const LineSplitter().convert(content);
       if (lines.length <= 1) return [];
       final routes = <gtfs.Route>[];
@@ -3209,7 +3218,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     Map<String, String>? thaiNames,
   }) async {
     try {
-      final content = await rootBundle.loadString(assetPath);
+      final content = await gtfsSyncService.getGtfsFile(assetPath);
       final lines = const LineSplitter().convert(content);
       if (lines.length <= 1) return [];
       final header = _parseCsvLine(lines.first).map((s) => s.trim()).toList();
@@ -3273,7 +3282,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
   Future<List<gtfs.Stop>> _parseBusStopsFromAsset(String assetPath) async {
     try {
-      final content = await rootBundle.loadString(assetPath);
+      final content = await gtfsSyncService.getGtfsFile(assetPath);
       final lines = const LineSplitter().convert(content);
       if (lines.length <= 1) return [];
       final header = _parseCsvLine(lines.first).map((s) => s.trim()).toList();
@@ -3325,7 +3334,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
   Future<Map<String, String>> _loadThaiStopNames() async {
     try {
-      final content = await rootBundle.loadString(
+      final content = await gtfsSyncService.getGtfsFile(
         'assets/gtfs_data/station_names_th.csv',
       );
       final lines = const LineSplitter().convert(content);
@@ -3361,7 +3370,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     fareTableMap.clear();
     try {
       // Faretype mapping: fareId -> status ('m'|'s')
-      final content = await rootBundle.loadString(
+      final content = await gtfsSyncService.getGtfsFile(
         'assets/gtfs_data/Faretype.txt',
       );
       final lines = const LineSplitter().convert(content);
@@ -3392,7 +3401,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
     try {
       // Fare data: fareDataId -> price
-      final content = await rootBundle.loadString(
+      final content = await gtfsSyncService.getGtfsFile(
         'assets/gtfs_data/FareData.txt',
       );
       final lines = const LineSplitter().convert(content);
@@ -3421,7 +3430,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
     // stopOrderMap: stopId → ลำดับสถานีบนสาย (เฉพาะ non-BTS ที่เป็นตัวเลข)
     try {
-      final content = await rootBundle.loadString(
+      final content = await gtfsSyncService.getGtfsFile(
         'assets/gtfs_data/Faretype.txt',
       );
       final lines = const LineSplitter().convert(content);
@@ -3449,7 +3458,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
     // fareTableMap: rowKey → List<int> จาก fare_table.txt
     try {
-      final content = await rootBundle.loadString(
+      final content = await gtfsSyncService.getGtfsFile(
         'assets/gtfs_data/fare_table.txt',
       );
       final lines = const LineSplitter().convert(content);
@@ -3514,7 +3523,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     final routeMap = {for (final r in routes) r.routeId: r};
     final tripToLine = <String, String>{};
     try {
-      final tripContent = await rootBundle.loadString(
+      final tripContent = await gtfsSyncService.getGtfsFile(
         'assets/gtfs_data/trips.txt',
       );
       final lines = const LineSplitter().convert(tripContent);
@@ -3550,7 +3559,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
     for (final file in stopTimesFiles) {
       try {
-        final stContent = await rootBundle.loadString(file);
+        final stContent = await gtfsSyncService.getGtfsFile(file);
         final lines = const LineSplitter().convert(stContent);
         if (lines.length <= 1) continue;
         final header = _parseCsvLine(lines[0]);
@@ -3585,7 +3594,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
     // Also parse bus_route_stop.txt for _stopToLinesMap
     try {
-      final content = await rootBundle.loadString(
+      final content = await gtfsSyncService.getGtfsFile(
         'assets/gtfs_data/bus_route_stop.txt',
       );
       final lines = const LineSplitter().convert(content);

@@ -1,4 +1,4 @@
-package com.example.route
+package com.hugekc.routetransit
 
 import io.flutter.embedding.android.FlutterActivity
 

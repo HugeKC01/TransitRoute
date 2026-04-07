@@ -1,6 +1,7 @@
 import 'dart:convert';
 
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart';
+import 'package:route/services/gtfs_sync_service.dart';
 import 'package:route/services/csv_utils.dart';
 import 'package:route/services/gtfs_models.dart' as gtfs;
 
@@ -9,7 +10,7 @@ class RouteAssetLoader {
 
   static Future<List<gtfs.Route>> loadRoutes(String assetPath) async {
     try {
-      final content = await rootBundle.loadString(assetPath);
+      final content = await gtfsSyncService.getGtfsFile(assetPath);
       final lines = const LineSplitter().convert(content);
       if (lines.length <= 1) return [];
       final header = parseCsvLine(lines.first).map((s) => s.trim()).toList();
@@ -77,7 +78,7 @@ class RouteAssetLoader {
     Map<String, String>? thaiNames,
   }) async {
     try {
-      final content = await rootBundle.loadString(assetPath);
+      final content = await gtfsSyncService.getGtfsFile(assetPath);
       final lines = const LineSplitter().convert(content);
       if (lines.length <= 1) return [];
       final header = parseCsvLine(lines.first).map((s) => s.trim()).toList();
@@ -141,7 +142,7 @@ class RouteAssetLoader {
   static Future<Map<String, String>> loadFareTypeMap(String assetPath) async {
     final result = <String, String>{};
     try {
-      final content = await rootBundle.loadString(assetPath);
+      final content = await gtfsSyncService.getGtfsFile(assetPath);
       final lines = const LineSplitter().convert(content);
       if (lines.length <= 1) return result;
       final header = parseCsvLine(
@@ -172,7 +173,7 @@ class RouteAssetLoader {
   static Future<Map<String, int>> loadFareDataMap(String assetPath) async {
     final result = <String, int>{};
     try {
-      final content = await rootBundle.loadString(assetPath);
+      final content = await gtfsSyncService.getGtfsFile(assetPath);
       final lines = const LineSplitter().convert(content);
       if (lines.length <= 1) return result;
       final header = parseCsvLine(
@@ -206,7 +207,7 @@ class RouteAssetLoader {
   static Future<Map<String, int>> loadStopOrderMap(String assetPath) async {
     final result = <String, int>{};
     try {
-      final content = await rootBundle.loadString(assetPath);
+      final content = await gtfsSyncService.getGtfsFile(assetPath);
       final lines = const LineSplitter().convert(content);
       if (lines.length <= 1) return result;
       final header = parseCsvLine(
@@ -242,7 +243,7 @@ class RouteAssetLoader {
   ) async {
     final result = <String, List<int>>{};
     try {
-      final content = await rootBundle.loadString(assetPath);
+      final content = await gtfsSyncService.getGtfsFile(assetPath);
       final lines = const LineSplitter().convert(content);
       for (int i = 0; i < lines.length; i++) {
         final line = lines[i].trimRight();
@@ -270,7 +271,7 @@ class RouteAssetLoader {
   static Future<Map<String, int>> loadFerryFlatFares(String assetPath) async {
     final result = <String, int>{};
     try {
-      final content = await rootBundle.loadString(assetPath);
+      final content = await gtfsSyncService.getGtfsFile(assetPath);
       final lines = const LineSplitter().convert(content);
       if (lines.length <= 1) return result;
       for (int i = 1; i < lines.length; i++) {
@@ -291,7 +292,7 @@ class RouteAssetLoader {
   static Future<Map<String, int>> loadFerryZoneMatrix(String assetPath) async {
     final result = <String, int>{};
     try {
-      final content = await rootBundle.loadString(assetPath);
+      final content = await gtfsSyncService.getGtfsFile(assetPath);
       final lines = const LineSplitter().convert(content);
       if (lines.length <= 1) return result;
       for (int i = 1; i < lines.length; i++) {
@@ -314,7 +315,7 @@ class RouteAssetLoader {
   static Future<Map<String, String>> loadFerryZones(String assetPath) async {
     final result = <String, String>{};
     try {
-      final content = await rootBundle.loadString(assetPath);
+      final content = await gtfsSyncService.getGtfsFile(assetPath);
       final lines = const LineSplitter().convert(content);
       if (lines.length <= 1) return result;
       for (int i = 1; i < lines.length; i++) {

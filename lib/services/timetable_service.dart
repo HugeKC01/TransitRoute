@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:route/services/gtfs_sync_service.dart';
 
 class TimetableEntry {
   final String tripId;
@@ -59,7 +60,7 @@ class TimetableService {
     // Read trips to map tripId -> routeId, headsign, and serviceId
     final tripMap = <String, Map<String, String>>{};
     try {
-      final tripContent = await rootBundle.loadString(
+      final tripContent = await gtfsSyncService.getGtfsFile(
         'assets/gtfs_data/trips.txt',
       );
       final lines = const LineSplitter().convert(tripContent);
@@ -101,7 +102,7 @@ class TimetableService {
 
     // 1. Read fixed_timetables.txt
     try {
-      final fixedContent = await rootBundle.loadString(
+      final fixedContent = await gtfsSyncService.getGtfsFile(
         'assets/gtfs_data/fixed_timetables.txt',
       );
       final lines = const LineSplitter().convert(fixedContent);
@@ -171,7 +172,7 @@ class TimetableService {
     // Read frequencies
     final frequencies = <String, List<Map<String, dynamic>>>{};
     try {
-      final freqContent = await rootBundle.loadString(
+      final freqContent = await gtfsSyncService.getGtfsFile(
         'assets/gtfs_data/frequencies.txt',
       );
       final lines = const LineSplitter().convert(freqContent);
@@ -201,7 +202,7 @@ class TimetableService {
     // Helper to read stop times from a specific file
     Future<void> readStopTimes(String assetPath) async {
       try {
-        final stContent = await rootBundle.loadString(assetPath);
+        final stContent = await gtfsSyncService.getGtfsFile(assetPath);
         final lines = const LineSplitter().convert(stContent);
         if (lines.length <= 1) return;
 

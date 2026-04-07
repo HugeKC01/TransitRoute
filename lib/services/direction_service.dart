@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'package:collection/collection.dart';
 
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart';
+import 'package:route/services/gtfs_sync_service.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:route/services/csv_utils.dart';
@@ -1184,7 +1185,7 @@ class DirectionService {
     final stopTimes = await _loadStopTimesFromAssets(_stopTimeAssets);
 
     try {
-      final content = await rootBundle.loadString(
+      final content = await gtfsSyncService.getGtfsFile(
         'assets/gtfs_data/bus_route_stop.txt',
       );
       final lines = const LineSplitter().convert(content);
@@ -1223,7 +1224,7 @@ class DirectionService {
     final result = <String, List<Map<String, dynamic>>>{};
     for (final asset in assets) {
       try {
-        final content = await rootBundle.loadString(asset);
+        final content = await gtfsSyncService.getGtfsFile(asset);
         final lines = const LineSplitter().convert(content);
         if (lines.length <= 1) continue;
         final header = parseCsvLine(lines.first).map((s) => s.trim()).toList();
@@ -1270,7 +1271,7 @@ class DirectionService {
     }
 
     try {
-      final tripsContent = await rootBundle.loadString(
+      final tripsContent = await gtfsSyncService.getGtfsFile(
         'assets/gtfs_data/trips.txt',
       );
       final lines = const LineSplitter().convert(tripsContent);
@@ -1332,7 +1333,7 @@ class DirectionService {
 
       // Also append trips from bus_route_stop.txt
       try {
-        final content = await rootBundle.loadString(
+        final content = await gtfsSyncService.getGtfsFile(
           'assets/gtfs_data/bus_route_stop.txt',
         );
         final busLines = const LineSplitter().convert(content);
@@ -1370,7 +1371,7 @@ class DirectionService {
       ];
       for (final asset in auxAssets) {
         try {
-          final content = await rootBundle.loadString(asset);
+          final content = await gtfsSyncService.getGtfsFile(asset);
           final auxLines = const LineSplitter().convert(content);
           if (auxLines.length > 1) {
             for (int i = 1; i < auxLines.length; i++) {
