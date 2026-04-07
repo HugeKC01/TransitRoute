@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:route/pages/about_page.dart';
 import 'package:route/services/gtfs_sync_service.dart';
 
 class Profile {
@@ -103,8 +104,12 @@ class MorePage extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 32,
-                  backgroundImage: profile.profileImageUrl.isNotEmpty ? NetworkImage(profile.profileImageUrl) : null,
-                  child: profile.profileImageUrl.isEmpty ? const Icon(Icons.person, size: 32) : null,
+                  backgroundImage: profile.profileImageUrl.isNotEmpty
+                      ? NetworkImage(profile.profileImageUrl)
+                      : null,
+                  child: profile.profileImageUrl.isEmpty
+                      ? const Icon(Icons.person, size: 32)
+                      : null,
                 ),
                 const SizedBox(width: 18),
                 Expanded(
@@ -386,19 +391,24 @@ class MorePage extends StatelessWidget {
         Card(
           clipBehavior: Clip.antiAlias,
           child: Column(
-            children: const [
-              ListTile(
+            children: [
+              const ListTile(
                 leading: Icon(Icons.help_outline),
                 title: Text('Help & feedback'),
                 subtitle: Text('FAQs, chat with support'),
                 trailing: Icon(Icons.chevron_right),
               ),
-              Divider(height: 1),
+              const Divider(height: 1),
               ListTile(
-                leading: Icon(Icons.info_outline),
-                title: Text('About'),
-                subtitle: Text('Version 1.0.0 • OSS licenses'),
-                trailing: Icon(Icons.chevron_right),
+                leading: const Icon(Icons.info_outline),
+                title: const Text('About'),
+                subtitle: const Text('Version 1.0.0 • OSS licenses'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (context) => const AboutPage()),
+                  );
+                },
               ),
             ],
           ),

@@ -31,17 +31,14 @@ class _CardsPageState extends State<CardsPage> {
       type: 'BTS / BRT / Yellow / Pink',
       color: Colors.orange,
       iconInfo: Icons.directions_transit,
-      promotions: ['Monthly Trip Pass', 'One Day Pass'],
+      promotions: ['-'],
     ),
     const TransitCard(
       name: 'MRT Card',
       type: 'MRT Blue / MRT Purple',
       color: Colors.blue,
       iconInfo: Icons.subway,
-      promotions: [
-        'Line Fare Discount',
-        'Transfer Discount: Yellow (Lat Phrao) to Blue - 14 Baht',
-        'Transfer Discount: Blue to Yellow (Lat Phrao) - 15 Baht',
+      promotions: ['-'
       ],
     ),
     const TransitCard(
