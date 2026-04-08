@@ -208,27 +208,6 @@ class MorePage extends StatelessWidget {
           clipBehavior: Clip.antiAlias,
           child: Column(
             children: [
-              const ListTile(
-                leading: Icon(Icons.language),
-                title: Text('App language'),
-                subtitle: Text('English (system default)'),
-                trailing: Icon(Icons.chevron_right),
-              ),
-              Divider(height: 1, color: theme.colorScheme.outlineVariant),
-              const ListTile(
-                leading: Icon(Icons.translate),
-                title: Text('Station name language'),
-                subtitle: Text('English + Thai'),
-                trailing: Icon(Icons.chevron_right),
-              ),
-              Divider(height: 1, color: theme.colorScheme.outlineVariant),
-              SwitchListTile.adaptive(
-                value: true,
-                onChanged: (_) {},
-                secondary: const Icon(Icons.notifications_active_outlined),
-                title: const Text('Notifications'),
-                subtitle: const Text('Receive disruption and fare alerts'),
-              ),
               Divider(height: 1, color: theme.colorScheme.outlineVariant),
               const _GtfsVersionTile(),
               Divider(height: 1, color: theme.colorScheme.outlineVariant),
@@ -248,12 +227,7 @@ class MorePage extends StatelessWidget {
                         Colors.purple,
                         Colors.orange,
                         Colors.teal,
-                        Colors.pink,
                         Colors.indigo,
-                        Colors.cyan,
-                        Colors.brown,
-                        Colors.amber,
-                        Colors.deepOrange,
                       ].map(
                         (color) => GestureDetector(
                           onTap: () => onAccentColorChanged(color),

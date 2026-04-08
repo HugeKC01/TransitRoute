@@ -380,7 +380,7 @@ class _TransitUpdatesListPageState extends State<TransitUpdatesListPage> {
             ),
             const SizedBox(height: 6),
             Text(
-              'Community-sourced alerts similar to Waze or Google Maps. Filter by issue type to focus on what matters.',
+              'Community-sourced alerts. Filter by issue type to focus on what matters.',
               style: theme.textTheme.bodyMedium,
             ),
             const SizedBox(height: 18),
