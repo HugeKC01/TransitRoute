@@ -13,6 +13,39 @@ import 'package:route/services/gtfs_models.dart' as gtfs;
 import 'package:route/services/transit_update_service.dart';
 import 'package:route/services/timetable_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+
+Map<String, List<Map<String, dynamic>>> _parseStopTimesIsolate(String content) {
+  final result = <String, List<Map<String, dynamic>>>{};
+  final lines = const LineSplitter().convert(content);
+  if (lines.length <= 1) return result;
+  final header = parseCsvLine(lines.first).map((s) => s.trim()).toList();
+  final idxTripId = header.indexOf('trip_id');
+  final idxStopId = header.indexOf('stop_id');
+  final idxStopSeq = header.indexOf('stop_sequence');
+  if (idxTripId < 0 || idxStopId < 0 || idxStopSeq < 0) {
+    return result;
+  }
+  for (int i = 1; i < lines.length; i++) {
+    final line = lines[i].trimRight();
+    if (line.isEmpty) continue;
+    final row = parseCsvLine(line);
+    if (row.length <= idxTripId ||
+        row.length <= idxStopId ||
+        row.length <= idxStopSeq) {
+      continue;
+    }
+    final tripId = row[idxTripId].trim();
+    final stopId = row[idxStopId].trim();
+    final stopSequence = int.tryParse(row[idxStopSeq].trim()) ?? i;
+    if (tripId.isEmpty || stopId.isEmpty) continue;
+    result.putIfAbsent(tripId, () => []).add({
+      'stopId': stopId,
+      'stopSequence': stopSequence,
+    });
+  }
+  return result;
+}
 
 typedef LineNameResolver = String? Function(String stopId);
 
@@ -1230,32 +1263,9 @@ class DirectionService {
     for (final asset in assets) {
       try {
         final content = await gtfsSyncService.getGtfsFile(asset);
-        final lines = const LineSplitter().convert(content);
-        if (lines.length <= 1) continue;
-        final header = parseCsvLine(lines.first).map((s) => s.trim()).toList();
-        final idxTripId = header.indexOf('trip_id');
-        final idxStopId = header.indexOf('stop_id');
-        final idxStopSeq = header.indexOf('stop_sequence');
-        if (idxTripId < 0 || idxStopId < 0 || idxStopSeq < 0) {
-          continue;
-        }
-        for (int i = 1; i < lines.length; i++) {
-          final line = lines[i].trimRight();
-          if (line.isEmpty) continue;
-          final row = parseCsvLine(line);
-          if (row.length <= idxTripId ||
-              row.length <= idxStopId ||
-              row.length <= idxStopSeq) {
-            continue;
-          }
-          final tripId = row[idxTripId].trim();
-          final stopId = row[idxStopId].trim();
-          final stopSequence = int.tryParse(row[idxStopSeq].trim()) ?? i;
-          if (tripId.isEmpty || stopId.isEmpty) continue;
-          result.putIfAbsent(tripId, () => []).add({
-            'stopId': stopId,
-            'stopSequence': stopSequence,
-          });
+        final parsed = await compute(_parseStopTimesIsolate, content);
+        for(final e in parsed.entries) {
+            result.putIfAbsent(e.key, () => []).addAll(e.value);
         }
       } catch (_) {
         continue;

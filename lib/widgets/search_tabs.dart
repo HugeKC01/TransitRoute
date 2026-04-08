@@ -36,10 +36,43 @@ class _ServiceTabsState extends State<ServiceTabs>
   String? _selectedBusLine;
   String? _selectedFerryLine;
 
+  late Map<String, List<gtfs.Stop>> _metroStops;
+  late Map<String, List<gtfs.Stop>> _trainStops;
+  late Map<String, List<gtfs.Stop>> _busStops;
+  late Map<String, List<gtfs.Stop>> _ferryStops;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    _calculateStops();
+  }
+
+  @override
+  void didUpdateWidget(ServiceTabs oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.allStops != oldWidget.allStops) {
+      _calculateStops();
+    }
+  }
+
+  void _calculateStops() {
+    _metroStops = _groupStopsByLine(
+      widget.allStops,
+      (line, stop) => widget.getServicePriority(stop) == 1,
+    );
+    _trainStops = _groupStopsByLine(
+      widget.allStops,
+      (line, stop) => widget.getServicePriority(stop) == 2,
+    );
+    _busStops = _groupStopsByLine(
+      widget.allStops,
+      (line, stop) => widget.getServicePriority(stop) == 3,
+    );
+    _ferryStops = _groupStopsByLine(
+      widget.allStops,
+      (line, stop) => widget.getServicePriority(stop) == 4,
+    );
   }
 
   @override
@@ -267,23 +300,6 @@ class _ServiceTabsState extends State<ServiceTabs>
         mediaQuery.size.height *
         0.7; // Take 70% of the screen height by default
 
-    final metroStops = _groupStopsByLine(
-      widget.allStops,
-      (line, stop) => widget.getServicePriority(stop) == 1,
-    );
-    final trainStops = _groupStopsByLine(
-      widget.allStops,
-      (line, stop) => widget.getServicePriority(stop) == 2,
-    );
-    final busStops = _groupStopsByLine(
-      widget.allStops,
-      (line, stop) => widget.getServicePriority(stop) == 3,
-    );
-    final ferryStops = _groupStopsByLine(
-      widget.allStops,
-      (line, stop) => widget.getServicePriority(stop) == 4,
-    );
-
     return SizedBox(
       height: height,
       child: Column(
@@ -308,28 +324,28 @@ class _ServiceTabsState extends State<ServiceTabs>
               children: [
                 _buildTabView(
                   context,
-                  groupedStops: metroStops,
+                  groupedStops: _metroStops,
                   selectedLine: _selectedMetroLine,
                   onLineChanged: (val) =>
                       setState(() => _selectedMetroLine = val),
                 ),
                 _buildTabView(
                   context,
-                  groupedStops: trainStops,
+                  groupedStops: _trainStops,
                   selectedLine: _selectedTrainLine,
                   onLineChanged: (val) =>
                       setState(() => _selectedTrainLine = val),
                 ),
                 _buildTabView(
                   context,
-                  groupedStops: busStops,
+                  groupedStops: _busStops,
                   selectedLine: _selectedBusLine,
                   onLineChanged: (val) =>
                       setState(() => _selectedBusLine = val),
                 ),
                 _buildTabView(
                   context,
-                  groupedStops: ferryStops,
+                  groupedStops: _ferryStops,
                   selectedLine: _selectedFerryLine,
                   onLineChanged: (val) =>
                       setState(() => _selectedFerryLine = val),
