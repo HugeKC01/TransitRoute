@@ -2810,7 +2810,29 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       controller: _collapsedSearchController,
       focusNode: isWide ? _collapsedSearchFocus : null,
       constraints: const BoxConstraints(minHeight: 48, maxHeight: 48),
-      leading: Icon(Icons.search, color: theme.colorScheme.primary),
+      leading: ListenableBuilder(
+        listenable: Listenable.merge([_collapsedSearchController, _collapsedSearchFocus]),
+        builder: (context, _) {
+          final isActive = _collapsedSearchController.text.isNotEmpty || 
+                           _collapsedSearchFocus.hasFocus || 
+                           (_collapsedSearchController.isAttached && _collapsedSearchController.isOpen);
+          if (isActive) {
+            return IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () {
+                setState(() {
+                  _collapsedSearchController.clear();
+                  if (_collapsedSearchController.isAttached && _collapsedSearchController.isOpen) {
+                    _collapsedSearchController.closeView('');
+                  }
+                  _collapsedSearchFocus.unfocus();
+                });
+              },
+            );
+          }
+          return Icon(Icons.search, color: theme.colorScheme.primary);
+        },
+      ),
       hintText: 'Where to?',
       hintStyle: WidgetStatePropertyAll(
         TextStyle(
@@ -2854,7 +2876,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             tooltip: 'Clear search',
             icon: const Icon(Icons.close, size: 20),
             onPressed: () {
-              setState(_collapsedSearchController.clear);
+              setState(() {
+                _collapsedSearchController.clear();
+              });
             },
           ),
       ],
@@ -2868,6 +2892,24 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             : SearchAnchor(
                 searchController: _collapsedSearchController,
                 viewHintText: 'Where to?',
+                viewTrailing: [
+                  ListenableBuilder(
+                    listenable: _collapsedSearchController,
+                    builder: (context, _) {
+                      if (_collapsedSearchController.text.isEmpty) {
+                        return const SizedBox.shrink();
+                      }
+                      return IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () {
+                          setState(() {
+                            _collapsedSearchController.clear();
+                          });
+                        },
+                      );
+                    },
+                  ),
+                ],
                 builder: (context, controller) => searchBar,
                 suggestionsBuilder: (context, controller) {
                   if (controller.text.isEmpty) {
@@ -3198,17 +3240,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           onPressed: () {
             setState(() {
               controller.clear();
-              if (asStart) {
-                selectedStartStopId = null;
-                _customStartPoint = null;
-              } else {
-                selectedDestinationStopId = null;
-                _customDestPoint = null;
-              }
-              directionOptions = [];
-              selectedDirectionIndex = 0;
-              _headerCollapsed.value = false;
-              _recalculateMapLayers();
             });
           },
         ),
@@ -3222,10 +3253,43 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       controller: controller,
       focusNode: isWide ? focusNode : null,
       constraints: const BoxConstraints(minHeight: 48, maxHeight: 48),
-      leading: Icon(
-        icon,
-        size: 20,
-        color: iconColor ?? theme.colorScheme.primary,
+      leading: ListenableBuilder(
+        listenable: Listenable.merge([controller, focusNode]),
+        builder: (context, _) {
+          final isActive = controller.text.isNotEmpty || 
+                           focusNode.hasFocus || 
+                           (controller.isAttached && controller.isOpen);
+          if (isActive) {
+            return IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () {
+                setState(() {
+                  controller.clear();
+                  if (controller.isAttached && controller.isOpen) {
+                    controller.closeView('');
+                  }
+                  focusNode.unfocus();
+                  if (asStart) {
+                    selectedStartStopId = null;
+                    _customStartPoint = null;
+                  } else {
+                    selectedDestinationStopId = null;
+                    _customDestPoint = null;
+                  }
+                  directionOptions = [];
+                  selectedDirectionIndex = 0;
+                  _headerCollapsed.value = false;
+                  _recalculateMapLayers();
+                });
+              },
+            );
+          }
+          return Icon(
+            icon,
+            size: 20,
+            color: iconColor ?? theme.colorScheme.primary,
+          );
+        },
       ),
       hintText: 'Search $label',
       hintStyle: WidgetStatePropertyAll(
@@ -3273,6 +3337,24 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             isFullScreen: true,
             searchController: controller,
             viewHintText: 'Search $label',
+            viewTrailing: [
+              ListenableBuilder(
+                listenable: controller,
+                builder: (context, _) {
+                  if (controller.text.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  return IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () {
+                      setState(() {
+                        controller.clear();
+                      });
+                    },
+                  );
+                },
+              ),
+            ],
             builder: (context, ctrl) => SizedBox(
               height: 48,
               child: searchBar,

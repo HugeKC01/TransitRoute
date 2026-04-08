@@ -18,11 +18,18 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
   bool _loading = true;
   String _searchQuery = '';
   String _selectedCategory = 'All';
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _loadRoutes();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadRoutes() async {
@@ -155,9 +162,21 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
                       vertical: 8.0,
                     ),
                     child: TextField(
-                      decoration: InputDecoration(
-                        hintText: 'Search lines, agencies, or codes...',
-                        prefixIcon: const Icon(Icons.search),
+                        controller: _searchController,
+                        decoration: InputDecoration(
+                          hintText: 'Search lines, agencies, or codes...',
+                          prefixIcon: const Icon(Icons.search),
+                          suffixIcon: _searchQuery.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.close),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() {
+                                      _searchQuery = '';
+                                    });
+                                  },
+                                )
+                              : null,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
                           borderSide: BorderSide.none,
