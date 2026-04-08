@@ -1264,8 +1264,8 @@ class DirectionService {
       try {
         final content = await gtfsSyncService.getGtfsFile(asset);
         final parsed = await compute(_parseStopTimesIsolate, content);
-        for(final e in parsed.entries) {
-            result.putIfAbsent(e.key, () => []).addAll(e.value);
+        for (final e in parsed.entries) {
+          result.putIfAbsent(e.key, () => []).addAll(e.value);
         }
       } catch (_) {
         continue;

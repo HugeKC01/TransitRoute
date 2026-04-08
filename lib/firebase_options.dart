@@ -72,5 +72,4 @@ class DefaultFirebaseOptions {
     storageBucket: 'route-bkk.firebasestorage.app',
     iosBundleId: 'com.hugekc.routetransit',
   );
-
 }

@@ -38,8 +38,7 @@ class _CardsPageState extends State<CardsPage> {
       type: 'MRT Blue / MRT Purple',
       color: Colors.blue,
       iconInfo: Icons.subway,
-      promotions: ['-'
-      ],
+      promotions: ['-'],
     ),
     const TransitCard(
       name: 'EMV Contactless',

@@ -58,58 +58,40 @@ class _ServiceTabsState extends State<ServiceTabs>
   }
 
   void _calculateStops() {
-    _metroStops = _groupStopsByLine(
-      widget.allStops,
-      (line, stop) => widget.getServicePriority(stop) == 1,
-    );
-    _trainStops = _groupStopsByLine(
-      widget.allStops,
-      (line, stop) => widget.getServicePriority(stop) == 2,
-    );
-    _busStops = _groupStopsByLine(
-      widget.allStops,
-      (line, stop) => widget.getServicePriority(stop) == 3,
-    );
-    _ferryStops = _groupStopsByLine(
-      widget.allStops,
-      (line, stop) => widget.getServicePriority(stop) == 4,
-    );
+    _metroStops = {};
+    _trainStops = {};
+    _busStops = {};
+    _ferryStops = {};
+
+    for (final stop in widget.allStops) {
+      final priority = widget.getServicePriority(stop);
+      final targetMap = switch (priority) {
+        1 => _metroStops,
+        2 => _trainStops,
+        3 => _busStops,
+        _ => _ferryStops,
+      };
+
+      if (widget.getLineNames != null) {
+        final lineNames = widget.getLineNames!(stop.stopId);
+        if (lineNames.isEmpty) {
+          targetMap.putIfAbsent('Unknown', () => []).add(stop);
+        } else {
+          for (final lineName in lineNames) {
+            targetMap.putIfAbsent(lineName, () => []).add(stop);
+          }
+        }
+      } else {
+        final lineName = widget.getLineName(stop.stopId) ?? 'Unknown';
+        targetMap.putIfAbsent(lineName, () => []).add(stop);
+      }
+    }
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
-  }
-
-  // Group stops by line name
-  Map<String, List<gtfs.Stop>> _groupStopsByLine(
-    List<gtfs.Stop> stops,
-    bool Function(String, gtfs.Stop) filterLine,
-  ) {
-    final Map<String, List<gtfs.Stop>> grouped = {};
-    for (final stop in stops) {
-      if (widget.getLineNames != null) {
-        final lineNames = widget.getLineNames!(stop.stopId);
-        if (lineNames.isEmpty) {
-          if (filterLine('Unknown', stop)) {
-            grouped.putIfAbsent('Unknown', () => []).add(stop);
-          }
-        } else {
-          for (final lineName in lineNames) {
-            if (filterLine(lineName, stop)) {
-              grouped.putIfAbsent(lineName, () => []).add(stop);
-            }
-          }
-        }
-      } else {
-        final lineName = widget.getLineName(stop.stopId) ?? 'Unknown';
-        if (filterLine(lineName, stop)) {
-          grouped.putIfAbsent(lineName, () => []).add(stop);
-        }
-      }
-    }
-    return grouped;
   }
 
   Widget _buildStopTile(
@@ -140,95 +122,91 @@ class _ServiceTabsState extends State<ServiceTabs>
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-          child: Material(
-            color: theme.colorScheme.surface.withValues(alpha: 0.6),
-            child: InkWell(
-              onTap: () => widget.onSelect(stop),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16.0,
-                  vertical: 12.0,
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: lineColor,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: theme.colorScheme.surface.withValues(
-                            alpha: 0.5,
-                          ),
-                          width: 1.5,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: lineColor.withValues(alpha: 0.3),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Icon(
-                            getIconForType(serviceType),
-                            color: (lineColor.computeLuminance() > 0.5)
-                                ? Colors.black87
-                                : Colors.white,
-                            size: 16,
-                          ),
-                          if (stop.code != null && stop.code!.isNotEmpty) ...[
-                            const SizedBox(width: 4),
-                            Text(
-                              stop.code!,
-                              style: TextStyle(
-                                color: (lineColor.computeLuminance() > 0.5)
-                                    ? Colors.black87
-                                    : Colors.white,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
+        child: Material(
+          color: theme.colorScheme.surface.withValues(
+            alpha: 0.9,
+          ), // adjusted opacity to compensate for lack of blue
+          child: InkWell(
+            onTap: () => widget.onSelect(stop),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 12.0,
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
+                    decoration: BoxDecoration(
+                      color: lineColor,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: theme.colorScheme.surface.withValues(alpha: 0.5),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: lineColor.withValues(alpha: 0.3),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Icon(
+                          getIconForType(serviceType),
+                          color: (lineColor.computeLuminance() > 0.5)
+                              ? Colors.black87
+                              : Colors.white,
+                          size: 16,
+                        ),
+                        if (stop.code != null && stop.code!.isNotEmpty) ...[
+                          const SizedBox(width: 4),
                           Text(
-                            stop.name,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
+                            stop.code!,
+                            style: TextStyle(
+                              color: (lineColor.computeLuminance() > 0.5)
+                                  ? Colors.black87
+                                  : Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          stop.name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (stop.thaiName != null && stop.thaiName!.isNotEmpty)
+                          Text(
+                            stop.thaiName!,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
-                          if (stop.thaiName != null &&
-                              stop.thaiName!.isNotEmpty)
-                            Text(
-                              stop.thaiName!,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                        ],
-                      ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),

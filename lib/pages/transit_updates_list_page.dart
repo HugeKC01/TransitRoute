@@ -582,7 +582,8 @@ class _ReportCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   TextButton.icon(
-                    onPressed: () => TransitUpdateService().voteResolve(report.id),
+                    onPressed: () =>
+                        TransitUpdateService().voteResolve(report.id),
                     icon: const Icon(Icons.check_circle_outlined, size: 18),
                     label: Text('Mark Resolved (${report.resolveVotes})'),
                   ),
@@ -774,7 +775,10 @@ class _ReportIssueSheetState extends State<_ReportIssueSheet> {
   void _sortLineOptions() {
     int getPriority(String line) {
       final upper = line.toUpperCase();
-      if (upper.contains('MRT') || upper.contains('BTS') || upper.contains('ARL')) return 1;
+      if (upper.contains('MRT') ||
+          upper.contains('BTS') ||
+          upper.contains('ARL'))
+        return 1;
       if (upper.contains('SRT')) return 2;
       if (upper.startsWith('BUS') || upper.contains('BUS')) return 3;
       if (upper.contains('FERRY')) return 4;
@@ -791,9 +795,11 @@ class _ReportIssueSheetState extends State<_ReportIssueSheet> {
 
   IconData _getIconForLine(String line) {
     final upper = line.toUpperCase();
-    if (upper.contains('MRT') || upper.contains('BTS') || upper.contains('ARL')) return Icons.subway;
+    if (upper.contains('MRT') || upper.contains('BTS') || upper.contains('ARL'))
+      return Icons.subway;
     if (upper.contains('SRT')) return Icons.train;
-    if (upper.startsWith('BUS') || upper.contains('BUS')) return Icons.directions_bus;
+    if (upper.startsWith('BUS') || upper.contains('BUS'))
+      return Icons.directions_bus;
     if (upper.contains('FERRY')) return Icons.directions_boat;
     return Icons.directions_transit;
   }

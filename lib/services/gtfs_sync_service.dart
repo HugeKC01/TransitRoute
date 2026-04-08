@@ -38,7 +38,7 @@ class GtfsSyncService {
     // Fetch latest version from Firebase Storage
     final versionRef = _storage.ref().child(_gtfsJsonFilename);
     final versionData = await versionRef.getData();
-    
+
     if (versionData == null) {
       print('No GTFS version data found in Firebase.');
       return;
@@ -74,7 +74,7 @@ class GtfsSyncService {
 
       final versionRef = _storage.ref().child(_gtfsJsonFilename);
       final versionData = await versionRef.getData();
-      
+
       if (versionData == null) {
         return 'No remote version found.';
       }
@@ -97,14 +97,14 @@ class GtfsSyncService {
 
   Future<void> _downloadAndExtractGtfs() async {
     final zipRef = _storage.ref().child(_gtfsZipFilename);
-    
+
     // Create temporary download path
     final tempDir = await getTemporaryDirectory();
     final tempZipFile = File('${tempDir.path}/$_gtfsZipFilename');
-    
+
     // Download the file
     await zipRef.writeToFile(tempZipFile);
-    
+
     // Create or clear the local target directory
     final targetDir = Directory(_localGtfsPath);
     if (await targetDir.exists()) {
