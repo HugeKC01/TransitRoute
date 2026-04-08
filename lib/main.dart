@@ -1,9 +1,8 @@
-import 'dart:async';
 import 'dart:convert';
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'widgets/station_details_content.dart';
@@ -172,6 +171,7 @@ class FavoritePin {
 
 class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   final MapController _mapController = MapController();
+  final LayerHitNotifier<int> _routeHitNotifier = ValueNotifier(null);
 
   List<FavoritePin> _favoritePins = [];
 
@@ -511,12 +511,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     }
   }
 
-  Polyline _linePolyline(LatLng from, LatLng to, Color color) {
-    return Polyline(points: [from, to], color: color, strokeWidth: 6.0);
+  Polyline<int> _linePolyline(LatLng from, LatLng to, Color color, {int? hitValue, bool isActive = true}) {
+    return Polyline<int>(hitValue: hitValue, points: [from, to], color: color, strokeWidth: 6.0);
   }
 
-  List<Polyline> _buildRoutePolylines(List<RouteSegment> segments) {
-    final polylines = <Polyline>[];
+  List<Polyline<int>> _buildRoutePolylines(List<RouteSegment> segments, {int? hitValue, bool isActive = true}) {
+    final polylines = <Polyline<int>>[];
     for (final segment in segments) {
       if (segment.mode == TravelMode.walk ||
           segment.mode == TravelMode.bicycle ||
@@ -590,8 +590,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           polylines.add(
             Polyline(
               points: points,
-              color: lineColor,
-              strokeWidth: width,
+              color: isActive ? lineColor : lineColor.withValues(alpha: 0.2),
+              strokeWidth: isActive ? width : (width * 0.7),
               pattern: pattern ?? const StrokePattern.solid(),
             ),
           );
@@ -605,7 +605,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               polylines: polylines,
               stopPoint: LatLng(stop.lat, stop.lon),
               routePoints: points,
-              color: lineColor,
+              color: isActive ? lineColor : lineColor.withValues(alpha: 0.2),
             );
           }
         }
@@ -660,7 +660,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               polylines.add(
                 Polyline(
                   points: shapePoints,
-                  color: lineColor,
+                  color: isActive ? lineColor : lineColor.withValues(alpha: 0.2),
                   strokeWidth: 6.0,
                 ),
               );
@@ -721,7 +721,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   polylines.add(
                     Polyline(
                       points: shapePoints,
-                      color: lineColor,
+                      color: isActive ? lineColor : lineColor.withValues(alpha: 0.2),
                       strokeWidth: 6.0,
                     ),
                   );
@@ -778,7 +778,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   polylines.add(
                     Polyline(
                       points: shapePoints,
-                      color: lineColor,
+                      color: isActive ? lineColor : lineColor.withValues(alpha: 0.2),
                       strokeWidth: 6.0,
                     ),
                   );
@@ -792,10 +792,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           if (!foundShape) {
             polylines.add(
               _linePolyline(
-                LatLng(route[i - 1].lat, route[i - 1].lon),
-                LatLng(route[i].lat, route[i].lon),
-                lineColor,
-              ),
+                  LatLng(route[i - 1].lat, route[i - 1].lon),
+                  LatLng(route[i].lat, route[i].lon),
+                  lineColor,
+                  hitValue: hitValue,
+                  isActive: isActive,
+                ),
             );
           }
         }
@@ -805,7 +807,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   }
 
   void _addOffsetConnectionLine({
-    required List<Polyline> polylines,
+    required List<Polyline<int>> polylines,
     required LatLng stopPoint,
     required List<LatLng> routePoints,
     required Color color,
@@ -1441,7 +1443,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               }
             },
             onLongPress: (tapPosition, point) {
-              _showDroppedPinDetails(context, point);
+              if (directionOptions.isEmpty) {
+                _showDroppedPinDetails(context, point);
+              }
             },
           ),
           children: [
@@ -1772,8 +1776,29 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   ),
                 ],
               ),
-            if (activeSegments.isNotEmpty)
-              PolylineLayer(polylines: _buildRoutePolylines(activeSegments)),
+            
+              if (directionOptions.isNotEmpty)
+                for (int i = 0; i < directionOptions.length; i++)
+                  if (i != selectedDirectionIndex)
+                    PolylineLayer<int>(
+                      hitNotifier: _routeHitNotifier,
+                      polylines: _buildRoutePolylines(
+                        directionOptions[i].segments,
+                        hitValue: i,
+                        isActive: false,
+                      ),
+                    ),
+
+              if (directionOptions.isNotEmpty && selectedDirectionIndex < directionOptions.length)
+                PolylineLayer<int>(
+                  hitNotifier: _routeHitNotifier,
+                  polylines: _buildRoutePolylines(
+                    directionOptions[selectedDirectionIndex].segments,
+                    hitValue: selectedDirectionIndex,
+                    isActive: true,
+                  ),
+                ),
+
             const RichAttributionWidget(
               attributions: [
                 TextSourceAttribution('© OpenStreetMap contributors'),
@@ -3284,6 +3309,16 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    _routeHitNotifier.addListener(() {
+      final val = _routeHitNotifier.value;
+      if (val != null && val.hitValues.isNotEmpty) {
+        if (val.hitValues.first < directionOptions.length) {
+          setState(() {
+            selectedDirectionIndex = val.hitValues.first;
+          });
+        }
+      }
+    });
     _loadFavoritePins();
     _loadProfile();
     _startSearchController = SearchController();
@@ -3316,6 +3351,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _routeHitNotifier.dispose();
     _headerCollapsed.dispose();
     _startSearchController.dispose();
     _destSearchController.dispose();
@@ -4048,7 +4084,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     ).push(MaterialPageRoute(builder: (context) => const CardsPage()));
   }
 
-  void _openNavigation(DirectionOption option) {
+  
+
+  void _openNavigation(DirectionOption option, {bool isNavigation = true}) {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => NavigationPage(
@@ -4056,6 +4094,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           lineNameResolver: _getLineName,
           lineColorResolver: _getLineColor,
           lineColors: lineColors,
+          
         ),
       ),
     );
