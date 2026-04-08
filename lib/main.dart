@@ -2458,144 +2458,246 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   }
 
   Widget _buildPhoneLayout(BuildContext context, Widget headerOverlay) {
-    final hasPanelContent = directionOptions.isNotEmpty || _viewingStop != null;
     final theme = Theme.of(context);
 
-    // Dynamic initial sheet height when content exist
-    final sheetInitialSize = hasPanelContent ? 0.45 : 0.0;
+    return ValueListenableBuilder<bool>(
+      valueListenable: _headerCollapsed,
+      builder: (context, isHeaderCollapsed, child) {
+        return ListenableBuilder(
+          listenable: Listenable.merge([
+            _collapsedSearchController,
+            _startSearchController,
+            _destSearchController,
+            _collapsedSearchFocus,
+            _startSearchFocus,
+            _destSearchFocus,
+          ]),
+          builder: (context, _) {
+            final isSearching =
+                isHeaderCollapsed &&
+                (_collapsedSearchFocus.hasFocus ||
+                    _collapsedSearchController.text.isNotEmpty);
+            final isStartSearching =
+                !isHeaderCollapsed &&
+                (_startSearchFocus.hasFocus ||
+                    _startSearchController.text.isNotEmpty);
+            final isDestSearching =
+                !isHeaderCollapsed &&
+                (_destSearchFocus.hasFocus ||
+                    _destSearchController.text.isNotEmpty);
+            final isAnySearching =
+                isSearching || isStartSearching || isDestSearching;
 
-    return Stack(
-      children: [
-        Positioned.fill(child: _buildMap(context)),
+            final hasPanelContent =
+                directionOptions.isNotEmpty || _viewingStop != null;
+            // Dynamic initial sheet height when content exist
+            final sheetInitialSize = hasPanelContent ? 0.45 : 0.0;
 
-        // Map blur when search is active
-        Positioned.fill(
-          child: ListenableBuilder(
-            listenable: Listenable.merge([
-              _collapsedSearchController,
-              _startSearchController,
-              _destSearchController,
-              _collapsedSearchFocus,
-              _startSearchFocus,
-              _destSearchFocus,
-            ]),
-            builder: (context, _) {
-              final isWide = MediaQuery.of(context).size.width > 600;
-              if ((!isWide &&
-                      _collapsedSearchController.isAttached &&
-                      _collapsedSearchController.isOpen) ||
-                  (!isWide &&
-                      _startSearchController.isAttached &&
-                      _startSearchController.isOpen) ||
-                  (!isWide &&
-                      _destSearchController.isAttached &&
-                      _destSearchController.isOpen) ||
-                  (isWide &&
-                      (_collapsedSearchFocus.hasFocus ||
-                          _collapsedSearchController.text.isNotEmpty ||
-                          _startSearchFocus.hasFocus ||
-                          _startSearchController.text.isNotEmpty ||
-                          _destSearchFocus.hasFocus ||
-                          _destSearchController.text.isNotEmpty))) {
-                return BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                  child: Container(color: Colors.black.withValues(alpha: 0.1)),
-                );
-              }
-              return const SizedBox.shrink();
-            },
-          ),
-        ),
-        headerOverlay,
+            return Stack(
+              children: [
+                Positioned.fill(child: _buildMap(context)),
 
-        // Drag sheet spanning full height but starting at initialSize
-        if (hasPanelContent)
-          DraggableScrollableSheet(
-            initialChildSize: sheetInitialSize,
-            minChildSize: 0.25,
-            maxChildSize: 0.95,
-            builder: (context, controller) {
-              final bottomPadding = MediaQuery.of(context).padding.bottom;
-              return Container(
-                decoration: BoxDecoration(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(28),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.15),
-                      blurRadius: 20,
-                      offset: const Offset(0, -4),
-                    ),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(28),
-                  ),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            theme.colorScheme.surface.withValues(
-                              alpha: theme.brightness == Brightness.dark
-                                  ? 0.75
-                                  : 0.90,
-                            ),
-                            theme.colorScheme.surface.withValues(
-                              alpha: theme.brightness == Brightness.dark
-                                  ? 0.60
-                                  : 0.80,
-                            ),
-                          ],
-                        ),
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(28),
-                        ),
-                        border: Border.all(
-                          color: Colors.white.withValues(
-                            alpha: theme.brightness == Brightness.dark
-                                ? 0.2
-                                : 0.5,
-                          ),
-                          width: 1.2,
+                // Map blur when search is active
+                if (isAnySearching)
+                  Positioned.fill(
+                    child: GestureDetector(
+                      onTap: () {
+                        _collapsedSearchFocus.unfocus();
+                        _startSearchFocus.unfocus();
+                        _destSearchFocus.unfocus();
+                      },
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                        child: Container(
+                          color: Colors.black.withValues(alpha: 0.1),
                         ),
                       ),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: ListView(
-                          controller: controller,
-                          padding: EdgeInsets.only(bottom: bottomPadding + 24),
-                          children: [
-                            const SizedBox(height: 12),
-                            Center(
-                              child: Container(
-                                width: 48,
-                                height: 5,
-                                decoration: BoxDecoration(
-                                  color: theme.colorScheme.onSurface.withValues(
-                                    alpha: 0.3,
+                    ),
+                  ),
+
+                if (!isAnySearching)
+                  headerOverlay
+                else
+                  Positioned(
+                    top: MediaQuery.of(context).padding.top + 12.0,
+                    left: 16.0,
+                    right: 16.0,
+                    bottom: 24.0,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildHomeHeader(context, false),
+                        Flexible(
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 16.0),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(24),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.15),
+                                    blurRadius: 20,
+                                    offset: const Offset(0, 8),
                                   ),
-                                  borderRadius: BorderRadius.circular(2.5),
+                                ],
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(24),
+                                child: BackdropFilter(
+                                  filter: ImageFilter.blur(
+                                    sigmaX: 20,
+                                    sigmaY: 20,
+                                  ),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: [
+                                          theme.colorScheme.surface.withValues(
+                                            alpha:
+                                                theme.brightness ==
+                                                    Brightness.dark
+                                                ? 0.75
+                                                : 0.90,
+                                          ),
+                                          theme.colorScheme.surface.withValues(
+                                            alpha:
+                                                theme.brightness ==
+                                                    Brightness.dark
+                                                ? 0.60
+                                                : 0.80,
+                                          ),
+                                        ],
+                                      ),
+                                      borderRadius: BorderRadius.circular(24),
+                                      border: Border.all(
+                                        color: Colors.white.withValues(
+                                          alpha:
+                                              theme.brightness ==
+                                                  Brightness.dark
+                                              ? 0.2
+                                              : 0.5,
+                                        ),
+                                        width: 1.2,
+                                      ),
+                                    ),
+                                    child: Material(
+                                      color: Colors.transparent,
+                                      child: isSearching
+                                          ? _buildWideSearchResults(context)
+                                          : _buildWideDirectionSearchResults(
+                                              context,
+                                            ),
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 16),
-                            _buildPanelContent(context),
-                          ],
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   ),
-                ),
-              );
-            },
-          ),
-      ],
+
+                // Drag sheet spanning full height but starting at initialSize
+                if (hasPanelContent)
+                  DraggableScrollableSheet(
+                    initialChildSize: sheetInitialSize,
+                    minChildSize: 0.25,
+                    maxChildSize: 0.95,
+                    builder: (context, controller) {
+                      final bottomPadding = MediaQuery.of(
+                        context,
+                      ).padding.bottom;
+                      return Container(
+                        decoration: BoxDecoration(
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(28),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.15),
+                              blurRadius: 20,
+                              offset: const Offset(0, -4),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(28),
+                          ),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    theme.colorScheme.surface.withValues(
+                                      alpha: theme.brightness == Brightness.dark
+                                          ? 0.75
+                                          : 0.90,
+                                    ),
+                                    theme.colorScheme.surface.withValues(
+                                      alpha: theme.brightness == Brightness.dark
+                                          ? 0.60
+                                          : 0.80,
+                                    ),
+                                  ],
+                                ),
+                                borderRadius: const BorderRadius.vertical(
+                                  top: Radius.circular(28),
+                                ),
+                                border: Border.all(
+                                  color: Colors.white.withValues(
+                                    alpha: theme.brightness == Brightness.dark
+                                        ? 0.2
+                                        : 0.5,
+                                  ),
+                                  width: 1.2,
+                                ),
+                              ),
+                              child: Material(
+                                color: Colors.transparent,
+                                child: ListView(
+                                  controller: controller,
+                                  padding: EdgeInsets.only(
+                                    bottom: bottomPadding + 24,
+                                  ),
+                                  children: [
+                                    const SizedBox(height: 12),
+                                    Center(
+                                      child: Container(
+                                        width: 48,
+                                        height: 5,
+                                        decoration: BoxDecoration(
+                                          color: theme.colorScheme.onSurface
+                                              .withValues(alpha: 0.3),
+                                          borderRadius: BorderRadius.circular(
+                                            2.5,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    _buildPanelContent(context),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -2892,11 +2994,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
   Widget _buildCollapsedSearchBar(BuildContext context) {
     final theme = Theme.of(context);
-    final isWide = MediaQuery.of(context).size.width > 600;
 
     final searchBar = SearchBar(
       controller: _collapsedSearchController,
-      focusNode: isWide ? _collapsedSearchFocus : null,
+      focusNode: _collapsedSearchFocus,
       constraints: const BoxConstraints(minHeight: 48, maxHeight: 48),
       leading: ListenableBuilder(
         listenable: Listenable.merge([
@@ -2906,19 +3007,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         builder: (context, _) {
           final isActive =
               _collapsedSearchController.text.isNotEmpty ||
-              _collapsedSearchFocus.hasFocus ||
-              (_collapsedSearchController.isAttached &&
-                  _collapsedSearchController.isOpen);
+              _collapsedSearchFocus.hasFocus;
+
           if (isActive) {
             return IconButton(
               icon: const Icon(Icons.arrow_back),
               onPressed: () {
                 setState(() {
                   _collapsedSearchController.clear();
-                  if (_collapsedSearchController.isAttached &&
-                      _collapsedSearchController.isOpen) {
-                    _collapsedSearchController.closeView('');
-                  }
                   _collapsedSearchFocus.unfocus();
                 });
               },
@@ -2948,22 +3044,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         ),
       ),
       onTap: () {
-        if (!isWide &&
-            _collapsedSearchController.isAttached &&
-            !_collapsedSearchController.isOpen) {
-          _collapsedSearchController.openView();
-        }
-        if (isWide) {
-          _collapsedSearchFocus.requestFocus();
-        }
+        _collapsedSearchFocus.requestFocus();
       },
       onChanged: (value) {
-        if (!isWide &&
-            _collapsedSearchController.isAttached &&
-            !_collapsedSearchController.isOpen) {
-          _collapsedSearchController.openView();
-        }
-        // Let ListenableBuilders handle the updates
+        // UI updates handled by ListenableBuilder now
       },
       trailing: [
         ListenableBuilder(
@@ -2987,68 +3071,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
     return Row(
       children: [
-        Expanded(
-          child: isWide
-              ? searchBar
-              : SearchAnchor(
-                  searchController: _collapsedSearchController,
-                  viewHintText: 'Where to?',
-                  viewTrailing: [
-                    ListenableBuilder(
-                      listenable: _collapsedSearchController,
-                      builder: (context, _) {
-                        if (_collapsedSearchController.text.isEmpty) {
-                          return const SizedBox.shrink();
-                        }
-                        return IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () {
-                            setState(() {
-                              _collapsedSearchController.clear();
-                            });
-                          },
-                        );
-                      },
-                    ),
-                  ],
-                  builder: (context, controller) => searchBar,
-                  suggestionsBuilder: (context, controller) {
-                    if (controller.text.isEmpty) {
-                      return [
-                        ServiceTabs(
-                          allStops: allStops,
-                          busStops: busStops,
-                          linePrefixes: linePrefixes,
-                          lineColors: lineColors,
-                          getLineName: _getLineName,
-                          getLineNames: _getLineNames,
-                          getServicePriority: _getServicePriority,
-                          onSelect: (stop) {
-                            controller.closeView(stop.name);
-                            _handleCollapsedStopSelection(stop);
-                          },
-                        ),
-                      ];
-                    }
-
-                    final results = _filterStops(controller.text);
-                    if (results.isEmpty) {
-                      return [
-                        const ListTile(
-                          leading: Icon(Icons.search_off),
-                          title: Text('No stations found'),
-                        ),
-                      ];
-                    }
-                    return results.map(
-                      (stop) => _buildSearchSuggestionTile(stop, () {
-                        controller.closeView(stop.name);
-                        _handleCollapsedStopSelection(stop);
-                      }),
-                    );
-                  },
-                ),
-        ),
+        Expanded(child: searchBar),
         const SizedBox(width: 8),
         _expandHeaderButton(),
       ],
@@ -3327,8 +3350,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   }) {
     final theme = Theme.of(context);
     final controller = asStart ? _startSearchController : _destSearchController;
-
-    final isWide = MediaQuery.of(context).size.width > 600;
     final focusNode = asStart ? _startSearchFocus : _destSearchFocus;
 
     final trailingWidgets = <Widget>[
@@ -3353,24 +3374,19 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
     final searchBar = SearchBar(
       controller: controller,
-      focusNode: isWide ? focusNode : null,
+      focusNode: focusNode,
       constraints: const BoxConstraints(minHeight: 48, maxHeight: 48),
       leading: ListenableBuilder(
         listenable: Listenable.merge([controller, focusNode]),
         builder: (context, _) {
-          final isActive =
-              controller.text.isNotEmpty ||
-              focusNode.hasFocus ||
-              (controller.isAttached && controller.isOpen);
+          final isActive = controller.text.isNotEmpty || focusNode.hasFocus;
+
           if (isActive) {
             return IconButton(
               icon: const Icon(Icons.arrow_back),
               onPressed: () {
                 setState(() {
                   controller.clear();
-                  if (controller.isAttached && controller.isOpen) {
-                    controller.closeView('');
-                  }
                   focusNode.unfocus();
                   if (asStart) {
                     selectedStartStopId = null;
@@ -3415,86 +3431,15 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         ),
       ),
       onTap: () {
-        if (!isWide && controller.isAttached && !controller.isOpen) {
-          controller.openView();
-        }
-        if (isWide) {
-          focusNode.requestFocus();
-        }
+        focusNode.requestFocus();
       },
       onChanged: (value) {
-        if (!isWide && controller.isAttached && !controller.isOpen) {
-          controller.openView();
-        }
         // UI updates handled by ListenableBuilder now
       },
       trailing: trailingWidgets,
     );
 
-    return isWide
-        ? SizedBox(height: 48, child: searchBar)
-        : SearchAnchor(
-            dividerColor: Colors.transparent,
-            isFullScreen: true,
-            searchController: controller,
-            viewHintText: 'Search $label',
-            viewTrailing: [
-              ListenableBuilder(
-                listenable: controller,
-                builder: (context, _) {
-                  if (controller.text.isEmpty) {
-                    return const SizedBox.shrink();
-                  }
-                  return IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () {
-                      setState(() {
-                        controller.clear();
-                      });
-                    },
-                  );
-                },
-              ),
-            ],
-            builder: (context, ctrl) => SizedBox(height: 48, child: searchBar),
-            suggestionsBuilder: (context, ctrl) {
-              if (ctrl.text.isEmpty) {
-                return [
-                  ServiceTabs(
-                    allStops: allStops,
-                    busStops: busStops,
-                    linePrefixes: linePrefixes,
-                    lineColors: lineColors,
-                    getLineName: _getLineName,
-                    getLineNames: _getLineNames,
-                    getServicePriority: _getServicePriority,
-                    onSelect: (stop) {
-                      ctrl.closeView(stop.name);
-                      _selectStopFromSearch(stop, asStart: asStart);
-                    },
-                  ),
-                ];
-              }
-
-              final results = _filterStops(ctrl.text);
-              if (results.isEmpty) {
-                return [
-                  const ListTile(
-                    leading: Icon(Icons.search_off),
-                    title: Text('No stations found'),
-                  ),
-                ];
-              }
-              return results
-                  .map(
-                    (stop) => _buildSearchSuggestionTile(stop, () {
-                      ctrl.closeView(stop.name);
-                      _selectStopFromSearch(stop, asStart: asStart);
-                    }),
-                  )
-                  .toList();
-            },
-          );
+    return SizedBox(height: 48, child: searchBar);
   }
 
   bool _isStopMetro(gtfs.Stop stop) {
@@ -4667,44 +4612,82 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       child: body,
     );
 
-    return Scaffold(
-      extendBody: true,
-      backgroundColor: theme.colorScheme.surface,
-      body: (isWideLayout && showNav)
-          ? Row(
-              children: [
-                NavigationRail(
-                  selectedIndex: _selectedNavIndex,
-                  onDestinationSelected: (index) {
-                    setState(() => _selectedNavIndex = index);
-                  },
-                  labelType: NavigationRailLabelType.all,
-                  destinations: const [
-                    NavigationRailDestination(
-                      icon: Icon(Icons.home_outlined),
-                      selectedIcon: Icon(Icons.home_rounded),
-                      label: Text('Home'),
-                    ),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.campaign_outlined),
-                      selectedIcon: Icon(Icons.campaign),
-                      label: Text('Updates'),
-                    ),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.more_horiz),
-                      selectedIcon: Icon(Icons.more),
-                      label: Text('More'),
-                    ),
-                  ],
-                ),
-                const VerticalDivider(thickness: 1, width: 1),
-                Expanded(child: bodyContent),
-              ],
-            )
-          : bodyContent,
-      bottomNavigationBar: (!isWideLayout && showNav)
-          ? _buildNavigationBar()
-          : null,
+    return PopScope(
+      canPop:
+          directionOptions.isEmpty &&
+          _viewingStop == null &&
+          !_collapsedSearchFocus.hasFocus &&
+          !_startSearchFocus.hasFocus &&
+          !_destSearchFocus.hasFocus &&
+          _collapsedSearchController.text.isEmpty,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        setState(() {
+          if (_collapsedSearchFocus.hasFocus ||
+              _startSearchFocus.hasFocus ||
+              _destSearchFocus.hasFocus) {
+            _collapsedSearchFocus.unfocus();
+            _startSearchFocus.unfocus();
+            _destSearchFocus.unfocus();
+          } else if (_collapsedSearchController.text.isNotEmpty) {
+            _collapsedSearchController.clear();
+          } else if (_viewingStop != null) {
+            _viewingStop = null;
+          } else if (directionOptions.isNotEmpty ||
+              _startSearchController.text.isNotEmpty ||
+              _destSearchController.text.isNotEmpty) {
+            _startSearchController.clear();
+            _destSearchController.clear();
+            selectedStartStopId = null;
+            selectedDestinationStopId = null;
+            _customStartPoint = null;
+            _customDestPoint = null;
+            directionOptions.clear();
+            selectedDirectionIndex = 0;
+            _headerCollapsed.value = false;
+            _recalculateMapLayers();
+          }
+        });
+      },
+      child: Scaffold(
+        extendBody: true,
+        backgroundColor: theme.colorScheme.surface,
+        body: (isWideLayout && showNav)
+            ? Row(
+                children: [
+                  NavigationRail(
+                    selectedIndex: _selectedNavIndex,
+                    onDestinationSelected: (index) {
+                      setState(() => _selectedNavIndex = index);
+                    },
+                    labelType: NavigationRailLabelType.all,
+                    destinations: const [
+                      NavigationRailDestination(
+                        icon: Icon(Icons.home_outlined),
+                        selectedIcon: Icon(Icons.home_rounded),
+                        label: Text('Home'),
+                      ),
+                      NavigationRailDestination(
+                        icon: Icon(Icons.campaign_outlined),
+                        selectedIcon: Icon(Icons.campaign),
+                        label: Text('Updates'),
+                      ),
+                      NavigationRailDestination(
+                        icon: Icon(Icons.more_horiz),
+                        selectedIcon: Icon(Icons.more),
+                        label: Text('More'),
+                      ),
+                    ],
+                  ),
+                  const VerticalDivider(thickness: 1, width: 1),
+                  Expanded(child: bodyContent),
+                ],
+              )
+            : bodyContent,
+        bottomNavigationBar: (!isWideLayout && showNav)
+            ? _buildNavigationBar()
+            : null,
+      ),
     );
   }
 

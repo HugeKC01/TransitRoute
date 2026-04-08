@@ -2,6 +2,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../services/gtfs_models.dart' as gtfs;
 
+import 'custom_dropdown.dart';
+
 class ServiceTabs extends StatefulWidget {
   final List<gtfs.Stop> allStops;
   final List<gtfs.Stop> busStops;
@@ -249,50 +251,21 @@ class _ServiceTabsState extends State<ServiceTabs>
       children: [
         if (lines.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: DropdownButton<String?>(
-              isExpanded: true,
-              value: effectiveSelectedLine,
-              underline: Container(
-                height: 1,
-                color: Theme.of(context).colorScheme.outlineVariant,
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16.0,
+              vertical: 8.0,
+            ),
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              clipBehavior: Clip.antiAlias,
+              child: CustomInlineDropdown<String>(
+                value: effectiveSelectedLine,
+                items: lines,
+                itemLabel: (item) => item ?? 'All Lines',
+                itemColor: (item) => widget.lineColors[item] ?? Colors.grey,
+                onChanged: onLineChanged,
               ),
-              items: [
-                const DropdownMenuItem<String?>(
-                  value: null,
-                  child: Text(
-                    'All Lines',
-                    style: TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                ),
-                ...lines.map((line) {
-                  final color = widget.lineColors[line] ?? Colors.grey;
-                  return DropdownMenuItem<String?>(
-                    value: line,
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 20,
-                          height: 20,
-                          margin: const EdgeInsets.only(right: 12),
-                          decoration: BoxDecoration(
-                            color: color,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        Expanded(
-                          child: Text(
-                            line,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w500),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
-              ],
-              onChanged: onLineChanged,
             ),
           ),
         Expanded(
