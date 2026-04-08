@@ -199,9 +199,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   }
 
   late final SearchController _startSearchController;
+  late final FocusNode _startSearchFocus;
   static bool _hasShownWelcome = false;
   late final SearchController _destSearchController;
+  late final FocusNode _destSearchFocus;
   late final SearchController _collapsedSearchController;
+  late final FocusNode _collapsedSearchFocus;
   int _selectedNavIndex = 0;
   Profile _profile = const Profile(
     username: 'User',
@@ -923,7 +926,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       polylines.add(
         Polyline(
           points: [stopPoint, bestProj],
-          color: color.withValues(alpha: color.a == 0.2 ? 1.0 : 0.5), // Retain original offset trace
+          color: color.withValues(
+            alpha: color.a == 0.2 ? 1.0 : 0.5,
+          ), // Retain original offset trace
           strokeWidth: 3.0,
         ),
       );
@@ -2226,7 +2231,13 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
   Widget _buildWideLayout(BuildContext context, Widget headerOverlay) {
     final width = MediaQuery.of(context).size.width;
-    final hasPanelContent = directionOptions.isNotEmpty || _viewingStop != null;
+    final isWideSearching = _headerCollapsed.value && (_collapsedSearchFocus.hasFocus || _collapsedSearchController.text.isNotEmpty);
+    final isWideStartSearching = !_headerCollapsed.value && (_startSearchFocus.hasFocus || _startSearchController.text.isNotEmpty);
+    final isWideDestSearching = !_headerCollapsed.value && (_destSearchFocus.hasFocus || _destSearchController.text.isNotEmpty);
+    final isAnyWideSearching = isWideSearching || isWideStartSearching || isWideDestSearching;
+    
+    // If we have search results from the side panel, we want to show it. Wait, if viewingStop != null, the route planner obscures it. We switch between them.
+    final hasPanelContent = directionOptions.isNotEmpty || _viewingStop != null || isAnyWideSearching;
     // ensure the side panel is at least 320px wide so route options text does not overflow
     final panelWidth = math.max(340.0, math.min(400.0, width * 0.3));
     final theme = Theme.of(context);
@@ -2236,6 +2247,35 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       children: [
         // Map fills the entire background
         Positioned.fill(child: _buildMap(context)),
+
+        // Map blur when search is active
+        Positioned.fill(
+          child: ListenableBuilder(
+            listenable: Listenable.merge([
+              _collapsedSearchController,
+              _startSearchController,
+              _destSearchController,
+              _collapsedSearchFocus,
+              _startSearchFocus,
+              _destSearchFocus,
+            ]),
+            builder: (context, _) {
+              final isWide = MediaQuery.of(context).size.width > 600;
+              if ((!isWide && _collapsedSearchController.isAttached && _collapsedSearchController.isOpen) ||
+                  (!isWide && _startSearchController.isAttached && _startSearchController.isOpen) ||
+                  (!isWide && _destSearchController.isAttached && _destSearchController.isOpen) ||
+                  (isWide && (_collapsedSearchFocus.hasFocus || _collapsedSearchController.text.isNotEmpty || _startSearchFocus.hasFocus || _startSearchController.text.isNotEmpty || _destSearchFocus.hasFocus || _destSearchController.text.isNotEmpty))) {
+                return BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                  child: Container(
+                    color: Colors.black.withValues(alpha: 0.1),
+                  ),
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
 
         // Content on the left side
         Positioned(
@@ -2269,7 +2309,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   },
                   child: hasPanelContent
                       ? Padding(
-                          key: const ValueKey('panel_content'),
+                          key: ValueKey('panel_content_${isAnyWideSearching ? "search" : "route"}'),
                           padding: const EdgeInsets.only(top: 16.0),
                           child: Container(
                             decoration: BoxDecoration(
@@ -2324,13 +2364,15 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                                   ),
                                   child: Material(
                                     color: Colors.transparent,
-                                    child: ListView(
-                                      padding: const EdgeInsets.only(
-                                        bottom: 24,
-                                        top: 12,
+                                    child: isAnyWideSearching
+                                      ? (isWideSearching ? _buildWideSearchResults(context) : _buildWideDirectionSearchResults(context))
+                                      : ListView(
+                                        padding: const EdgeInsets.only(
+                                          bottom: 24,
+                                          top: 12,
+                                        ),
+                                        children: [_buildPanelContent(context)],
                                       ),
-                                      children: [_buildPanelContent(context)],
-                                    ),
                                   ),
                                 ),
                               ),
@@ -2357,6 +2399,35 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     return Stack(
       children: [
         Positioned.fill(child: _buildMap(context)),
+        
+        // Map blur when search is active
+        Positioned.fill(
+          child: ListenableBuilder(
+            listenable: Listenable.merge([
+              _collapsedSearchController,
+              _startSearchController,
+              _destSearchController,
+              _collapsedSearchFocus,
+              _startSearchFocus,
+              _destSearchFocus,
+            ]),
+            builder: (context, _) {
+              final isWide = MediaQuery.of(context).size.width > 600;
+              if ((!isWide && _collapsedSearchController.isAttached && _collapsedSearchController.isOpen) ||
+                  (!isWide && _startSearchController.isAttached && _startSearchController.isOpen) ||
+                  (!isWide && _destSearchController.isAttached && _destSearchController.isOpen) ||
+                  (isWide && (_collapsedSearchFocus.hasFocus || _collapsedSearchController.text.isNotEmpty || _startSearchFocus.hasFocus || _startSearchController.text.isNotEmpty || _destSearchFocus.hasFocus || _destSearchController.text.isNotEmpty))) {
+                return BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                  child: Container(
+                    color: Colors.black.withValues(alpha: 0.1),
+                  ),
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
         headerOverlay,
 
         // Drag sheet spanning full height but starting at initialSize
@@ -2650,97 +2721,190 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     );
   }
 
+  Widget _buildWideDirectionSearchResults(BuildContext context) {
+    final isStart = _startSearchFocus.hasFocus || _startSearchController.text.isNotEmpty;
+    final ctrl = isStart ? _startSearchController : _destSearchController;
+    final text = ctrl.text;
+
+    closeAndSelect(stop) {
+      if (isStart) _startSearchFocus.unfocus();
+      if (!isStart) _destSearchFocus.unfocus();
+      _selectStopFromSearch(stop, asStart: isStart);
+    }
+
+    if (text.isEmpty) {
+      return ServiceTabs(
+        allStops: allStops,
+        busStops: busStops,
+        linePrefixes: linePrefixes,
+        lineColors: lineColors,
+        getLineName: _getLineName,
+        getLineNames: _getLineNames,
+        getServicePriority: _getServicePriority,
+        onSelect: closeAndSelect,
+      );
+    }
+
+    final results = _filterStops(text);
+    if (results.isEmpty) {
+      return ListView(
+        shrinkWrap: true,
+        children: const [
+          ListTile(
+            leading: Icon(Icons.search_off),
+            title: Text('No stations found'),
+          ),
+        ],
+      );
+    }
+    return ListView(
+      shrinkWrap: true,
+      children: results.map((stop) => _buildSearchSuggestionTile(stop, () => closeAndSelect(stop))).toList(),
+    );
+  }
+
+  Widget _buildWideSearchResults(BuildContext context) {
+    final text = _collapsedSearchController.text;
+    if (text.isEmpty) {
+      return ServiceTabs(
+        allStops: allStops,
+        busStops: busStops,
+        linePrefixes: linePrefixes,
+        lineColors: lineColors,
+        getLineName: _getLineName,
+        getLineNames: _getLineNames,
+        getServicePriority: _getServicePriority,
+        onSelect: (stop) {
+          _collapsedSearchFocus.unfocus();
+          _handleCollapsedStopSelection(stop);
+        },
+      );
+    }
+
+    final results = _filterStops(text);
+    if (results.isEmpty) {
+      return ListView(
+        shrinkWrap: true,
+        children: const [
+          ListTile(
+            leading: Icon(Icons.search_off),
+            title: Text('No stations found'),
+          ),
+        ],
+      );
+    }
+    return ListView(
+      shrinkWrap: true,
+      children: results.map((stop) => _buildSearchSuggestionTile(stop, () {
+        _collapsedSearchFocus.unfocus();
+        _handleCollapsedStopSelection(stop);
+      })).toList(),
+    );
+  }
+
   Widget _buildCollapsedSearchBar(BuildContext context) {
     final theme = Theme.of(context);
+    final isWide = MediaQuery.of(context).size.width > 600;
+
+    final searchBar = SearchBar(
+      controller: _collapsedSearchController,
+      focusNode: isWide ? _collapsedSearchFocus : null,
+      constraints: const BoxConstraints(minHeight: 48, maxHeight: 48),
+      leading: Icon(Icons.search, color: theme.colorScheme.primary),
+      hintText: 'Where to?',
+      hintStyle: WidgetStatePropertyAll(
+        TextStyle(
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+          fontSize: 15,
+        ),
+      ),
+      padding: const WidgetStatePropertyAll(
+        EdgeInsets.symmetric(horizontal: 16),
+      ),
+      elevation: const WidgetStatePropertyAll<double>(0),
+      backgroundColor: WidgetStatePropertyAll(
+        theme.colorScheme.surface.withValues(alpha: 0.75),
+      ),
+      shape: WidgetStatePropertyAll(
+        RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(
+            color: Colors.white.withValues(alpha: 0.3),
+          ),
+        ),
+      ),
+      onTap: () {
+        if (!isWide && _collapsedSearchController.isAttached && !_collapsedSearchController.isOpen) {
+          _collapsedSearchController.openView();
+        }
+        if (isWide) {
+          _collapsedSearchFocus.requestFocus();
+        }
+      },
+      onChanged: (value) {
+        if (!isWide && _collapsedSearchController.isAttached && !_collapsedSearchController.isOpen) {
+          _collapsedSearchController.openView();
+        }
+        setState(() {});
+      },
+      trailing: [
+        if (_collapsedSearchController.text.isNotEmpty)
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            tooltip: 'Clear search',
+            icon: const Icon(Icons.close, size: 20),
+            onPressed: () {
+              setState(_collapsedSearchController.clear);
+            },
+          ),
+      ],
+    );
+
     return Row(
       children: [
         Expanded(
-          child: SearchAnchor(
-            searchController: _collapsedSearchController,
-            viewHintText: 'Where to?',
-            builder: (context, controller) {
-              return SearchBar(
-                controller: controller,
-                constraints: const BoxConstraints(minHeight: 48, maxHeight: 48),
-                leading: Icon(Icons.search, color: theme.colorScheme.primary),
-                hintText: 'Where to?',
-                hintStyle: WidgetStatePropertyAll(
-                  TextStyle(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
-                    fontSize: 15,
-                  ),
-                ),
-                padding: const WidgetStatePropertyAll(
-                  EdgeInsets.symmetric(horizontal: 16),
-                ),
-                elevation: const WidgetStatePropertyAll<double>(0),
-                backgroundColor: WidgetStatePropertyAll(
-                  theme.colorScheme.surface.withValues(alpha: 0.75),
-                ),
-                shape: WidgetStatePropertyAll(
-                  RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    side: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.3),
-                    ),
-                  ),
-                ),
-                onTap: controller.openView,
-                onChanged: (value) {
-                  if (!controller.isOpen) {
-                    controller.openView();
+          child: isWide 
+            ? searchBar
+            : SearchAnchor(
+                searchController: _collapsedSearchController,
+                viewHintText: 'Where to?',
+                builder: (context, controller) => searchBar,
+                suggestionsBuilder: (context, controller) {
+                  if (controller.text.isEmpty) {
+                    return [
+                      ServiceTabs(
+                        allStops: allStops,
+                        busStops: busStops,
+                        linePrefixes: linePrefixes,
+                        lineColors: lineColors,
+                        getLineName: _getLineName,
+                        getLineNames: _getLineNames,
+                        getServicePriority: _getServicePriority,
+                        onSelect: (stop) {
+                          controller.closeView(stop.name);
+                          _handleCollapsedStopSelection(stop);
+                        },
+                      ),
+                    ];
                   }
-                  setState(() {});
-                },
-                trailing: [
-                  if (controller.text.isNotEmpty)
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      tooltip: 'Clear search',
-                      icon: const Icon(Icons.close, size: 20),
-                      onPressed: () {
-                        setState(controller.clear);
-                      },
-                    ),
-                ],
-              );
-            },
-            suggestionsBuilder: (context, controller) {
-              if (controller.text.isEmpty) {
-                return [
-                  ServiceTabs(
-                    allStops: allStops,
-                    busStops: busStops,
-                    linePrefixes: linePrefixes,
-                    lineColors: lineColors,
-                    getLineName: _getLineName,
-                    getLineNames: _getLineNames,
-                    getServicePriority: _getServicePriority,
-                    onSelect: (stop) {
+
+                  final results = _filterStops(controller.text);
+                  if (results.isEmpty) {
+                    return [
+                      const ListTile(
+                        leading: Icon(Icons.search_off),
+                        title: Text('No stations found'),
+                      ),
+                    ];
+                  }
+                  return results.map(
+                    (stop) => _buildSearchSuggestionTile(stop, () {
                       controller.closeView(stop.name);
                       _handleCollapsedStopSelection(stop);
-                    },
-                  ),
-                ];
-              }
-
-              final results = _filterStops(controller.text);
-              if (results.isEmpty) {
-                return [
-                  const ListTile(
-                    leading: Icon(Icons.search_off),
-                    title: Text('No stations found'),
-                  ),
-                ];
-              }
-              return results.map(
-                (stop) => _buildSearchSuggestionTile(stop, () {
-                  controller.closeView(stop.name);
-                  _handleCollapsedStopSelection(stop);
-                }),
-              );
-            },
-          ),
+                    }),
+                  );
+                },
+              ),
         ),
         const SizedBox(width: 8),
         _expandHeaderButton(),
@@ -3021,121 +3185,134 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     final theme = Theme.of(context);
     final controller = asStart ? _startSearchController : _destSearchController;
 
-    return SearchAnchor(
-      searchController: controller,
-      viewHintText: 'Search $label',
-      builder: (context, ctrl) {
-        final trailingWidgets = <Widget>[];
-        if (ctrl.text.isNotEmpty) {
-          trailingWidgets.add(
-            IconButton(
-              visualDensity: VisualDensity.compact,
-              tooltip: 'Clear $label',
-              icon: const Icon(Icons.close, size: 18),
-              onPressed: () {
-                setState(() {
-                  ctrl.clear();
-                  if (asStart) {
-                    selectedStartStopId = null;
-                    _customStartPoint = null;
-                  } else {
-                    selectedDestinationStopId = null;
-                    _customDestPoint = null;
-                  }
-                  directionOptions = [];
-                  selectedDirectionIndex = 0;
-                  _headerCollapsed.value = false;
-                  _recalculateMapLayers();
-                });
-              },
-            ),
-          );
-        }
-        if (trailingAction != null) {
-          trailingWidgets.add(trailingAction);
-        }
-        return SizedBox(
-          height: 48,
-          child: SearchBar(
-            controller: ctrl,
-            constraints: const BoxConstraints(minHeight: 48, maxHeight: 48),
-            leading: Icon(
-              icon,
-              size: 20,
-              color: iconColor ?? theme.colorScheme.onSurfaceVariant,
-            ),
-            hintText: 'Search $label',
-            hintStyle: WidgetStatePropertyAll(
-              TextStyle(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
-                fontSize: 14,
-              ),
-            ),
-            textStyle: WidgetStatePropertyAll(
-              TextStyle(color: theme.colorScheme.onSurface, fontSize: 15),
-            ),
-            padding: const WidgetStatePropertyAll(
-              EdgeInsets.symmetric(horizontal: 12),
-            ),
-            elevation: const WidgetStatePropertyAll<double>(0),
-            backgroundColor: WidgetStatePropertyAll(
-              theme.colorScheme.surface.withValues(alpha: 0.75),
-            ),
-            shape: WidgetStatePropertyAll(
-              RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: BorderSide(
-                  color: theme.colorScheme.outline.withValues(alpha: 0.3),
-                ),
-              ),
-            ),
-            onTap: ctrl.openView,
-            onChanged: (value) {
-              if (!ctrl.isOpen) {
-                ctrl.openView();
-              }
-              setState(() {});
-            },
-            trailing: trailingWidgets,
-          ),
-        );
-      },
-      suggestionsBuilder: (context, ctrl) {
-        if (ctrl.text.isEmpty) {
-          return [
-            ServiceTabs(
-              allStops: allStops,
-              busStops: busStops,
-              linePrefixes: linePrefixes,
-              lineColors: lineColors,
-              getLineName: _getLineName,
-              getLineNames: _getLineNames,
-              getServicePriority: _getServicePriority,
-              onSelect: (stop) {
-                ctrl.closeView(stop.name);
-                _selectStopFromSearch(stop, asStart: asStart);
-              },
-            ),
-          ];
-        }
+    final isWide = MediaQuery.of(context).size.width > 600;
+    final focusNode = asStart ? _startSearchFocus : _destSearchFocus;
 
-        final results = _filterStops(ctrl.text);
-        if (results.isEmpty) {
-          return [
-            const ListTile(
-              leading: Icon(Icons.search_off),
-              title: Text('No stations found'),
-            ),
-          ];
+    final trailingWidgets = <Widget>[];
+    if (controller.text.isNotEmpty) {
+      trailingWidgets.add(
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          tooltip: 'Clear $label',
+          icon: const Icon(Icons.close, size: 18),
+          onPressed: () {
+            setState(() {
+              controller.clear();
+              if (asStart) {
+                selectedStartStopId = null;
+                _customStartPoint = null;
+              } else {
+                selectedDestinationStopId = null;
+                _customDestPoint = null;
+              }
+              directionOptions = [];
+              selectedDirectionIndex = 0;
+              _headerCollapsed.value = false;
+              _recalculateMapLayers();
+            });
+          },
+        ),
+      );
+    }
+    if (trailingAction != null) {
+      trailingWidgets.add(trailingAction);
+    }
+
+    final searchBar = SearchBar(
+      controller: controller,
+      focusNode: isWide ? focusNode : null,
+      constraints: const BoxConstraints(minHeight: 48, maxHeight: 48),
+      leading: Icon(
+        icon,
+        size: 20,
+        color: iconColor ?? theme.colorScheme.primary,
+      ),
+      hintText: 'Search $label',
+      hintStyle: WidgetStatePropertyAll(
+        TextStyle(
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+          fontSize: 15,
+        ),
+      ),
+      padding: const WidgetStatePropertyAll(
+        EdgeInsets.symmetric(horizontal: 16),
+      ),
+      elevation: const WidgetStatePropertyAll<double>(0),
+      backgroundColor: WidgetStatePropertyAll(
+        theme.colorScheme.surface.withValues(alpha: 0.75),
+      ),
+      shape: WidgetStatePropertyAll(
+        RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(
+            color: Colors.white.withValues(alpha: 0.3),
+          ),
+        ),
+      ),
+      onTap: () {
+        if (!isWide && controller.isAttached && !controller.isOpen) {
+          controller.openView();
         }
-        return results.map(
-          (stop) => _buildSearchSuggestionTile(stop, () {
-            ctrl.closeView(stop.name);
-            _selectStopFromSearch(stop, asStart: asStart);
-          }),
-        );
+        if (isWide) {
+          focusNode.requestFocus();
+        }
       },
+      onChanged: (value) {
+        if (!isWide && controller.isAttached && !controller.isOpen) {
+          controller.openView();
+        }
+        setState(() {});
+      },
+      trailing: trailingWidgets,
     );
+
+    return isWide 
+        ? SizedBox(height: 48, child: searchBar)
+        : SearchAnchor(
+            dividerColor: Colors.transparent,
+            isFullScreen: true,
+            searchController: controller,
+            viewHintText: 'Search $label',
+            builder: (context, ctrl) => SizedBox(
+              height: 48,
+              child: searchBar,
+            ),
+            suggestionsBuilder: (context, ctrl) {
+              if (ctrl.text.isEmpty) {
+                return [
+                  ServiceTabs(
+                    allStops: allStops,
+                    busStops: busStops,
+                    linePrefixes: linePrefixes,
+                    lineColors: lineColors,
+                    getLineName: _getLineName,
+                    getLineNames: _getLineNames,
+                    getServicePriority: _getServicePriority,
+                    onSelect: (stop) {
+                      ctrl.closeView(stop.name);
+                      _selectStopFromSearch(stop, asStart: asStart);
+                    },
+                  ),
+                ];
+              }
+
+              final results = _filterStops(ctrl.text);
+              if (results.isEmpty) {
+                return [
+                  const ListTile(
+                    leading: Icon(Icons.search_off),
+                    title: Text('No stations found'),
+                  ),
+                ];
+              }
+              return results.map(
+                (stop) => _buildSearchSuggestionTile(stop, () {
+                  ctrl.closeView(stop.name);
+                  _selectStopFromSearch(stop, asStart: asStart);
+                }),
+              ).toList();
+            },
+          );
   }
 
   bool _isStopMetro(gtfs.Stop stop) {
@@ -3297,8 +3474,17 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     _loadFavoritePins();
     _loadProfile();
     _startSearchController = SearchController();
+    _startSearchController.addListener(() => setState(() {}));
+    _startSearchFocus = FocusNode();
+    _startSearchFocus.addListener(() => setState(() {}));
     _destSearchController = SearchController();
+    _destSearchController.addListener(() => setState(() {}));
+    _destSearchFocus = FocusNode();
+    _destSearchFocus.addListener(() => setState(() {}));
     _collapsedSearchController = SearchController();
+    _collapsedSearchController.addListener(() => setState(() {}));
+    _collapsedSearchFocus = FocusNode();
+    _collapsedSearchFocus.addListener(() => setState(() {}));
     _directionService = DirectionService(lineNameResolver: _getLineName);
     _loadRoutesAndStops();
     _initLocationTracking();
@@ -3329,8 +3515,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     _routeHitNotifier.dispose();
     _headerCollapsed.dispose();
     _startSearchController.dispose();
+    _startSearchFocus.dispose();
     _destSearchController.dispose();
+    _destSearchFocus.dispose();
     _collapsedSearchController.dispose();
+    _collapsedSearchFocus.dispose();
+    _collapsedSearchFocus.dispose();
     _locationSub?.cancel();
     super.dispose();
   }

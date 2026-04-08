@@ -1,4 +1,5 @@
-import 'dart:ui';
+with open('lib/widgets/search_tabs.dart', 'w') as f:
+    f.write("""import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../services/gtfs_models.dart' as gtfs;
 
@@ -112,12 +113,7 @@ class _ServiceTabsState extends State<ServiceTabs>
     return grouped;
   }
 
-  Widget _buildStopTile(
-    BuildContext context,
-    gtfs.Stop stop,
-    String lineName, [
-    int serviceType = 3,
-  ]) {
+  Widget _buildStopTile(BuildContext context, gtfs.Stop stop, String lineName, [int serviceType = 3]) {
     final lineColor = widget.lineColors[lineName] ?? Colors.grey;
     final theme = Theme.of(context);
 
@@ -147,53 +143,36 @@ class _ServiceTabsState extends State<ServiceTabs>
             child: InkWell(
               onTap: () => widget.onSelect(stop),
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16.0,
-                  vertical: 12.0,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
                 child: Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
                         color: lineColor,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: theme.colorScheme.surface.withValues(
-                            alpha: 0.5,
-                          ),
-                          width: 1.5,
-                        ),
+                        border: Border.all(color: theme.colorScheme.surface.withValues(alpha: 0.5), width: 1.5),
                         boxShadow: [
                           BoxShadow(
                             color: lineColor.withValues(alpha: 0.3),
                             blurRadius: 6,
                             offset: const Offset(0, 2),
                           ),
-                        ],
+                        ]
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Icon(
-                            getIconForType(serviceType),
-                            color: (lineColor.computeLuminance() > 0.5)
-                                ? Colors.black87
-                                : Colors.white,
-                            size: 16,
-                          ),
+                          Icon(getIconForType(serviceType), 
+                               color: (lineColor.computeLuminance() > 0.5) ? Colors.black87 : Colors.white,
+                               size: 16),
                           if (stop.code != null && stop.code!.isNotEmpty) ...[
                             const SizedBox(width: 4),
                             Text(
                               stop.code!,
                               style: TextStyle(
-                                color: (lineColor.computeLuminance() > 0.5)
-                                    ? Colors.black87
-                                    : Colors.white,
+                                color: (lineColor.computeLuminance() > 0.5) ? Colors.black87 : Colors.white,
                                 fontWeight: FontWeight.w700,
                                 fontSize: 13,
                               ),
@@ -209,14 +188,10 @@ class _ServiceTabsState extends State<ServiceTabs>
                         children: [
                           Text(
                             stop.name,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                            ),
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                             overflow: TextOverflow.ellipsis,
                           ),
-                          if (stop.thaiName != null &&
-                              stop.thaiName!.isNotEmpty)
+                          if (stop.thaiName != null && stop.thaiName!.isNotEmpty)
                             Text(
                               stop.thaiName!,
                               style: theme.textTheme.bodySmall?.copyWith(
@@ -371,12 +346,7 @@ class _ServiceTabsState extends State<ServiceTabs>
                         ],
                       );
                     } else if (item.stop != null) {
-                      return _buildStopTile(
-                        context,
-                        item.stop!,
-                        item.line,
-                        widget.getServicePriority(item.stop!),
-                      );
+                      return _buildStopTile(context, item.stop!, item.line, widget.getServicePriority(item.stop!));
                     }
 
                     return const SizedBox.shrink();
@@ -451,9 +421,22 @@ class _ServiceTabsState extends State<ServiceTabs>
       ),
     );
 
-    return Padding(
-      padding: const EdgeInsets.only(top: 8.0, bottom: 16.0),
-      child: mainContent,
+    return Align(
+      alignment: isWideWindow ? Alignment.topLeft : Alignment.center,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: isWideWindow ? 400 : double.infinity,
+        ),
+        child: Padding(
+          padding: EdgeInsets.only(
+             left: isWideWindow ? 24.0 : 0, 
+             top: 8.0,
+             bottom: 16.0
+          ),
+          child: mainContent,
+        ),
+      ),
     );
   }
 }
+""")
