@@ -293,6 +293,13 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   List<Polyline<int>> _cachedShapePolylines = [];
   Set<String> _routeStopIds = {};
 
+  List<Polyline<int>> _cachedActiveDirectionPolylines = [];
+  Map<int, List<Polyline<int>>> _cachedInactiveDirectionPolylines = {};
+
+  final Map<String, bool> _isTrainCache = {};
+  final Map<String, bool> _isMetroCache = {};
+  final Map<String, String?> _routeIconCache = {};
+
   LocationData? _userLocation;
   StreamSubscription<LocationData>? _locationSub;
 
@@ -310,15 +317,21 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     return [];
   }
 
+  final Map<String, String?> _lineNameCache = {};
   String? _getLineName(String stopId) {
+    if (_lineNameCache.containsKey(stopId)) return _lineNameCache[stopId];
     if (stopId.startsWith('ST_') || stopId.startsWith('STOP_')) {
+      _lineNameCache[stopId] = 'BMTA Bus';
       return 'BMTA Bus';
     }
     if (_stopToLinesMap.containsKey(stopId) &&
         _stopToLinesMap[stopId]!.isNotEmpty) {
       final lines = _stopToLinesMap[stopId]!.toList()..sort();
-      return lines.join(', ');
+      final name = lines.join(', ');
+      _lineNameCache[stopId] = name;
+      return name;
     }
+    _lineNameCache[stopId] = null;
     return null;
   }
 
@@ -480,17 +493,24 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     }
   }
 
+  final Map<String, Color> _lineColorCache = {};
   Color _getLineColor(String stopId) {
+    if (_lineColorCache.containsKey(stopId)) return _lineColorCache[stopId]!;
     final lineName = _getLineName(stopId);
     if (lineName != null) {
       if (lineColors.containsKey(lineName)) {
-        return lineColors[lineName]!;
+        final col = lineColors[lineName]!;
+        _lineColorCache[stopId] = col;
+        return col;
       }
       final firstLine = lineName.split(', ').first;
       if (lineColors.containsKey(firstLine)) {
-        return lineColors[firstLine]!;
+        final col = lineColors[firstLine]!;
+        _lineColorCache[stopId] = col;
+        return col;
       }
     }
+    _lineColorCache[stopId] = Colors.purple;
     return Colors.purple;
   }
 
@@ -507,22 +527,46 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
   String? _getRouteIcon(String lineName) {
     if (lineName.isEmpty) return null;
+    if (_routeIconCache.containsKey(lineName)) return _routeIconCache[lineName];
     final firstLine = lineName.split(', ').first;
     try {
       final route = allRoutes.firstWhere(
         (r) => r.shortName == firstLine || r.longName == firstLine,
       );
-      return route.routeIcon;
+      final icon = route.routeIcon;
+      _routeIconCache[lineName] = icon;
+      return icon;
     } catch (e) {
+      _routeIconCache[lineName] = null;
       return null;
     }
   }
 
-  Polyline<int> _linePolyline(LatLng from, LatLng to, Color color, {int? hitValue, bool isActive = true}) {
-    return Polyline<int>(hitValue: hitValue, points: [from, to], color: color, strokeWidth: 6.0);
+  Polyline<int> _linePolyline(
+    LatLng from,
+    LatLng to,
+    Color color, {
+    int? hitValue,
+    bool isActive = true,
+    Color? borderColor,
+  }) {
+    return Polyline<int>(
+      hitValue: hitValue,
+      points: [from, to],
+      color: color,
+      borderStrokeWidth: isActive ? 0.0 : 2.0,
+      borderColor: isActive
+          ? Colors.transparent
+          : borderColor ?? Colors.transparent,
+      strokeWidth: isActive ? 6.0 : 4.0,
+    );
   }
 
-  List<Polyline<int>> _buildRoutePolylines(List<RouteSegment> segments, {int? hitValue, bool isActive = true}) {
+  List<Polyline<int>> _buildRoutePolylines(
+    List<RouteSegment> segments, {
+    int? hitValue,
+    bool isActive = true,
+  }) {
     final polylines = <Polyline<int>>[];
     for (final segment in segments) {
       if (segment.mode == TravelMode.walk ||
@@ -579,26 +623,35 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
         if (isTrainSegment) {
           polylines.add(
-            Polyline(
+            Polyline<int>(
+              hitValue: hitValue,
               points: points,
-              color: const Color(0xFF6B4226),
+              color: isActive ? const Color(0xFF6B4226) : Colors.grey,
+              borderStrokeWidth: isActive ? 0.0 : 2.0,
+              borderColor: isActive
+                  ? Colors.transparent
+                  : const Color(0xFF6B4226),
               strokeWidth: 7.0,
             ),
           );
           polylines.add(
-            Polyline(
+            Polyline<int>(
+              hitValue: hitValue,
               points: points,
-              color: Colors.white,
+              color: isActive ? Colors.white : Colors.grey.shade300,
               strokeWidth: 4.0,
               pattern: StrokePattern.dashed(segments: [10.0, 10.0]),
             ),
           );
         } else {
           polylines.add(
-            Polyline(
+            Polyline<int>(
+              hitValue: hitValue,
               points: points,
-              color: isActive ? lineColor : lineColor.withValues(alpha: 0.2),
-              strokeWidth: isActive ? width : (width * 0.7),
+              color: isActive ? lineColor : Colors.grey,
+              borderStrokeWidth: isActive ? 0.0 : 2.0,
+              borderColor: isActive ? Colors.transparent : lineColor,
+              strokeWidth: isActive ? width : 4.0,
               pattern: pattern ?? const StrokePattern.solid(),
             ),
           );
@@ -631,9 +684,29 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           final stopA = route[i - 1].stopId;
           final stopB = route[i].stopId;
 
+          final targetId = segment.routeId ?? lineName.split(' ').first;
+          final exactShapeId = segment.shapeId;
+
+          List<ShapeSegment> validShapes = [];
+          if (exactShapeId != null && exactShapeId.isNotEmpty) {
+            validShapes = shapeSegments
+                .where((s) => s.shapeId == exactShapeId)
+                .toList();
+          }
+          if (validShapes.isEmpty && targetId.isNotEmpty) {
+            validShapes = shapeSegments
+                .where(
+                  (s) => s.routeId == targetId || s.shapeId.contains(targetId),
+                )
+                .toList();
+          }
+          if (validShapes.isEmpty) {
+            validShapes = shapeSegments;
+          }
+
           bool foundShape = false;
           // Look for a shape that connects stopA and stopB
-          for (final shape in shapeSegments) {
+          for (final shape in validShapes) {
             final aLocs = <int>[];
             final bLocs = <int>[];
             for (int k = 0; k < shape.pointNames.length; k++) {
@@ -665,10 +738,13 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                 shapePoints = shapePoints.reversed.toList();
               }
               polylines.add(
-                Polyline(
+                Polyline<int>(
+                  hitValue: hitValue,
                   points: shapePoints,
-                  color: isActive ? lineColor : lineColor.withValues(alpha: 0.2),
-                  strokeWidth: 6.0,
+                  color: isActive ? lineColor : Colors.grey,
+                  borderStrokeWidth: isActive ? 0.0 : 2.0,
+                  borderColor: isActive ? Colors.transparent : lineColor,
+                  strokeWidth: isActive ? 6.0 : 4.0,
                 ),
               );
               foundShape = true;
@@ -676,8 +752,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             }
           } // Geometric fallback for buses
           if (!foundShape) {
-            final targetId = segment.routeId ?? lineName.split(' ').first;
-            final exactShapeId = segment.shapeId;
+            // targetId and exactShapeId already computed
             if (exactShapeId != null && exactShapeId.isNotEmpty) {
               final exactMatch = shapeSegments
                   .where((s) => s.shapeId == exactShapeId)
@@ -726,10 +801,13 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   }
 
                   polylines.add(
-                    Polyline(
+                    Polyline<int>(
+                      hitValue: hitValue,
                       points: shapePoints,
-                      color: isActive ? lineColor : lineColor.withValues(alpha: 0.2),
-                      strokeWidth: 6.0,
+                      color: isActive ? lineColor : Colors.grey,
+                      borderStrokeWidth: isActive ? 0.0 : 2.0,
+                      borderColor: isActive ? Colors.transparent : lineColor,
+                      strokeWidth: isActive ? 6.0 : 4.0,
                     ),
                   );
                   foundShape = true;
@@ -783,10 +861,13 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   }
 
                   polylines.add(
-                    Polyline(
+                    Polyline<int>(
+                      hitValue: hitValue,
                       points: shapePoints,
-                      color: isActive ? lineColor : lineColor.withValues(alpha: 0.2),
-                      strokeWidth: 6.0,
+                      color: isActive ? lineColor : Colors.grey,
+                      borderStrokeWidth: isActive ? 0.0 : 2.0,
+                      borderColor: isActive ? Colors.transparent : lineColor,
+                      strokeWidth: isActive ? 6.0 : 4.0,
                     ),
                   );
                   foundShape = true;
@@ -799,12 +880,13 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           if (!foundShape) {
             polylines.add(
               _linePolyline(
-                  LatLng(route[i - 1].lat, route[i - 1].lon),
-                  LatLng(route[i].lat, route[i].lon),
-                  lineColor,
-                  hitValue: hitValue,
-                  isActive: isActive,
-                ),
+                LatLng(route[i - 1].lat, route[i - 1].lon),
+                LatLng(route[i].lat, route[i].lon),
+                isActive ? lineColor : Colors.grey,
+                hitValue: hitValue,
+                isActive: isActive,
+                borderColor: lineColor,
+              ),
             );
           }
         }
@@ -841,7 +923,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       polylines.add(
         Polyline(
           points: [stopPoint, bestProj],
-          color: color.withValues(alpha: 0.5),
+          color: color.withValues(alpha: color.a == 0.2 ? 1.0 : 0.5), // Retain original offset trace
           strokeWidth: 3.0,
         ),
       );
@@ -1152,6 +1234,11 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       final tempText = _startSearchController.text;
       _startSearchController.text = _destSearchController.text;
       _destSearchController.text = tempText;
+
+      directionOptions = [];
+      selectedDirectionIndex = 0;
+      _recalculateMapLayers();
+
       if (selectedStartStopId != null ||
           selectedDestinationStopId != null ||
           _customStartPoint != null ||
@@ -1327,6 +1414,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               _selectedSortMode = newMode;
               _sortDirectionOptions();
               selectedDirectionIndex = 0;
+              _recalculateMapLayers();
             });
           }
         },
@@ -1402,6 +1490,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       final isTrain = _isStopTrain(stop);
       final isMetro = _isStopMetro(stop);
 
+      if (activeSegments.isNotEmpty &&
+          !_routeStopIds.contains(stop.stopId) &&
+          stop.stopId != startId &&
+          stop.stopId != destId)
+        return false;
+
       if (isTrain && !_showTrainPins) return false;
       if (isMetro && !_showMetroPins) return false;
       if (!isTrain && !isMetro) {
@@ -1438,7 +1532,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             onMapEvent: (event) {
               final newZoom = event.camera.zoom;
               _currentCenter = event.camera.center;
-              if ((newZoom - _currentZoom).abs() > 0.05) {
+              final wasShowingBus = _currentZoom >= _busStopZoomThreshold;
+              final nowShowingBus = newZoom >= _busStopZoomThreshold;
+              if (wasShowingBus != nowShowingBus ||
+                  (newZoom.round() - _currentZoom.round()).abs() >= 1) {
                 setState(() => _currentZoom = newZoom);
               }
             },
@@ -1455,10 +1552,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             ),
             if (shapeSegments.isNotEmpty)
               PolylineLayer(polylines: _cachedShapePolylines),
-            if (showBusStops)
-              MarkerLayer(markers: _cachedBusMarkers),
-            if (showFerryStops)
-              MarkerLayer(markers: _cachedFerryMarkers),
+            if (showBusStops) MarkerLayer(markers: _cachedBusMarkers),
+            if (showFerryStops) MarkerLayer(markers: _cachedFerryMarkers),
             if (filteredRailStops.isNotEmpty)
               MarkerLayer(
                 markers: filteredRailStops.map((stop) {
@@ -1532,7 +1627,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                                       : (stop.stopId == destId)
                                       ? Colors.redAccent.withValues(alpha: 0.85)
                                       : (activeSegments.isNotEmpty &&
-                                            !_routeStopIds.contains(stop.stopId))
+                                            !_routeStopIds.contains(
+                                              stop.stopId,
+                                            ))
                                       ? Colors.grey.shade300
                                       : Colors.white,
                                   shape: BoxShape.circle,
@@ -1632,28 +1729,19 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   ),
                 ],
               ),
-            
-              if (directionOptions.isNotEmpty)
-                for (int i = 0; i < directionOptions.length; i++)
-                  if (i != selectedDirectionIndex)
-                    PolylineLayer<int>(
-                      hitNotifier: _routeHitNotifier,
-                      polylines: _buildRoutePolylines(
-                        directionOptions[i].segments,
-                        hitValue: i,
-                        isActive: false,
-                      ),
-                    ),
 
-              if (directionOptions.isNotEmpty && selectedDirectionIndex < directionOptions.length)
+            if (_cachedInactiveDirectionPolylines.isNotEmpty)
+              for (final entry in _cachedInactiveDirectionPolylines.entries)
                 PolylineLayer<int>(
                   hitNotifier: _routeHitNotifier,
-                  polylines: _buildRoutePolylines(
-                    directionOptions[selectedDirectionIndex].segments,
-                    hitValue: selectedDirectionIndex,
-                    isActive: true,
-                  ),
+                  polylines: entry.value,
                 ),
+
+            if (_cachedActiveDirectionPolylines.isNotEmpty)
+              PolylineLayer<int>(
+                hitNotifier: _routeHitNotifier,
+                polylines: _cachedActiveDirectionPolylines,
+              ),
 
             const RichAttributionWidget(
               attributions: [
@@ -1671,7 +1759,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              _buildFilterMenu(isWide),
+              if (directionOptions.isEmpty) _buildFilterMenu(isWide),
               const SizedBox(height: 16),
               Container(
                 decoration: BoxDecoration(
@@ -2957,6 +3045,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   directionOptions = [];
                   selectedDirectionIndex = 0;
                   _headerCollapsed.value = false;
+                  _recalculateMapLayers();
                 });
               },
             ),
@@ -3050,6 +3139,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   }
 
   bool _isStopMetro(gtfs.Stop stop) {
+    if (_isMetroCache.containsKey(stop.stopId))
+      return _isMetroCache[stop.stopId]!;
     final lineNames = _stopToLinesMap[stop.stopId];
     if (lineNames != null) {
       for (final lName in lineNames) {
@@ -3061,14 +3152,18 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             )
             .firstOrNull;
         if (route?.type == '1') {
+          _isMetroCache[stop.stopId] = true;
           return true;
         }
       }
     }
+    _isMetroCache[stop.stopId] = false;
     return false;
   }
 
   bool _isStopTrain(gtfs.Stop stop) {
+    if (_isTrainCache.containsKey(stop.stopId))
+      return _isTrainCache[stop.stopId]!;
     final lineNames = _stopToLinesMap[stop.stopId];
     if (lineNames != null) {
       for (final lName in lineNames) {
@@ -3080,10 +3175,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             )
             .firstOrNull;
         if (route?.type == '2') {
+          _isTrainCache[stop.stopId] = true;
           return true;
         }
       }
     }
+    _isTrainCache[stop.stopId] = false;
     return false;
   }
 
@@ -3193,9 +3290,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       final val = _routeHitNotifier.value;
       if (val != null && val.hitValues.isNotEmpty) {
         if (val.hitValues.first < directionOptions.length) {
-          setState(() {
-            selectedDirectionIndex = val.hitValues.first;
-          });
+          _selectRouteOption(val.hitValues.first);
         }
       }
     });
@@ -3863,13 +3958,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           final isTrain = _isShapeTrain(s);
 
           if (activeRouteSegments.isNotEmpty) {
-            return [
-              Polyline<int>(
-                points: s.points,
-                color: Colors.grey.withValues(alpha: 0.5),
-                strokeWidth: 4.0,
-              ),
-            ];
+            return [];
           }
 
           if (isTrain) {
@@ -3894,87 +3983,130 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         })
         .toList();
 
-    _cachedBusMarkers = busStops.map((stop) {
-      return Marker(
-        point: LatLng(stop.lat, stop.lon),
-        width: 18,
-        height: 22,
-        child: GestureDetector(
-          onTap: () => _showStopDetails(context, stop),
-          child: Tooltip(
-            message: stop.name,
-            child: Container(
-              decoration: BoxDecoration(
-                color: (activeRouteSegments.isNotEmpty &&
-                        !_routeStopIds.contains(stop.stopId))
-                    ? Colors.grey.shade400
-                    : const Color.fromARGB(255, 38, 62, 199),
-                border: Border.all(
-                  color: (activeRouteSegments.isNotEmpty &&
-                          !_routeStopIds.contains(stop.stopId))
-                      ? Colors.grey.shade600
-                      : Colors.black.withValues(alpha: 0.18),
-                  width: 1,
-                ),
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(6),
-                  topRight: Radius.circular(6),
-                  bottomRight: Radius.circular(6),
-                  bottomLeft: Radius.circular(2),
-                ),
-              ),
-              child: const Icon(
-                Icons.directions_bus,
-                color: Colors.white,
-                size: 11,
-              ),
-            ),
-          ),
-        ),
-      );
-    }).toList();
-
-    _cachedFerryMarkers = ferryStops.map((stop) {
-      return Marker(
-        point: LatLng(stop.lat, stop.lon),
-        width: 20,
-        height: 20,
-        child: GestureDetector(
-          onTap: () => _showStopDetails(context, stop),
-          child: Tooltip(
-            message: stop.name,
-            child: Container(
-              decoration: BoxDecoration(
-                color: (activeRouteSegments.isNotEmpty &&
-                        !_routeStopIds.contains(stop.stopId))
-                    ? Colors.grey.shade400
-                    : const Color.fromARGB(255, 0, 150, 136),
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: (activeRouteSegments.isNotEmpty &&
-                          !_routeStopIds.contains(stop.stopId))
-                      ? Colors.grey.shade600
-                      : Colors.black.withValues(alpha: 0.2),
-                  width: 1.5,
-                ),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Colors.black12,
-                    blurRadius: 2,
-                    offset: Offset(0, 1),
+    _cachedBusMarkers = busStops
+        .where((stop) {
+          if (activeRouteSegments.isNotEmpty &&
+              !_routeStopIds.contains(stop.stopId))
+            return false;
+          return true;
+        })
+        .map((stop) {
+          return Marker(
+            point: LatLng(stop.lat, stop.lon),
+            width: 18,
+            height: 22,
+            child: GestureDetector(
+              onTap: () => _showStopDetails(context, stop),
+              child: Tooltip(
+                message: stop.name,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color:
+                        (activeRouteSegments.isNotEmpty &&
+                            !_routeStopIds.contains(stop.stopId))
+                        ? Colors.grey.shade400
+                        : const Color.fromARGB(255, 38, 62, 199),
+                    border: Border.all(
+                      color:
+                          (activeRouteSegments.isNotEmpty &&
+                              !_routeStopIds.contains(stop.stopId))
+                          ? Colors.grey.shade600
+                          : Colors.black.withValues(alpha: 0.18),
+                      width: 1,
+                    ),
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(6),
+                      topRight: Radius.circular(6),
+                      bottomRight: Radius.circular(6),
+                      bottomLeft: Radius.circular(2),
+                    ),
                   ),
-                ],
-              ),
-              child: const Icon(
-                Icons.directions_boat,
-                color: Colors.white,
-                size: 11,
+                  child: const Icon(
+                    Icons.directions_bus,
+                    color: Colors.white,
+                    size: 11,
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
+          );
+        })
+        .toList();
+
+    _cachedFerryMarkers = ferryStops
+        .where((stop) {
+          if (activeRouteSegments.isNotEmpty &&
+              !_routeStopIds.contains(stop.stopId))
+            return false;
+          return true;
+        })
+        .map((stop) {
+          return Marker(
+            point: LatLng(stop.lat, stop.lon),
+            width: 20,
+            height: 20,
+            child: GestureDetector(
+              onTap: () => _showStopDetails(context, stop),
+              child: Tooltip(
+                message: stop.name,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color:
+                        (activeRouteSegments.isNotEmpty &&
+                            !_routeStopIds.contains(stop.stopId))
+                        ? Colors.grey.shade400
+                        : const Color.fromARGB(255, 0, 150, 136),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color:
+                          (activeRouteSegments.isNotEmpty &&
+                              !_routeStopIds.contains(stop.stopId))
+                          ? Colors.grey.shade600
+                          : Colors.black.withValues(alpha: 0.2),
+                      width: 1.5,
+                    ),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black12,
+                        blurRadius: 2,
+                        offset: Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.directions_boat,
+                    color: Colors.white,
+                    size: 11,
+                  ),
+                ),
+              ),
+            ),
+          );
+        })
+        .toList();
+
+    _cachedInactiveDirectionPolylines.clear();
+    if (directionOptions.isNotEmpty) {
+      for (int i = 0; i < directionOptions.length; i++) {
+        if (i != selectedDirectionIndex) {
+          _cachedInactiveDirectionPolylines[i] = _buildRoutePolylines(
+            directionOptions[i].segments,
+            hitValue: i,
+            isActive: false,
+          );
+        }
+      }
+    }
+
+    _cachedActiveDirectionPolylines = [];
+    if (directionOptions.isNotEmpty &&
+        selectedDirectionIndex < directionOptions.length) {
+      _cachedActiveDirectionPolylines = _buildRoutePolylines(
+        directionOptions[selectedDirectionIndex].segments,
+        hitValue: selectedDirectionIndex,
+        isActive: true,
       );
-    }).toList();
+    }
   }
 
   void _animatedMapMove(
@@ -4103,8 +4235,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     ).push(MaterialPageRoute(builder: (context) => const CardsPage()));
   }
 
-  
-
   void _openNavigation(DirectionOption option, {bool isNavigation = true}) {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -4113,7 +4243,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           lineNameResolver: _getLineName,
           lineColorResolver: _getLineColor,
           lineColors: lineColors,
-          
         ),
       ),
     );
