@@ -2231,13 +2231,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
   Widget _buildWideLayout(BuildContext context, Widget headerOverlay) {
     final width = MediaQuery.of(context).size.width;
-    final isWideSearching = _headerCollapsed.value && (_collapsedSearchFocus.hasFocus || _collapsedSearchController.text.isNotEmpty);
-    final isWideStartSearching = !_headerCollapsed.value && (_startSearchFocus.hasFocus || _startSearchController.text.isNotEmpty);
-    final isWideDestSearching = !_headerCollapsed.value && (_destSearchFocus.hasFocus || _destSearchController.text.isNotEmpty);
-    final isAnyWideSearching = isWideSearching || isWideStartSearching || isWideDestSearching;
-    
-    // If we have search results from the side panel, we want to show it. Wait, if viewingStop != null, the route planner obscures it. We switch between them.
-    final hasPanelContent = directionOptions.isNotEmpty || _viewingStop != null || isAnyWideSearching;
+
     // ensure the side panel is at least 320px wide so route options text does not overflow
     final panelWidth = math.max(340.0, math.min(400.0, width * 0.3));
     final theme = Theme.of(context);
@@ -2261,15 +2255,25 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             ]),
             builder: (context, _) {
               final isWide = MediaQuery.of(context).size.width > 600;
-              if ((!isWide && _collapsedSearchController.isAttached && _collapsedSearchController.isOpen) ||
-                  (!isWide && _startSearchController.isAttached && _startSearchController.isOpen) ||
-                  (!isWide && _destSearchController.isAttached && _destSearchController.isOpen) ||
-                  (isWide && (_collapsedSearchFocus.hasFocus || _collapsedSearchController.text.isNotEmpty || _startSearchFocus.hasFocus || _startSearchController.text.isNotEmpty || _destSearchFocus.hasFocus || _destSearchController.text.isNotEmpty))) {
+              if ((!isWide &&
+                      _collapsedSearchController.isAttached &&
+                      _collapsedSearchController.isOpen) ||
+                  (!isWide &&
+                      _startSearchController.isAttached &&
+                      _startSearchController.isOpen) ||
+                  (!isWide &&
+                      _destSearchController.isAttached &&
+                      _destSearchController.isOpen) ||
+                  (isWide &&
+                      (_collapsedSearchFocus.hasFocus ||
+                          _collapsedSearchController.text.isNotEmpty ||
+                          _startSearchFocus.hasFocus ||
+                          _startSearchController.text.isNotEmpty ||
+                          _destSearchFocus.hasFocus ||
+                          _destSearchController.text.isNotEmpty))) {
                 return BackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                  child: Container(
-                    color: Colors.black.withValues(alpha: 0.1),
-                  ),
+                  child: Container(color: Colors.black.withValues(alpha: 0.1)),
                 );
               }
               return const SizedBox.shrink();
@@ -2291,95 +2295,159 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
               // The floating options panel underneath
               Expanded(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 350),
-                  switchInCurve: Curves.easeInOutCubic,
-                  switchOutCurve: Curves.easeInOutCubic,
-                  transitionBuilder: (child, animation) {
-                    return SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(
-                          -1.2,
-                          0.0,
-                        ), // slide from left out of view
-                        end: Offset.zero,
-                      ).animate(animation),
-                      child: FadeTransition(opacity: animation, child: child),
-                    );
-                  },
-                  child: hasPanelContent
-                      ? Padding(
-                          key: ValueKey('panel_content_${isAnyWideSearching ? "search" : "route"}'),
-                          padding: const EdgeInsets.only(top: 16.0),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(24),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.15),
-                                  blurRadius: 20,
-                                  offset: const Offset(0, 8),
-                                ),
-                              ],
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(24),
-                              child: BackdropFilter(
-                                filter: ImageFilter.blur(
-                                  sigmaX: 20,
-                                  sigmaY: 20,
-                                ),
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                      colors: [
-                                        theme.colorScheme.surface.withValues(
-                                          alpha:
-                                              theme.brightness ==
-                                                  Brightness.dark
-                                              ? 0.75
-                                              : 0.90,
-                                        ),
-                                        theme.colorScheme.surface.withValues(
-                                          alpha:
-                                              theme.brightness ==
-                                                  Brightness.dark
-                                              ? 0.60
-                                              : 0.80,
+                child: ValueListenableBuilder<bool>(
+                  valueListenable: _headerCollapsed,
+                  builder: (context, isHeaderCollapsed, child) {
+                    return ListenableBuilder(
+                      listenable: Listenable.merge([
+                        _collapsedSearchController,
+                        _startSearchController,
+                        _destSearchController,
+                        _collapsedSearchFocus,
+                        _startSearchFocus,
+                        _destSearchFocus,
+                      ]),
+                      builder: (context, _) {
+                        final isWideSearching =
+                            isHeaderCollapsed &&
+                            (_collapsedSearchFocus.hasFocus ||
+                                _collapsedSearchController.text.isNotEmpty);
+                        final isWideStartSearching =
+                            !isHeaderCollapsed &&
+                            (_startSearchFocus.hasFocus ||
+                                _startSearchController.text.isNotEmpty);
+                        final isWideDestSearching =
+                            !isHeaderCollapsed &&
+                            (_destSearchFocus.hasFocus ||
+                                _destSearchController.text.isNotEmpty);
+                        final isAnyWideSearching =
+                            isWideSearching ||
+                            isWideStartSearching ||
+                            isWideDestSearching;
+
+                        // If we have search results from the side panel, we want to show it. Wait, if viewingStop != null, the route planner obscures it. We switch between them.
+                        final hasPanelContent =
+                            directionOptions.isNotEmpty ||
+                            _viewingStop != null ||
+                            isAnyWideSearching;
+                        return AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 350),
+                          switchInCurve: Curves.easeInOutCubic,
+                          switchOutCurve: Curves.easeInOutCubic,
+                          transitionBuilder: (child, animation) {
+                            return SlideTransition(
+                              position: Tween<Offset>(
+                                begin: const Offset(
+                                  -1.2,
+                                  0.0,
+                                ), // slide from left out of view
+                                end: Offset.zero,
+                              ).animate(animation),
+                              child: FadeTransition(
+                                opacity: animation,
+                                child: child,
+                              ),
+                            );
+                          },
+                          child: hasPanelContent
+                              ? Padding(
+                                  key: ValueKey(
+                                    'panel_content_${isAnyWideSearching ? "search" : "route"}',
+                                  ),
+                                  padding: const EdgeInsets.only(top: 16.0),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(24),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(
+                                            alpha: 0.15,
+                                          ),
+                                          blurRadius: 20,
+                                          offset: const Offset(0, 8),
                                         ),
                                       ],
                                     ),
-                                    borderRadius: BorderRadius.circular(24),
-                                    border: Border.all(
-                                      color: Colors.white.withValues(
-                                        alpha:
-                                            theme.brightness == Brightness.dark
-                                            ? 0.2
-                                            : 0.5,
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(24),
+                                      child: BackdropFilter(
+                                        filter: ImageFilter.blur(
+                                          sigmaX: 20,
+                                          sigmaY: 20,
+                                        ),
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            gradient: LinearGradient(
+                                              begin: Alignment.topLeft,
+                                              end: Alignment.bottomRight,
+                                              colors: [
+                                                theme.colorScheme.surface
+                                                    .withValues(
+                                                      alpha:
+                                                          theme.brightness ==
+                                                              Brightness.dark
+                                                          ? 0.75
+                                                          : 0.90,
+                                                    ),
+                                                theme.colorScheme.surface
+                                                    .withValues(
+                                                      alpha:
+                                                          theme.brightness ==
+                                                              Brightness.dark
+                                                          ? 0.60
+                                                          : 0.80,
+                                                    ),
+                                              ],
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              24,
+                                            ),
+                                            border: Border.all(
+                                              color: Colors.white.withValues(
+                                                alpha:
+                                                    theme.brightness ==
+                                                        Brightness.dark
+                                                    ? 0.2
+                                                    : 0.5,
+                                              ),
+                                              width: 1.2,
+                                            ),
+                                          ),
+                                          child: Material(
+                                            color: Colors.transparent,
+                                            child: isAnyWideSearching
+                                                ? (isWideSearching
+                                                      ? _buildWideSearchResults(
+                                                          context,
+                                                        )
+                                                      : _buildWideDirectionSearchResults(
+                                                          context,
+                                                        ))
+                                                : ListView(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                          bottom: 24,
+                                                          top: 12,
+                                                        ),
+                                                    children: [
+                                                      _buildPanelContent(
+                                                        context,
+                                                      ),
+                                                    ],
+                                                  ),
+                                          ),
+                                        ),
                                       ),
-                                      width: 1.2,
                                     ),
                                   ),
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: isAnyWideSearching
-                                      ? (isWideSearching ? _buildWideSearchResults(context) : _buildWideDirectionSearchResults(context))
-                                      : ListView(
-                                        padding: const EdgeInsets.only(
-                                          bottom: 24,
-                                          top: 12,
-                                        ),
-                                        children: [_buildPanelContent(context)],
-                                      ),
-                                  ),
+                                )
+                              : const SizedBox.shrink(
+                                  key: ValueKey('no_content'),
                                 ),
-                              ),
-                            ),
-                          ),
-                        )
-                      : const SizedBox.shrink(key: ValueKey('no_content')),
+                        );
+                      },
+                    );
+                  },
                 ),
               ),
             ],
@@ -2399,7 +2467,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     return Stack(
       children: [
         Positioned.fill(child: _buildMap(context)),
-        
+
         // Map blur when search is active
         Positioned.fill(
           child: ListenableBuilder(
@@ -2413,15 +2481,25 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             ]),
             builder: (context, _) {
               final isWide = MediaQuery.of(context).size.width > 600;
-              if ((!isWide && _collapsedSearchController.isAttached && _collapsedSearchController.isOpen) ||
-                  (!isWide && _startSearchController.isAttached && _startSearchController.isOpen) ||
-                  (!isWide && _destSearchController.isAttached && _destSearchController.isOpen) ||
-                  (isWide && (_collapsedSearchFocus.hasFocus || _collapsedSearchController.text.isNotEmpty || _startSearchFocus.hasFocus || _startSearchController.text.isNotEmpty || _destSearchFocus.hasFocus || _destSearchController.text.isNotEmpty))) {
+              if ((!isWide &&
+                      _collapsedSearchController.isAttached &&
+                      _collapsedSearchController.isOpen) ||
+                  (!isWide &&
+                      _startSearchController.isAttached &&
+                      _startSearchController.isOpen) ||
+                  (!isWide &&
+                      _destSearchController.isAttached &&
+                      _destSearchController.isOpen) ||
+                  (isWide &&
+                      (_collapsedSearchFocus.hasFocus ||
+                          _collapsedSearchController.text.isNotEmpty ||
+                          _startSearchFocus.hasFocus ||
+                          _startSearchController.text.isNotEmpty ||
+                          _destSearchFocus.hasFocus ||
+                          _destSearchController.text.isNotEmpty))) {
                 return BackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                  child: Container(
-                    color: Colors.black.withValues(alpha: 0.1),
-                  ),
+                  child: Container(color: Colors.black.withValues(alpha: 0.1)),
                 );
               }
               return const SizedBox.shrink();
@@ -2722,7 +2800,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   }
 
   Widget _buildWideDirectionSearchResults(BuildContext context) {
-    final isStart = _startSearchFocus.hasFocus || _startSearchController.text.isNotEmpty;
+    final isStart =
+        _startSearchFocus.hasFocus || _startSearchController.text.isNotEmpty;
     final ctrl = isStart ? _startSearchController : _destSearchController;
     final text = ctrl.text;
 
@@ -2759,7 +2838,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     }
     return ListView(
       shrinkWrap: true,
-      children: results.map((stop) => _buildSearchSuggestionTile(stop, () => closeAndSelect(stop))).toList(),
+      children: results
+          .map(
+            (stop) =>
+                _buildSearchSuggestionTile(stop, () => closeAndSelect(stop)),
+          )
+          .toList(),
     );
   }
 
@@ -2795,10 +2879,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     }
     return ListView(
       shrinkWrap: true,
-      children: results.map((stop) => _buildSearchSuggestionTile(stop, () {
-        _collapsedSearchFocus.unfocus();
-        _handleCollapsedStopSelection(stop);
-      })).toList(),
+      children: results
+          .map(
+            (stop) => _buildSearchSuggestionTile(stop, () {
+              _collapsedSearchFocus.unfocus();
+              _handleCollapsedStopSelection(stop);
+            }),
+          )
+          .toList(),
     );
   }
 
@@ -2811,18 +2899,24 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       focusNode: isWide ? _collapsedSearchFocus : null,
       constraints: const BoxConstraints(minHeight: 48, maxHeight: 48),
       leading: ListenableBuilder(
-        listenable: Listenable.merge([_collapsedSearchController, _collapsedSearchFocus]),
+        listenable: Listenable.merge([
+          _collapsedSearchController,
+          _collapsedSearchFocus,
+        ]),
         builder: (context, _) {
-          final isActive = _collapsedSearchController.text.isNotEmpty || 
-                           _collapsedSearchFocus.hasFocus || 
-                           (_collapsedSearchController.isAttached && _collapsedSearchController.isOpen);
+          final isActive =
+              _collapsedSearchController.text.isNotEmpty ||
+              _collapsedSearchFocus.hasFocus ||
+              (_collapsedSearchController.isAttached &&
+                  _collapsedSearchController.isOpen);
           if (isActive) {
             return IconButton(
               icon: const Icon(Icons.arrow_back),
               onPressed: () {
                 setState(() {
                   _collapsedSearchController.clear();
-                  if (_collapsedSearchController.isAttached && _collapsedSearchController.isOpen) {
+                  if (_collapsedSearchController.isAttached &&
+                      _collapsedSearchController.isOpen) {
                     _collapsedSearchController.closeView('');
                   }
                   _collapsedSearchFocus.unfocus();
@@ -2850,13 +2944,13 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       shape: WidgetStatePropertyAll(
         RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: BorderSide(
-            color: Colors.white.withValues(alpha: 0.3),
-          ),
+          side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
         ),
       ),
       onTap: () {
-        if (!isWide && _collapsedSearchController.isAttached && !_collapsedSearchController.isOpen) {
+        if (!isWide &&
+            _collapsedSearchController.isAttached &&
+            !_collapsedSearchController.isOpen) {
           _collapsedSearchController.openView();
         }
         if (isWide) {
@@ -2864,89 +2958,96 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         }
       },
       onChanged: (value) {
-        if (!isWide && _collapsedSearchController.isAttached && !_collapsedSearchController.isOpen) {
+        if (!isWide &&
+            _collapsedSearchController.isAttached &&
+            !_collapsedSearchController.isOpen) {
           _collapsedSearchController.openView();
         }
-        setState(() {});
+        // Let ListenableBuilders handle the updates
       },
       trailing: [
-        if (_collapsedSearchController.text.isNotEmpty)
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            tooltip: 'Clear search',
-            icon: const Icon(Icons.close, size: 20),
-            onPressed: () {
-              setState(() {
-                _collapsedSearchController.clear();
-              });
-            },
-          ),
+        ListenableBuilder(
+          listenable: _collapsedSearchController,
+          builder: (context, _) {
+            if (_collapsedSearchController.text.isNotEmpty) {
+              return IconButton(
+                visualDensity: VisualDensity.compact,
+                tooltip: 'Clear search',
+                icon: const Icon(Icons.close, size: 20),
+                onPressed: () {
+                  _collapsedSearchController.clear();
+                },
+              );
+            }
+            return const SizedBox.shrink();
+          },
+        ),
       ],
     );
 
     return Row(
       children: [
         Expanded(
-          child: isWide 
-            ? searchBar
-            : SearchAnchor(
-                searchController: _collapsedSearchController,
-                viewHintText: 'Where to?',
-                viewTrailing: [
-                  ListenableBuilder(
-                    listenable: _collapsedSearchController,
-                    builder: (context, _) {
-                      if (_collapsedSearchController.text.isEmpty) {
-                        return const SizedBox.shrink();
-                      }
-                      return IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () {
-                          setState(() {
-                            _collapsedSearchController.clear();
-                          });
-                        },
-                      );
-                    },
-                  ),
-                ],
-                builder: (context, controller) => searchBar,
-                suggestionsBuilder: (context, controller) {
-                  if (controller.text.isEmpty) {
-                    return [
-                      ServiceTabs(
-                        allStops: allStops,
-                        busStops: busStops,
-                        linePrefixes: linePrefixes,
-                        lineColors: lineColors,
-                        getLineName: _getLineName,
-                        getLineNames: _getLineNames,
-                        getServicePriority: _getServicePriority,
-                        onSelect: (stop) {
-                          controller.closeView(stop.name);
-                          _handleCollapsedStopSelection(stop);
-                        },
-                      ),
-                    ];
-                  }
+          child: isWide
+              ? searchBar
+              : SearchAnchor(
+                  searchController: _collapsedSearchController,
+                  viewHintText: 'Where to?',
+                  viewTrailing: [
+                    ListenableBuilder(
+                      listenable: _collapsedSearchController,
+                      builder: (context, _) {
+                        if (_collapsedSearchController.text.isEmpty) {
+                          return const SizedBox.shrink();
+                        }
+                        return IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () {
+                            setState(() {
+                              _collapsedSearchController.clear();
+                            });
+                          },
+                        );
+                      },
+                    ),
+                  ],
+                  builder: (context, controller) => searchBar,
+                  suggestionsBuilder: (context, controller) {
+                    if (controller.text.isEmpty) {
+                      return [
+                        ServiceTabs(
+                          allStops: allStops,
+                          busStops: busStops,
+                          linePrefixes: linePrefixes,
+                          lineColors: lineColors,
+                          getLineName: _getLineName,
+                          getLineNames: _getLineNames,
+                          getServicePriority: _getServicePriority,
+                          onSelect: (stop) {
+                            controller.closeView(stop.name);
+                            _handleCollapsedStopSelection(stop);
+                          },
+                        ),
+                      ];
+                    }
 
-                  final results = _filterStops(controller.text);
-                  if (results.isEmpty) {
-                    return [
-                      const ListTile(
-                        leading: Icon(Icons.search_off),
-                        title: Text('No stations found'),
-                      ),
-                    ];
-                  }
-                  return results.map(
-                    (stop) => _buildSearchSuggestionTile(stop, () {
-                      controller.closeView(stop.name);
-                      _handleCollapsedStopSelection(stop);
-                    }),
-                  );
-                },
-              ),
+                    final results = _filterStops(controller.text);
+                    if (results.isEmpty) {
+                      return [
+                        const ListTile(
+                          leading: Icon(Icons.search_off),
+                          title: Text('No stations found'),
+                        ),
+                      ];
+                    }
+                    return results.map(
+                      (stop) => _buildSearchSuggestionTile(stop, () {
+                        controller.closeView(stop.name);
+                        _handleCollapsedStopSelection(stop);
+                      }),
+                    );
+                  },
+                ),
         ),
         const SizedBox(width: 8),
         _expandHeaderButton(),
@@ -3230,24 +3331,25 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     final isWide = MediaQuery.of(context).size.width > 600;
     final focusNode = asStart ? _startSearchFocus : _destSearchFocus;
 
-    final trailingWidgets = <Widget>[];
-    if (controller.text.isNotEmpty) {
-      trailingWidgets.add(
-        IconButton(
-          visualDensity: VisualDensity.compact,
-          tooltip: 'Clear $label',
-          icon: const Icon(Icons.close, size: 18),
-          onPressed: () {
-            setState(() {
-              controller.clear();
-            });
-          },
-        ),
-      );
-    }
-    if (trailingAction != null) {
-      trailingWidgets.add(trailingAction);
-    }
+    final trailingWidgets = <Widget>[
+      ListenableBuilder(
+        listenable: controller,
+        builder: (context, _) {
+          if (controller.text.isNotEmpty) {
+            return IconButton(
+              visualDensity: VisualDensity.compact,
+              tooltip: 'Clear $label',
+              icon: const Icon(Icons.close, size: 18),
+              onPressed: () {
+                controller.clear();
+              },
+            );
+          }
+          return const SizedBox.shrink();
+        },
+      ),
+      if (trailingAction != null) trailingAction,
+    ];
 
     final searchBar = SearchBar(
       controller: controller,
@@ -3256,9 +3358,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       leading: ListenableBuilder(
         listenable: Listenable.merge([controller, focusNode]),
         builder: (context, _) {
-          final isActive = controller.text.isNotEmpty || 
-                           focusNode.hasFocus || 
-                           (controller.isAttached && controller.isOpen);
+          final isActive =
+              controller.text.isNotEmpty ||
+              focusNode.hasFocus ||
+              (controller.isAttached && controller.isOpen);
           if (isActive) {
             return IconButton(
               icon: const Icon(Icons.arrow_back),
@@ -3308,9 +3411,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       shape: WidgetStatePropertyAll(
         RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: BorderSide(
-            color: Colors.white.withValues(alpha: 0.3),
-          ),
+          side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
         ),
       ),
       onTap: () {
@@ -3325,12 +3426,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         if (!isWide && controller.isAttached && !controller.isOpen) {
           controller.openView();
         }
-        setState(() {});
+        // UI updates handled by ListenableBuilder now
       },
       trailing: trailingWidgets,
     );
 
-    return isWide 
+    return isWide
         ? SizedBox(height: 48, child: searchBar)
         : SearchAnchor(
             dividerColor: Colors.transparent,
@@ -3355,10 +3456,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                 },
               ),
             ],
-            builder: (context, ctrl) => SizedBox(
-              height: 48,
-              child: searchBar,
-            ),
+            builder: (context, ctrl) => SizedBox(height: 48, child: searchBar),
             suggestionsBuilder: (context, ctrl) {
               if (ctrl.text.isEmpty) {
                 return [
@@ -3387,12 +3485,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   ),
                 ];
               }
-              return results.map(
-                (stop) => _buildSearchSuggestionTile(stop, () {
-                  ctrl.closeView(stop.name);
-                  _selectStopFromSearch(stop, asStart: asStart);
-                }),
-              ).toList();
+              return results
+                  .map(
+                    (stop) => _buildSearchSuggestionTile(stop, () {
+                      ctrl.closeView(stop.name);
+                      _selectStopFromSearch(stop, asStart: asStart);
+                    }),
+                  )
+                  .toList();
             },
           );
   }
@@ -3463,9 +3563,13 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     return route?.type == '1';
   }
 
+  Set<String>? _busStopIdSetCache;
   int _getServicePriority(gtfs.Stop stop) {
     if (stop.stopId.startsWith('F')) return 4;
-    if (busStops.any((s) => s.stopId == stop.stopId)) return 3;
+
+    _busStopIdSetCache ??= busStops.map((s) => s.stopId).toSet();
+    if (_busStopIdSetCache!.contains(stop.stopId)) return 3;
+
     if (_isStopTrain(stop)) return 2;
     return 1;
   }
@@ -3556,17 +3660,11 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     _loadFavoritePins();
     _loadProfile();
     _startSearchController = SearchController();
-    _startSearchController.addListener(() => setState(() {}));
     _startSearchFocus = FocusNode();
-    _startSearchFocus.addListener(() => setState(() {}));
     _destSearchController = SearchController();
-    _destSearchController.addListener(() => setState(() {}));
     _destSearchFocus = FocusNode();
-    _destSearchFocus.addListener(() => setState(() {}));
     _collapsedSearchController = SearchController();
-    _collapsedSearchController.addListener(() => setState(() {}));
     _collapsedSearchFocus = FocusNode();
-    _collapsedSearchFocus.addListener(() => setState(() {}));
     _directionService = DirectionService(lineNameResolver: _getLineName);
     _loadRoutesAndStops();
     _initLocationTracking();
@@ -3721,6 +3819,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       railStops = stops;
       allStops = combinedStops;
       busStops = busStopList;
+      _busStopIdSetCache = null; // Clear cache on update
       this.ferryStops = ferryStops;
       linePrefixes = prefixMap;
       lineColors = colorMap;
