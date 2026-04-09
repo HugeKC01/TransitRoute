@@ -282,7 +282,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   String routingMode = 'Fastest';
   String _selectedSortMode = 'Default';
   List<String> allowedTransitTypes = ['Metro', 'Train', 'Bus', 'Ferry'];
-  final ValueNotifier<bool> _headerCollapsed = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> _headerCollapsed = ValueNotifier<bool>(true);
   double _currentZoom = 12.0;
   static const double _busStopZoomThreshold = 15.0;
 
@@ -3304,15 +3304,16 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   }
 
   Future<void> _handleCollapsedStopSelection(gtfs.Stop stop) async {
-    final assignStart = selectedStartStopId == null;
-    await _selectStopFromSearch(
-      stop,
-      asStart: assignStart,
-      preserveHeaderState: true,
-    );
     setState(() {
+      _viewingStop = stop;
+      _viewingDetailsOption = null;
       _collapsedSearchController.clear();
+      _collapsedSearchFocus.unfocus();
+      _recalculateMapLayers();
     });
+    
+    final zoom = math.max(_mapController.camera.zoom, 14).toDouble();
+    _mapController.move(LatLng(stop.lat, stop.lon), zoom);
   }
 
   Widget _buildSelectionSummaryCard(
