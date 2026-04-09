@@ -1431,6 +1431,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         onStartNavigation: _openNavigation,
         lineNameResolver: _getLineName,
         lineColors: lineColors,
+        routeIconResolver: _getRouteIcon,
       );
     }
 
@@ -1579,6 +1580,20 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             ),
             if (shapeSegments.isNotEmpty)
               PolylineLayer(polylines: _cachedShapePolylines),
+
+            if (_cachedInactiveDirectionPolylines.isNotEmpty)
+              for (final entry in _cachedInactiveDirectionPolylines.entries)
+                PolylineLayer<int>(
+                  hitNotifier: _routeHitNotifier,
+                  polylines: entry.value,
+                ),
+
+            if (_cachedActiveDirectionPolylines.isNotEmpty)
+              PolylineLayer<int>(
+                hitNotifier: _routeHitNotifier,
+                polylines: _cachedActiveDirectionPolylines,
+              ),
+
             if (showBusStops) MarkerLayer(markers: _cachedBusMarkers),
             if (showFerryStops) MarkerLayer(markers: _cachedFerryMarkers),
             if (filteredRailStops.isNotEmpty)
@@ -1683,41 +1698,92 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   );
                 }).toList(),
               ),
-            if (_customStartPoint != null)
-              MarkerLayer(
-                markers: [
-                  Marker(
-                    point: LatLng(
-                      _customStartPoint!.lat,
-                      _customStartPoint!.lon,
-                    ),
-                    width: 30,
-                    height: 30,
-                    alignment: Alignment.topCenter,
-                    child: const Icon(
-                      Icons.location_on,
-                      color: Colors.green,
-                      size: 30,
-                    ),
-                  ),
-                ],
-              ),
-            if (_customDestPoint != null)
-              MarkerLayer(
-                markers: [
-                  Marker(
-                    point: LatLng(_customDestPoint!.lat, _customDestPoint!.lon),
-                    width: 30,
-                    height: 30,
-                    alignment: Alignment.topCenter,
-                    child: const Icon(
-                      Icons.location_on,
-                      color: Colors.red,
-                      size: 30,
-                    ),
-                  ),
-                ],
-              ),
+            if (_customStartPoint != null || selectedStartStopId != null)
+              Builder(builder: (context) {
+                double? lat, lon;
+                if (_customStartPoint != null) {
+                  lat = _customStartPoint!.lat;
+                  lon = _customStartPoint!.lon;
+                } else if (selectedStartStopId != null) {
+                  try {
+                    final stop = allStops.firstWhere((s) => s.stopId == selectedStartStopId);
+                    lat = stop.lat;
+                    lon = stop.lon;
+                  } catch (_) {}
+                }
+                if (lat != null && lon != null) {
+                  return MarkerLayer(
+                    markers: [
+                      Marker(
+                        point: LatLng(lat, lon),
+                        width: 24,
+                        height: 24,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surface,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Theme.of(context).colorScheme.primary,
+                              width: 4,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.2),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                }
+                return const SizedBox.shrink();
+              }),
+            if (_customDestPoint != null || selectedDestinationStopId != null)
+              Builder(builder: (context) {
+                double? lat, lon;
+                if (_customDestPoint != null) {
+                  lat = _customDestPoint!.lat;
+                  lon = _customDestPoint!.lon;
+                } else if (selectedDestinationStopId != null) {
+                  try {
+                    final stop = allStops.firstWhere((s) => s.stopId == selectedDestinationStopId);
+                    lat = stop.lat;
+                    lon = stop.lon;
+                  } catch (_) {}
+                }
+                if (lat != null && lon != null) {
+                  return MarkerLayer(
+                    markers: [
+                      Marker(
+                        point: LatLng(lat, lon),
+                        width: 24,
+                        height: 24,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surface,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Theme.of(context).colorScheme.secondary,
+                              width: 4,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.2),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                }
+                return const SizedBox.shrink();
+              }),
             if (_userLocation?.latitude != null &&
                 _userLocation?.longitude != null)
               MarkerLayer(
@@ -1755,19 +1821,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                     ),
                   ),
                 ],
-              ),
-
-            if (_cachedInactiveDirectionPolylines.isNotEmpty)
-              for (final entry in _cachedInactiveDirectionPolylines.entries)
-                PolylineLayer<int>(
-                  hitNotifier: _routeHitNotifier,
-                  polylines: entry.value,
-                ),
-
-            if (_cachedActiveDirectionPolylines.isNotEmpty)
-              PolylineLayer<int>(
-                hitNotifier: _routeHitNotifier,
-                polylines: _cachedActiveDirectionPolylines,
               ),
 
             const RichAttributionWidget(

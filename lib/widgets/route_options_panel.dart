@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:route/services/direction_service.dart';
 import 'formatters.dart';
 
@@ -14,6 +15,7 @@ class RouteOptionsPanel extends StatelessWidget {
     required this.lineColors,
     required this.selectedSortMode,
     required this.onSortModeChanged,
+    this.routeIconResolver,
   });
 
   final List<DirectionOption> options;
@@ -25,6 +27,7 @@ class RouteOptionsPanel extends StatelessWidget {
   final Map<String, Color> lineColors;
   final String selectedSortMode;
   final ValueChanged<String?> onSortModeChanged;
+  final String? Function(String)? routeIconResolver;
 
   @override
   Widget build(BuildContext context) {
@@ -145,6 +148,7 @@ class RouteOptionsPanel extends StatelessWidget {
               onStartNavigation: () => onStartNavigation(options[index]),
               lineNameResolver: lineNameResolver,
               lineColors: lineColors,
+              routeIconResolver: routeIconResolver,
               highlightType: index == fastestIndex
                   ? _HighlightType.fastest
                   : index == cheapestIndex
@@ -172,6 +176,7 @@ class _RouteOptionCard extends StatelessWidget {
     required this.onStartNavigation,
     required this.lineNameResolver,
     required this.lineColors,
+    this.routeIconResolver,
     this.highlightType,
     required this.showShortestTag,
     required this.showFastestTag,
@@ -185,6 +190,7 @@ class _RouteOptionCard extends StatelessWidget {
   final VoidCallback onStartNavigation;
   final LineNameResolver lineNameResolver;
   final Map<String, Color> lineColors;
+  final String? Function(String)? routeIconResolver;
   final _HighlightType? highlightType;
   final bool showShortestTag;
   final bool showFastestTag;
@@ -226,9 +232,11 @@ class _RouteOptionCard extends StatelessWidget {
     final headlineTags = filteredTags.take(3).toList();
     final remainingTags = filteredTags.length - headlineTags.length;
     final distanceText = formatDistance(option.distanceMeters);
-    final transitSegments = option.segments
-        .where((s) => s.mode == TravelMode.transit && s.routeShortName != null)
-        .toList();
+    final displaySegments = option.segments.where((s) {
+      if (s.mode == TravelMode.transit && s.routeShortName != null) return true;
+      if (s.mode == TravelMode.walk && s.distanceMeters > 0) return true;
+      return false;
+    }).toList();
 
     final theme = Theme.of(context);
     final highlightColor = switch (highlightType) {
@@ -301,6 +309,10 @@ class _RouteOptionCard extends StatelessWidget {
                                           ? const Color(0xFF2E7D32)
                                           : tag == 'Cheapest'
                                           ? const Color(0xFFF9A825)
+                                          : tag == 'Fewest stops'
+                                          ? const Color(0xFF0288D1)
+                                          : tag == 'Low transfers'
+                                          ? const Color(0xFF8E24AA)
                                           : theme.colorScheme.primary,
                                       icon: tag == 'Fastest'
                                           ? Icons.bolt
@@ -308,6 +320,10 @@ class _RouteOptionCard extends StatelessWidget {
                                           ? Icons.savings
                                           : tag == 'Shortest'
                                           ? Icons.straighten
+                                          : tag == 'Fewest stops'
+                                          ? Icons.signpost
+                                          : tag == 'Low transfers'
+                                          ? Icons.swap_horiz
                                           : null,
                                     ),
                                   ),
@@ -350,7 +366,7 @@ class _RouteOptionCard extends StatelessWidget {
                                 TextSpan(
                                   children: [
                                     TextSpan(
-                                      text: '${option.minutes}',
+                                      text: '~${option.minutes}',
                                       style: theme.textTheme.titleLarge
                                           ?.copyWith(
                                             fontWeight: FontWeight.w900,
@@ -389,7 +405,7 @@ class _RouteOptionCard extends StatelessWidget {
                                   children: [
                                     TextSpan(
                                       text:
-                                          '${option.fareBreakdown['total'] ?? 0}',
+                                          '~${option.fareBreakdown['total'] ?? 0}',
                                       style: theme.textTheme.titleMedium
                                           ?.copyWith(
                                             fontWeight: FontWeight.bold,
@@ -451,7 +467,7 @@ class _RouteOptionCard extends StatelessWidget {
                   ],
 
                   // Transit Line Visualizer
-                  if (transitSegments.isNotEmpty) ...[
+                  if (displaySegments.isNotEmpty) ...[
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -465,7 +481,7 @@ class _RouteOptionCard extends StatelessWidget {
                           children: [
                             for (
                               int i = 0;
-                              i < transitSegments.length;
+                              i < displaySegments.length;
                               i++
                             ) ...[
                               if (i > 0)
@@ -481,16 +497,25 @@ class _RouteOptionCard extends StatelessWidget {
                                 ),
                               Builder(
                                 builder: (context) {
-                                  final lineName =
-                                      transitSegments[i].routeShortName ??
-                                      'Unknown line';
-                                  final color =
-                                      lineColors[lineName] ??
-                                      theme.colorScheme.primary;
-                                  final textColor =
-                                      color.computeLuminance() > 0.5
-                                      ? Colors.black87
-                                      : Colors.white;
+                                  final segment = displaySegments[i];
+                                  final isWalk = segment.mode == TravelMode.walk;
+                                  
+                                  final lineName = isWalk 
+                                      ? formatDistance(segment.distanceMeters)
+                                      : (segment.routeShortName ?? 'Unknown line');
+                                  
+                                  final color = isWalk
+                                      ? theme.colorScheme.surfaceContainerHighest
+                                      : (lineColors[lineName] ?? theme.colorScheme.primary);
+                                  
+                                  final textColor = isWalk
+                                      ? theme.colorScheme.onSurface
+                                      : (color.computeLuminance() > 0.5 ? Colors.black87 : Colors.white);
+
+                                  final String? iconPath =
+                                      (!isWalk && routeIconResolver != null)
+                                          ? routeIconResolver!(lineName)
+                                          : null;
 
                                   IconData getTransportIcon(
                                     RouteSegment segment,
@@ -513,26 +538,47 @@ class _RouteOptionCard extends StatelessWidget {
                                       vertical: 4,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: color,
+                                      color: iconPath != null
+                                          ? color.withValues(alpha: 0.15)
+                                          : color,
+                                      border: iconPath != null
+                                          ? Border.all(color: color)
+                                          : null,
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Icon(
-                                          getTransportIcon(transitSegments[i]),
-                                          size: 16,
-                                          color: textColor,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          lineName,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold,
+                                        if (iconPath != null) ...[
+                                          SvgPicture.asset(
+                                            iconPath,
+                                            height: 16,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            lineName,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                              color: theme.colorScheme.onSurface,
+                                            ),
+                                          ),
+                                        ] else ...[
+                                          Icon(
+                                            getTransportIcon(segment),
+                                            size: 16,
                                             color: textColor,
                                           ),
-                                        ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            lineName,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                              color: textColor,
+                                            ),
+                                          ),
+                                        ],
                                       ],
                                     ),
                                   );
