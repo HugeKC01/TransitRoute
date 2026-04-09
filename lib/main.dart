@@ -532,7 +532,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     if (lineName.isEmpty) return null;
     if (_routeIconCache.containsKey(lineName)) return _routeIconCache[lineName];
     final firstLine = lineName.split(', ').first;
-    
+
     if (firstLine.toUpperCase() == 'BRT') {
       _routeIconCache[lineName] = 'assets/icons/BRT.svg';
       return 'assets/icons/BRT.svg';
@@ -1411,6 +1411,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         lineNameResolver: _getLineName,
         lineColorResolver: _getLineColor,
         lineColors: lineColors,
+        routeIconResolver: _getRouteIcon,
       );
     } else {
       content = RouteOptionsPanel(
@@ -1562,13 +1563,17 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                 if (_startSearchFocus.hasFocus) {
                   _startSearchFocus.unfocus();
                 }
-                if (_startSearchController.text.isNotEmpty && selectedStartStopId == null && _customStartPoint == null) {
+                if (_startSearchController.text.isNotEmpty &&
+                    selectedStartStopId == null &&
+                    _customStartPoint == null) {
                   _startSearchController.clear();
                 }
                 if (_destSearchFocus.hasFocus) {
                   _destSearchFocus.unfocus();
                 }
-                if (_destSearchController.text.isNotEmpty && selectedDestinationStopId == null && _customDestPoint == null) {
+                if (_destSearchController.text.isNotEmpty &&
+                    selectedDestinationStopId == null &&
+                    _customDestPoint == null) {
                   _destSearchController.clear();
                 }
               });
@@ -1705,91 +1710,99 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                 }).toList(),
               ),
             if (_customStartPoint != null || selectedStartStopId != null)
-              Builder(builder: (context) {
-                double? lat, lon;
-                if (_customStartPoint != null) {
-                  lat = _customStartPoint!.lat;
-                  lon = _customStartPoint!.lon;
-                } else if (selectedStartStopId != null) {
-                  try {
-                    final stop = allStops.firstWhere((s) => s.stopId == selectedStartStopId);
-                    lat = stop.lat;
-                    lon = stop.lon;
-                  } catch (_) {}
-                }
-                if (lat != null && lon != null) {
-                  return MarkerLayer(
-                    markers: [
-                      Marker(
-                        point: LatLng(lat, lon),
-                        width: 24,
-                        height: 24,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.surface,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Theme.of(context).colorScheme.primary,
-                              width: 4,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.2),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2),
+              Builder(
+                builder: (context) {
+                  double? lat, lon;
+                  if (_customStartPoint != null) {
+                    lat = _customStartPoint!.lat;
+                    lon = _customStartPoint!.lon;
+                  } else if (selectedStartStopId != null) {
+                    try {
+                      final stop = allStops.firstWhere(
+                        (s) => s.stopId == selectedStartStopId,
+                      );
+                      lat = stop.lat;
+                      lon = stop.lon;
+                    } catch (_) {}
+                  }
+                  if (lat != null && lon != null) {
+                    return MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: LatLng(lat, lon),
+                          width: 24,
+                          height: 24,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.surface,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Theme.of(context).colorScheme.primary,
+                                width: 4,
                               ),
-                            ],
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.2),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  );
-                }
-                return const SizedBox.shrink();
-              }),
+                      ],
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
             if (_customDestPoint != null || selectedDestinationStopId != null)
-              Builder(builder: (context) {
-                double? lat, lon;
-                if (_customDestPoint != null) {
-                  lat = _customDestPoint!.lat;
-                  lon = _customDestPoint!.lon;
-                } else if (selectedDestinationStopId != null) {
-                  try {
-                    final stop = allStops.firstWhere((s) => s.stopId == selectedDestinationStopId);
-                    lat = stop.lat;
-                    lon = stop.lon;
-                  } catch (_) {}
-                }
-                if (lat != null && lon != null) {
-                  return MarkerLayer(
-                    markers: [
-                      Marker(
-                        point: LatLng(lat, lon),
-                        width: 24,
-                        height: 24,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.surface,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Theme.of(context).colorScheme.secondary,
-                              width: 4,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.2),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2),
+              Builder(
+                builder: (context) {
+                  double? lat, lon;
+                  if (_customDestPoint != null) {
+                    lat = _customDestPoint!.lat;
+                    lon = _customDestPoint!.lon;
+                  } else if (selectedDestinationStopId != null) {
+                    try {
+                      final stop = allStops.firstWhere(
+                        (s) => s.stopId == selectedDestinationStopId,
+                      );
+                      lat = stop.lat;
+                      lon = stop.lon;
+                    } catch (_) {}
+                  }
+                  if (lat != null && lon != null) {
+                    return MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: LatLng(lat, lon),
+                          width: 24,
+                          height: 24,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.surface,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Theme.of(context).colorScheme.secondary,
+                                width: 4,
                               ),
-                            ],
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.2),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  );
-                }
-                return const SizedBox.shrink();
-              }),
+                      ],
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
             if (_userLocation?.latitude != null &&
                 _userLocation?.longitude != null)
               MarkerLayer(
@@ -2366,20 +2379,26 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                       if (_startSearchFocus.hasFocus) {
                         _startSearchFocus.unfocus();
                       }
-                      if (_startSearchController.text.isNotEmpty && selectedStartStopId == null && _customStartPoint == null) {
+                      if (_startSearchController.text.isNotEmpty &&
+                          selectedStartStopId == null &&
+                          _customStartPoint == null) {
                         _startSearchController.clear();
                       }
                       if (_destSearchFocus.hasFocus) {
                         _destSearchFocus.unfocus();
                       }
-                      if (_destSearchController.text.isNotEmpty && selectedDestinationStopId == null && _customDestPoint == null) {
+                      if (_destSearchController.text.isNotEmpty &&
+                          selectedDestinationStopId == null &&
+                          _customDestPoint == null) {
                         _destSearchController.clear();
                       }
                     });
                   },
                   child: BackdropFilter(
                     filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                    child: Container(color: Colors.black.withValues(alpha: 0.1)),
+                    child: Container(
+                      color: Colors.black.withValues(alpha: 0.1),
+                    ),
                   ),
                 );
               }
@@ -2623,13 +2642,17 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                           if (_startSearchFocus.hasFocus) {
                             _startSearchFocus.unfocus();
                           }
-                          if (_startSearchController.text.isNotEmpty && selectedStartStopId == null && _customStartPoint == null) {
+                          if (_startSearchController.text.isNotEmpty &&
+                              selectedStartStopId == null &&
+                              _customStartPoint == null) {
                             _startSearchController.clear();
                           }
                           if (_destSearchFocus.hasFocus) {
                             _destSearchFocus.unfocus();
                           }
-                          if (_destSearchController.text.isNotEmpty && selectedDestinationStopId == null && _customDestPoint == null) {
+                          if (_destSearchController.text.isNotEmpty &&
+                              selectedDestinationStopId == null &&
+                              _customDestPoint == null) {
                             _destSearchController.clear();
                           }
                         });
@@ -3435,7 +3458,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       _collapsedSearchFocus.unfocus();
       _recalculateMapLayers();
     });
-    
+
     final zoom = math.max(_mapController.camera.zoom, 14).toDouble();
     _mapController.move(LatLng(stop.lat, stop.lon), zoom);
   }

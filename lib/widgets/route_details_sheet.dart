@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:route/services/direction_service.dart';
 import 'formatters.dart';
 
@@ -12,6 +13,7 @@ class RouteDetailsSheet extends StatelessWidget {
     required this.lineColorResolver,
     required this.lineColors,
     required this.onBack,
+    this.routeIconResolver,
   });
 
   final DirectionOption option;
@@ -19,6 +21,7 @@ class RouteDetailsSheet extends StatelessWidget {
   final LineColorResolver lineColorResolver;
   final Map<String, Color> lineColors;
   final VoidCallback onBack;
+  final String? Function(String)? routeIconResolver;
 
   static const List<String> _tagOrder = [
     'Shortest',
@@ -37,7 +40,8 @@ class RouteDetailsSheet extends StatelessWidget {
     int index,
     ThemeData theme,
   ) {
-    IconData icon;
+    IconData? icon;
+    String? iconPath;
     Color iconColor;
     String title;
 
@@ -54,13 +58,20 @@ class RouteDetailsSheet extends StatelessWidget {
       iconColor = Colors.deepOrange;
       title = segment.instruction ?? 'Motorcycle Taxi';
     } else {
-      if (segment.isFerry) {
-        icon = Icons.directions_boat;
-      } else if (segment.isBus) {
-        icon = Icons.directions_bus;
-      } else {
-        icon = Icons.train;
+      if (routeIconResolver != null && segment.routeShortName != null) {
+        iconPath = routeIconResolver!(segment.routeShortName!);
       }
+
+      if (iconPath == null) {
+        if (segment.isFerry) {
+          icon = Icons.directions_boat;
+        } else if (segment.isBus) {
+          icon = Icons.directions_bus;
+        } else {
+          icon = Icons.train;
+        }
+      }
+
       iconColor =
           lineColors[segment.routeShortName] ?? theme.colorScheme.primary;
       title = segment.routeShortName ?? 'Transit';
@@ -81,8 +92,18 @@ class RouteDetailsSheet extends StatelessWidget {
         children: [
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: iconColor, shape: BoxShape.circle),
-            child: Icon(icon, color: Colors.white, size: 20),
+            decoration: BoxDecoration(
+              color: iconPath != null
+                  ? iconColor.withValues(alpha: 0.15)
+                  : iconColor,
+              shape: BoxShape.circle,
+              border: iconPath != null
+                  ? Border.all(color: iconColor, width: 1.5)
+                  : null,
+            ),
+            child: iconPath != null
+                ? SvgPicture.asset(iconPath, width: 20, height: 20)
+                : Icon(icon, color: Colors.white, size: 20),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -93,9 +114,7 @@ class RouteDetailsSheet extends StatelessWidget {
                   title,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: iconColor != Colors.grey
-                        ? iconColor
-                        : theme.colorScheme.onSurface,
+                    color: theme.colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -157,7 +176,7 @@ class RouteDetailsSheet extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Transform.translate(
-                    offset: Offset(isFirst || isLast ? -4.5 : -2.5, 0),
+                    offset: Offset(isFirst || isLast ? -7.5 : -5.5, 0),
                     child: Container(
                       width: isFirst || isLast ? 12 : 8,
                       height: isFirst || isLast ? 12 : 8,

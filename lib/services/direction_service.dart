@@ -759,22 +759,28 @@ class DirectionService {
       final fareBreakdown = _fareCalculator.calculateFare(option.stops);
 
       for (final seg in option.segments!) {
-        int sFare = seg.fare;
         if (seg.isBus &&
             seg.routeShortName != null &&
             seg.routeShortName != 'BRT' &&
             seg.intermediateStops != null) {
-          sFare = _fareCalculator.getBusFare(
+          int sFare = _fareCalculator.getBusFare(
             seg.distanceMeters,
             seg.routeShortName!,
           );
           seg.fare = sFare;
-        }
-
-        if (sFare > 0) {
+          
+          if (sFare > 0) {
+            String subLabel = seg.instruction ?? 'Transit';
+            fareBreakdown[subLabel] = (fareBreakdown[subLabel] ?? 0) + sFare;
+            fareBreakdown['total'] = (fareBreakdown['total'] ?? 0) + sFare;
+          }
+        } else if (seg.mode == TravelMode.transit && seg.intermediateStops != null) {
+          seg.fare = _fareCalculator.calculateFare(seg.intermediateStops!)['total'] ?? 0;
+        } else if (seg.fare > 0) {
+          // If a pre-calculated non-transit fare exists
           String subLabel = seg.instruction ?? 'Transit';
-          fareBreakdown[subLabel] = (fareBreakdown[subLabel] ?? 0) + sFare;
-          fareBreakdown['total'] = (fareBreakdown['total'] ?? 0) + sFare;
+          fareBreakdown[subLabel] = (fareBreakdown[subLabel] ?? 0) + seg.fare;
+          fareBreakdown['total'] = (fareBreakdown['total'] ?? 0) + seg.fare;
         }
       }
 
@@ -1660,19 +1666,20 @@ class DirectionService {
       route.segments ??= _buildSegmentsFromStops(route.stops);
       int fare = _fareCalculator.calculateFare(route.stops)['total'] ?? 0;
       for (final seg in route.segments!) {
-        int sFare = seg.fare;
         if (seg.isBus &&
             seg.routeShortName != null &&
             seg.routeShortName != 'BRT' &&
             seg.intermediateStops != null) {
-          sFare = _fareCalculator.getBusFare(
+          int sFare = _fareCalculator.getBusFare(
             seg.distanceMeters,
             seg.routeShortName!,
           );
           seg.fare = sFare;
-        }
-        if (sFare > 0) {
           fare += sFare;
+        } else if (seg.mode == TravelMode.transit && seg.intermediateStops != null) {
+          seg.fare = _fareCalculator.calculateFare(seg.intermediateStops!)['total'] ?? 0;
+        } else if (seg.fare > 0) {
+          fare += seg.fare;
         }
       }
       fares[route] = fare;
