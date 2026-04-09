@@ -20,6 +20,8 @@ class StationDetailsContent extends StatelessWidget {
   final VoidCallback? onClose;
   final bool isBottomSheet;
   final bool isSidePanel;
+  final bool isFavorite;
+  final VoidCallback? onToggleFavorite;
 
   const StationDetailsContent({
     super.key,
@@ -37,6 +39,8 @@ class StationDetailsContent extends StatelessWidget {
     this.onClose,
     this.isBottomSheet = false,
     this.isSidePanel = false,
+    this.isFavorite = false,
+    this.onToggleFavorite,
   });
 
   bool get _hasThaiName =>
@@ -86,6 +90,8 @@ class StationDetailsContent extends StatelessWidget {
                       lineColorResolver: lineColorResolver,
                       lineColorByName: lineColorByName,
                       routeIconByName: routeIconByName,
+                      isFavorite: isFavorite,
+                      onToggleFavorite: onToggleFavorite,
                       onTransferStationSelected: onTransferStationSelected,
                     ),
                   ),
@@ -218,6 +224,21 @@ class StationDetailsContent extends StatelessWidget {
                         ],
                       ),
                     ),
+                    if (onToggleFavorite != null)
+                      IconButton(
+                        icon: Icon(
+                          isFavorite ? Icons.favorite : Icons.favorite_border,
+                        ),
+                        color: isFavorite ? Colors.red : scheme.onSurfaceVariant,
+                        onPressed: onToggleFavorite,
+                        style: IconButton.styleFrom(
+                          backgroundColor: scheme.surface.withValues(
+                            alpha: 0.8,
+                          ),
+                          padding: const EdgeInsets.all(8),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ),
                     if (onClose != null)
                       IconButton(
                         icon: const Icon(Icons.close),

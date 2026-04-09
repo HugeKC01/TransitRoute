@@ -1073,6 +1073,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   }
 
   void _showDroppedPinDetails(BuildContext context, LatLng point) {
+    try {
+      final stop = allStops.firstWhere(
+        (s) => s.lat == point.latitude && s.lon == point.longitude,
+      );
+      _showStopDetails(context, stop);
+      return;
+    } catch (_) {}
+
     FavoritePin? matchingPin;
     try {
       matchingPin = _favoritePins.firstWhere(
@@ -1395,6 +1403,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       final lineName = _getLineName(stop.stopId);
       final lineColor = _getLineColor(stop.stopId);
       final transferStops = _directionService.getTransferStations(stop.stopId);
+      final bool isFavorite = _favoritePins.any(
+        (p) =>
+            p.point.latitude == stop.lat && p.point.longitude == stop.lon,
+      );
 
       return Stack(
         key: const ValueKey('station_details'),
@@ -1405,6 +1417,22 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             lineName: lineName,
             isBottomSheet: true,
             isSidePanel: true,
+            isFavorite: isFavorite,
+            onToggleFavorite: () {
+              setState(() {
+                if (isFavorite) {
+                  _favoritePins.removeWhere(
+                    (p) =>
+                        p.point.latitude == stop.lat &&
+                        p.point.longitude == stop.lon,
+                  );
+                } else {
+                  _favoritePins.add(FavoritePin(stop.name, LatLng(stop.lat, stop.lon)));
+                }
+                _saveFavoritePins();
+                _recalculateMapLayers();
+              });
+            },
             transferStops: transferStops,
             lineNameResolver: (id) => _getLineName(id),
             lineColorResolver: (id) => _getLineColor(id),
@@ -1653,7 +1681,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             if (showFerryStops) MarkerLayer(markers: _cachedFerryMarkers),
             if (_favoritePins.isNotEmpty)
               MarkerLayer(
-                markers: _favoritePins.map((pin) {
+                markers: _favoritePins.where((pin) {
+                  // Only draw the generic heart pin if it's not a transit stop.
+                  // Transit stops handle their own "favorite" red border rendering.
+                    return !allStops.any((s) => s.lat == pin.point.latitude && s.lon == pin.point.longitude);
+
+                }).map((pin) {
                   return Marker(
                     point: pin.point,
                     width: 24,
@@ -4713,10 +4746,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           return true;
         })
         .map((stop) {
+          final isFav = _favoritePins.any(
+            (p) =>
+                p.point.latitude == stop.lat && p.point.longitude == stop.lon,
+          );
           return Marker(
             point: LatLng(stop.lat, stop.lon),
-            width: 18,
-            height: 22,
+            width: isFav ? 20 : 18,
+            height: isFav ? 24 : 22,
             child: GestureDetector(
               onTap: () => _showStopDetails(context, stop),
               child: Tooltip(
@@ -4729,12 +4766,13 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                         ? Colors.grey.shade400
                         : const Color.fromARGB(255, 38, 62, 199),
                     border: Border.all(
-                      color:
-                          (activeRouteSegments.isNotEmpty &&
+                      color: isFav
+                          ? Colors.red
+                          : (activeRouteSegments.isNotEmpty &&
                               !_routeStopIds.contains(stop.stopId))
                           ? Colors.grey.shade600
                           : Colors.black.withValues(alpha: 0.18),
-                      width: 1,
+                      width: isFav ? 2 : 1,
                     ),
                     borderRadius: const BorderRadius.only(
                       topLeft: Radius.circular(6),
@@ -4763,10 +4801,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           return true;
         })
         .map((stop) {
+          final isFav = _favoritePins.any(
+            (p) =>
+                p.point.latitude == stop.lat && p.point.longitude == stop.lon,
+          );
           return Marker(
             point: LatLng(stop.lat, stop.lon),
-            width: 20,
-            height: 20,
+            width: isFav ? 24 : 20,
+            height: isFav ? 24 : 20,
             child: GestureDetector(
               onTap: () => _showStopDetails(context, stop),
               child: Tooltip(
@@ -4780,12 +4822,13 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                         : const Color.fromARGB(255, 0, 150, 136),
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color:
-                          (activeRouteSegments.isNotEmpty &&
+                      color: isFav
+                          ? Colors.red
+                          : (activeRouteSegments.isNotEmpty &&
                               !_routeStopIds.contains(stop.stopId))
                           ? Colors.grey.shade600
                           : Colors.black.withValues(alpha: 0.2),
-                      width: 1.5,
+                      width: isFav ? 2.5 : 1.5,
                     ),
                     boxShadow: const [
                       BoxShadow(
@@ -5005,14 +5048,18 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         onOpenTransitUpdates: _openTransitUpdatePage,
         onOpenGraphicMap: _openGraphicMap,
         onOpenCards: _openCardsPage,
+        allStops: allStops,
+        routeIconByName: _getRouteIcon,
+        lineColorByName: _getPolylineColor,
+        stopToLinesMap: _stopToLinesMap,
         onSelectFavoritePin: (lat, lon) {
           setState(() => _selectedNavIndex = 0);
           final point = LatLng(lat, lon);
           _mapController.move(point, 15);
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _showDroppedPinDetails(context, point);
-          });
-        },
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _showDroppedPinDetails(context, point);
+            });
+          },
         profile: _profile,
         onProfileUpdated: _saveProfile,
         currentAccentColor: widget.currentAccentColor,

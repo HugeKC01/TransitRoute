@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:route/services/gtfs_models.dart' as gtfs;
 import 'package:route/widgets/station_details_content.dart';
 
-class StationDetailsPage extends StatelessWidget {
+class StationDetailsPage extends StatefulWidget {
+  final bool isFavorite;
+  final VoidCallback? onToggleFavorite;
+
   const StationDetailsPage({
     super.key,
     required this.stop,
@@ -16,6 +19,8 @@ class StationDetailsPage extends StatelessWidget {
     this.lineColorByName,
     this.routeIconByName,
     this.onTransferStationSelected,
+    this.isFavorite = false,
+    this.onToggleFavorite,
   });
 
   final gtfs.Stop stop;
@@ -31,35 +36,57 @@ class StationDetailsPage extends StatelessWidget {
   final void Function(gtfs.Stop stop)? onTransferStationSelected;
 
   @override
+  State<StationDetailsPage> createState() => _StationDetailsPageState();
+}
+
+class _StationDetailsPageState extends State<StationDetailsPage> {
+  late bool _isFavorite;
+
+  @override
+  void initState() {
+    super.initState();
+    _isFavorite = widget.isFavorite;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final hasThaiName =
-        stop.thaiName != null && stop.thaiName!.trim().isNotEmpty;
+        widget.stop.thaiName != null && widget.stop.thaiName!.trim().isNotEmpty;
     final size = MediaQuery.of(context).size;
     final isWide = size.width > 600 && size.width > size.height;
 
     final content = StationDetailsContent(
-      stop: stop,
-      lineColor: lineColor,
-      lineName: lineName,
+      stop: widget.stop,
+      lineColor: widget.lineColor,
+      lineName: widget.lineName,
       onSelectAsStart: () {
-        onSelectAsStart();
+        widget.onSelectAsStart();
         Navigator.pop(context);
       },
       onSelectAsDestination: () {
-        onSelectAsDestination();
+        widget.onSelectAsDestination();
         Navigator.pop(context);
       },
-      transferStops: transferStops,
-      lineNameResolver: lineNameResolver,
-      lineColorResolver: lineColorResolver,
-      lineColorByName: lineColorByName,
-      routeIconByName: routeIconByName,
+      transferStops: widget.transferStops,
+      lineNameResolver: widget.lineNameResolver,
+      lineColorResolver: widget.lineColorResolver,
+      lineColorByName: widget.lineColorByName,
+      routeIconByName: widget.routeIconByName,
       onTransferStationSelected: (tStop) {
-        if (onTransferStationSelected != null) {
-          onTransferStationSelected!(tStop);
+        if (widget.onTransferStationSelected != null) {
+          widget.onTransferStationSelected!(tStop);
         }
       },
       isBottomSheet: false,
+      isFavorite: _isFavorite,
+      onToggleFavorite: () {
+        setState(() {
+          _isFavorite = !_isFavorite;
+        });
+        if (widget.onToggleFavorite != null) {
+          widget.onToggleFavorite!();
+        }
+      },
     );
 
     if (isWide) {
@@ -94,7 +121,7 @@ class StationDetailsPage extends StatelessWidget {
                 child: Column(
                   children: [
                     AppBar(
-                      title: Text(hasThaiName ? stop.thaiName! : stop.name),
+                      title: Text(hasThaiName ? widget.stop.thaiName! : widget.stop.name),
                       centerTitle: true,
                       backgroundColor: Colors.transparent,
                       elevation: 0,
@@ -111,7 +138,7 @@ class StationDetailsPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(hasThaiName ? stop.thaiName! : stop.name),
+        title: Text(hasThaiName ? widget.stop.thaiName! : widget.stop.name),
         centerTitle: true,
       ),
       body: content,

@@ -4,6 +4,8 @@ import 'package:latlong2/latlong.dart';
 import 'package:flutter/material.dart';
 import 'package:route/pages/about_page.dart';
 import 'package:route/services/gtfs_sync_service.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:route/services/gtfs_models.dart' as gtfs;
 
 class Profile {
   final String username;
@@ -69,6 +71,10 @@ class MorePage extends StatelessWidget {
     required this.onProfileUpdated,
     required this.currentAccentColor,
     required this.onAccentColorChanged,
+    required this.allStops,
+    required this.routeIconByName,
+    required this.lineColorByName,
+    required this.stopToLinesMap,
   });
 
   final VoidCallback onOpenTransportLines;
@@ -81,6 +87,11 @@ class MorePage extends StatelessWidget {
 
   final Color currentAccentColor;
   final ValueChanged<Color> onAccentColorChanged;
+  
+  final List<gtfs.Stop> allStops;
+  final String? Function(String) routeIconByName;
+  final Color Function(String) lineColorByName;
+  final Map<String, Set<String>> stopToLinesMap;
 
   void _showEditProfileDialog(BuildContext context) {
     showDialog(
@@ -216,6 +227,10 @@ class MorePage extends StatelessWidget {
                         profile: profile,
                         onProfileUpdated: onProfileUpdated,
                         onPinSelected: onSelectFavoritePin,
+                        allStops: allStops,
+                        routeIconByName: routeIconByName,
+                        lineColorByName: lineColorByName,
+                        stopToLinesMap: stopToLinesMap,
                       ),
                     ),
                   );
@@ -571,11 +586,19 @@ class _FavoritedPinsPage extends StatefulWidget {
   final Profile profile;
   final ValueChanged<Profile> onProfileUpdated;
   final void Function(double lat, double lon) onPinSelected;
+  final List<gtfs.Stop> allStops;
+  final String? Function(String) routeIconByName;
+  final Color Function(String) lineColorByName;
+  final Map<String, Set<String>> stopToLinesMap;
 
   const _FavoritedPinsPage({
     required this.profile,
     required this.onProfileUpdated,
     required this.onPinSelected,
+    required this.allStops,
+    required this.routeIconByName,
+    required this.lineColorByName,
+    required this.stopToLinesMap,
   });
 
   @override
@@ -593,8 +616,8 @@ class _FavoritedPinsPageState extends State<_FavoritedPinsPage> {
           ? const Center(child: Text('No saved locations yet.'))
           : GridView.builder(
               padding: const EdgeInsets.all(16),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 200,
                 crossAxisSpacing: 16,
                 mainAxisSpacing: 16,
                 childAspectRatio: 0.8,
@@ -605,6 +628,23 @@ class _FavoritedPinsPageState extends State<_FavoritedPinsPage> {
                 final label = pin['label'] as String? ?? 'Saved Pin';
                 final lat = pin['lat'] as double? ?? 0.0;
                 final lng = pin['lng'] as double? ?? 0.0;
+
+                gtfs.Stop? matchedStop;
+                try {
+                  matchedStop = widget.allStops.firstWhere(
+                    (s) => s.lat == lat && s.lon == lng,
+                  );
+                } catch (_) {}
+
+                final lines = (matchedStop != null &&
+                        widget.stopToLinesMap.containsKey(matchedStop.stopId))
+                    ? widget.stopToLinesMap[matchedStop.stopId]!
+                    : <String>{};
+
+                String displayTitle = label;
+                if (matchedStop != null && matchedStop.name.isNotEmpty) {
+                  displayTitle = matchedStop.name;
+                }
 
                 return Card(
                   clipBehavior: Clip.antiAlias,
@@ -643,28 +683,51 @@ class _FavoritedPinsPageState extends State<_FavoritedPinsPage> {
                                       point: LatLng(lat, lng),
                                       width: 24,
                                       height: 24,
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          color: Colors.red,
-                                          shape: BoxShape.circle,
-                                          border: Border.all(
-                                            color: Colors.white,
-                                            width: 2,
-                                          ),
-                                          boxShadow: const [
-                                            BoxShadow(
-                                              color: Colors.black26,
-                                              blurRadius: 4,
-                                              offset: Offset(0, 2),
+                                      child: matchedStop != null
+                                          ? Container(
+                                              decoration: BoxDecoration(
+                                                color: Colors.blue.shade700,
+                                                shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color: Colors.white,
+                                                  width: 2,
+                                                ),
+                                                boxShadow: const [
+                                                  BoxShadow(
+                                                    color: Colors.black26,
+                                                    blurRadius: 4,
+                                                    offset: Offset(0, 2),
+                                                  ),
+                                                ],
+                                              ),
+                                              child: const Icon(
+                                                Icons.directions_bus,
+                                                color: Colors.white,
+                                                size: 14,
+                                              ),
+                                            )
+                                          : Container(
+                                              decoration: BoxDecoration(
+                                                color: Colors.red,
+                                                shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color: Colors.white,
+                                                  width: 2,
+                                                ),
+                                                boxShadow: const [
+                                                  BoxShadow(
+                                                    color: Colors.black26,
+                                                    blurRadius: 4,
+                                                    offset: Offset(0, 2),
+                                                  ),
+                                                ],
+                                              ),
+                                              child: const Icon(
+                                                Icons.favorite,
+                                                color: Colors.white,
+                                                size: 14,
+                                              ),
                                             ),
-                                          ],
-                                        ),
-                                        child: const Icon(
-                                          Icons.favorite,
-                                          color: Colors.white,
-                                          size: 14,
-                                        ),
-                                      ),
                                     ),
                                   ],
                                 ),
@@ -677,8 +740,86 @@ class _FavoritedPinsPageState extends State<_FavoritedPinsPage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              if (matchedStop != null &&
+                                  matchedStop.code?.isNotEmpty == true)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 4.0),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 4, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey.shade200,
+                                          borderRadius:
+                                              BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          matchedStop.code ?? '',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.grey.shade800,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      if (lines.isNotEmpty)
+                                        Expanded(
+                                          child: SingleChildScrollView(
+                                            scrollDirection: Axis.horizontal,
+                                            child: Row(
+                                              children: lines.map((shortName) {
+                                                final iconSvg = widget
+                                                    .routeIconByName(shortName);
+                                                final color = widget
+                                                    .lineColorByName(shortName);
+
+                                                if (iconSvg != null) {
+                                                  return Padding(
+                                                    padding: const EdgeInsets.only(right: 4.0),
+                                                    child: SvgPicture.string(
+                                                      iconSvg,
+                                                      width: 16,
+                                                      height: 16,
+                                                      placeholderBuilder: (BuildContext context) => Container(
+                                                          width: 16,
+                                                          height: 16,
+                                                          decoration: BoxDecoration(
+                                                            color: color,
+                                                            shape: BoxShape.circle,
+                                                          )),
+                                                    ),
+                                                  );
+                                                } else {
+                                                  return Padding(
+                                                    padding: const EdgeInsets.only(right: 4.0),
+                                                    child: Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                                      decoration: BoxDecoration(
+                                                        color: color,
+                                                        borderRadius: BorderRadius.circular(4),
+                                                      ),
+                                                      child: Text(
+                                                        shortName,
+                                                        style: const TextStyle(
+                                                          color: Colors.white,
+                                                          fontSize: 9,
+                                                          fontWeight: FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  );
+                                                }
+                                              }).toList(),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
                               Text(
-                                label,
+                                displayTitle,
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
