@@ -2268,9 +2268,11 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                       (_collapsedSearchFocus.hasFocus ||
                           _collapsedSearchController.text.isNotEmpty ||
                           _startSearchFocus.hasFocus ||
-                          _startSearchController.text.isNotEmpty ||
+                          (_startSearchController.text.isNotEmpty &&
+                              selectedStartStopId == null) ||
                           _destSearchFocus.hasFocus ||
-                          _destSearchController.text.isNotEmpty))) {
+                          (_destSearchController.text.isNotEmpty &&
+                              selectedDestinationStopId == null)))) {
                 return BackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                   child: Container(color: Colors.black.withValues(alpha: 0.1)),
@@ -2315,11 +2317,13 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                         final isWideStartSearching =
                             !isHeaderCollapsed &&
                             (_startSearchFocus.hasFocus ||
-                                _startSearchController.text.isNotEmpty);
+                                (_startSearchController.text.isNotEmpty &&
+                                    selectedStartStopId == null));
                         final isWideDestSearching =
                             !isHeaderCollapsed &&
                             (_destSearchFocus.hasFocus ||
-                                _destSearchController.text.isNotEmpty);
+                                (_destSearchController.text.isNotEmpty &&
+                                    selectedDestinationStopId == null));
                         final isAnyWideSearching =
                             isWideSearching ||
                             isWideStartSearching ||
@@ -2480,11 +2484,13 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             final isStartSearching =
                 !isHeaderCollapsed &&
                 (_startSearchFocus.hasFocus ||
-                    _startSearchController.text.isNotEmpty);
+                    (_startSearchController.text.isNotEmpty &&
+                        selectedStartStopId == null));
             final isDestSearching =
                 !isHeaderCollapsed &&
                 (_destSearchFocus.hasFocus ||
-                    _destSearchController.text.isNotEmpty);
+                    (_destSearchController.text.isNotEmpty &&
+                        selectedDestinationStopId == null));
             final isAnySearching =
                 isSearching || isStartSearching || isDestSearching;
 
@@ -3022,8 +3028,19 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   }
 
   Widget _buildWideDirectionSearchResults(BuildContext context) {
-    final isStart =
-        _startSearchFocus.hasFocus || _startSearchController.text.isNotEmpty;
+    var isStart = true;
+    if (_destSearchFocus.hasFocus) {
+      isStart = false;
+    } else if (_startSearchFocus.hasFocus) {
+      isStart = true;
+    } else if (_startSearchController.text.isNotEmpty &&
+        selectedStartStopId == null) {
+      isStart = true;
+    } else if (_destSearchController.text.isNotEmpty &&
+        selectedDestinationStopId == null) {
+      isStart = false;
+    }
+
     final ctrl = isStart ? _startSearchController : _destSearchController;
     final text = ctrl.text;
 
@@ -3499,7 +3516,11 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       leading: ListenableBuilder(
         listenable: Listenable.merge([controller, focusNode]),
         builder: (context, _) {
-          final isActive = controller.text.isNotEmpty || focusNode.hasFocus;
+          final isSelected = asStart
+              ? (selectedStartStopId != null || _customStartPoint != null)
+              : (selectedDestinationStopId != null || _customDestPoint != null);
+          final isActive =
+              focusNode.hasFocus || (controller.text.isNotEmpty && !isSelected);
 
           if (isActive) {
             return IconButton(
