@@ -3499,7 +3499,19 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               tooltip: 'Clear $label',
               icon: const Icon(Icons.close, size: 18),
               onPressed: () {
-                controller.clear();
+                setState(() {
+                  controller.clear();
+                  if (asStart) {
+                    selectedStartStopId = null;
+                    _customStartPoint = null;
+                  } else {
+                    selectedDestinationStopId = null;
+                    _customDestPoint = null;
+                  }
+                  directionOptions = [];
+                  selectedDirectionIndex = 0;
+                  _recalculateMapLayers();
+                });
               },
             );
           }
@@ -3527,19 +3539,34 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               icon: const Icon(Icons.arrow_back),
               onPressed: () {
                 setState(() {
-                  controller.clear();
                   focusNode.unfocus();
-                  if (asStart) {
-                    selectedStartStopId = null;
-                    _customStartPoint = null;
+                  if (isSelected) {
+                    if (asStart) {
+                      if (selectedStartStopId != null) {
+                        for (final s in allStops) {
+                          if (s.stopId == selectedStartStopId) {
+                            controller.text = s.name;
+                            break;
+                          }
+                        }
+                      } else if (_customStartPoint != null) {
+                        controller.text = 'Dropped Pin';
+                      }
+                    } else {
+                      if (selectedDestinationStopId != null) {
+                        for (final s in allStops) {
+                          if (s.stopId == selectedDestinationStopId) {
+                            controller.text = s.name;
+                            break;
+                          }
+                        }
+                      } else if (_customDestPoint != null) {
+                        controller.text = 'Dropped Pin';
+                      }
+                    }
                   } else {
-                    selectedDestinationStopId = null;
-                    _customDestPoint = null;
+                    controller.clear();
                   }
-                  directionOptions = [];
-                  selectedDirectionIndex = 0;
-                  _headerCollapsed.value = false;
-                  _recalculateMapLayers();
                 });
               },
             );
