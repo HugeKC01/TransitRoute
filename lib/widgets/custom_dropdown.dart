@@ -4,7 +4,7 @@ class CustomInlineDropdown<T> extends StatefulWidget {
   final T? value;
   final List<T> items;
   final String Function(T?) itemLabel;
-  final Color Function(T)? itemColor;
+  final Widget? Function(T?)? itemLeading;
   final void Function(T?) onChanged;
 
   const CustomInlineDropdown({
@@ -12,7 +12,7 @@ class CustomInlineDropdown<T> extends StatefulWidget {
     this.value,
     required this.items,
     required this.itemLabel,
-    this.itemColor,
+    this.itemLeading,
     required this.onChanged,
   });
 
@@ -47,15 +47,10 @@ class _CustomInlineDropdownState<T> extends State<CustomInlineDropdown<T>> {
             ),
             child: Row(
               children: [
-                if (widget.value != null && widget.itemColor != null)
+                if (widget.itemLeading != null && widget.itemLeading!(widget.value) != null)
                   Container(
-                    width: 20,
-                    height: 20,
                     margin: const EdgeInsets.only(right: 12),
-                    decoration: BoxDecoration(
-                      color: widget.itemColor!(widget.value as T),
-                      shape: BoxShape.circle,
-                    ),
+                    child: widget.itemLeading!(widget.value)!,
                   ),
                 Expanded(
                   child: Text(
@@ -97,15 +92,8 @@ class _CustomInlineDropdownState<T> extends State<CustomInlineDropdown<T>> {
                 ),
                 ...widget.items.map((item) {
                   return ListTile(
-                    leading: widget.itemColor != null
-                        ? Container(
-                            width: 20,
-                            height: 20,
-                            decoration: BoxDecoration(
-                              color: widget.itemColor!(item),
-                              shape: BoxShape.circle,
-                            ),
-                          )
+                    leading: widget.itemLeading != null
+                        ? widget.itemLeading!(item)
                         : null,
                     title: Text(widget.itemLabel(item)),
                     onTap: () {

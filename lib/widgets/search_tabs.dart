@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../services/gtfs_models.dart' as gtfs;
 
 import 'custom_dropdown.dart';
@@ -13,6 +14,7 @@ class ServiceTabs extends StatefulWidget {
   final List<String> Function(String)? getLineNames;
   final void Function(gtfs.Stop) onSelect;
   final int Function(gtfs.Stop) getServicePriority;
+  final String? Function(String)? routeIconByName;
 
   const ServiceTabs({
     super.key,
@@ -24,6 +26,7 @@ class ServiceTabs extends StatefulWidget {
     this.getLineNames,
     required this.onSelect,
     required this.getServicePriority,
+    this.routeIconByName,
   });
 
   @override
@@ -137,52 +140,108 @@ class _ServiceTabsState extends State<ServiceTabs>
               ),
               child: Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: lineColor,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: theme.colorScheme.surface.withValues(alpha: 0.5),
-                        width: 1.5,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: lineColor.withValues(alpha: 0.3),
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
+                  Builder(
+                    builder: (context) {
+                      String? routeIcon;
+                      if (serviceType == 1 && widget.routeIconByName != null) {
+                        routeIcon = widget.routeIconByName!(lineName);
+                      }
+
+                      if (routeIcon != null && routeIcon.isNotEmpty) {
+                        return Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: lineColor.withValues(alpha: 0.15),
+                                shape: BoxShape.circle,
+                              ),
+                              child: SvgPicture.asset(
+                                routeIcon,
+                                width: 24,
+                                height: 24,
+                              ),
+                            ),
+                            if (stop.code != null && stop.code!.isNotEmpty) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: lineColor,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  stop.code!,
+                                  style: TextStyle(
+                                    color: (lineColor.computeLuminance() > 0.5)
+                                        ? Colors.black87
+                                        : Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        );
+                      }
+
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
                         ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Icon(
-                          getIconForType(serviceType),
-                          color: (lineColor.computeLuminance() > 0.5)
-                              ? Colors.black87
-                              : Colors.white,
-                          size: 16,
+                        decoration: BoxDecoration(
+                          color: lineColor,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: theme.colorScheme.surface.withValues(
+                              alpha: 0.5,
+                            ),
+                            width: 1.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: lineColor.withValues(alpha: 0.3),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
-                        if (stop.code != null && stop.code!.isNotEmpty) ...[
-                          const SizedBox(width: 4),
-                          Text(
-                            stop.code!,
-                            style: TextStyle(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Icon(
+                              getIconForType(serviceType),
                               color: (lineColor.computeLuminance() > 0.5)
                                   ? Colors.black87
                                   : Colors.white,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 13,
+                              size: 16,
                             ),
-                          ),
-                        ],
-                      ],
-                    ),
+                            if (stop.code != null && stop.code!.isNotEmpty) ...[
+                              const SizedBox(width: 4),
+                              Text(
+                                stop.code!,
+                                style: TextStyle(
+                                  color: (lineColor.computeLuminance() > 0.5)
+                                      ? Colors.black87
+                                      : Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -263,7 +322,32 @@ class _ServiceTabsState extends State<ServiceTabs>
                 value: effectiveSelectedLine,
                 items: lines,
                 itemLabel: (item) => item ?? 'All Lines',
-                itemColor: (item) => widget.lineColors[item] ?? Colors.grey,
+                itemLeading: (item) {
+                  if (item == null) return null;
+                  final color = widget.lineColors[item] ?? Colors.grey;
+                  if (widget.routeIconByName != null) {
+                    final routeIcon = widget.routeIconByName!(item);
+                    if (routeIcon != null && routeIcon.isNotEmpty) {
+                      return SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: SvgPicture.asset(
+                          routeIcon,
+                          width: 20,
+                          height: 20,
+                        ),
+                      );
+                    }
+                  }
+                  return Container(
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                    ),
+                  );
+                },
                 onChanged: onLineChanged,
               ),
             ),
@@ -293,13 +377,34 @@ class _ServiceTabsState extends State<ServiceTabs>
                             ),
                             child: Row(
                               children: [
-                                Container(
-                                  width: 12,
-                                  height: 12,
-                                  decoration: BoxDecoration(
-                                    color: color,
-                                    shape: BoxShape.circle,
-                                  ),
+                                Builder(
+                                  builder: (context) {
+                                    if (widget.routeIconByName != null) {
+                                      final routeIcon = widget.routeIconByName!(
+                                        item.line,
+                                      );
+                                      if (routeIcon != null &&
+                                          routeIcon.isNotEmpty) {
+                                        return SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: SvgPicture.asset(
+                                            routeIcon,
+                                            width: 16,
+                                            height: 16,
+                                          ),
+                                        );
+                                      }
+                                    }
+                                    return Container(
+                                      width: 12,
+                                      height: 12,
+                                      decoration: BoxDecoration(
+                                        color: color,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    );
+                                  },
                                 ),
                                 const SizedBox(width: 8),
                                 Expanded(

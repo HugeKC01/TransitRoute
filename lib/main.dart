@@ -2867,37 +2867,157 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   Widget _buildSearchSuggestionTile(gtfs.Stop stop, VoidCallback onTap) {
     final theme = Theme.of(context);
     final lineColor = _getLineColor(stop.stopId);
+    final int serviceType = _getServicePriority(stop);
+    final lineName = _getLineName(stop.stopId) ?? '';
 
-    return ListTile(
-      leading: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: lineColor,
-          border: Border.all(color: theme.colorScheme.surface, width: 2),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          stop.code ?? '',
-          style: TextStyle(
-            color: (lineColor.computeLuminance() > 0.5)
-                ? Colors.black
-                : Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 10,
+    IconData getIconForType(int type) {
+      switch (type) {
+        case 1:
+          return Icons.subway;
+        case 2:
+          return Icons.train;
+        case 3:
+          return Icons.directions_bus;
+        case 4:
+          return Icons.directions_boat;
+        default:
+          return Icons.directions_transit;
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Material(
+          color: theme.colorScheme.surface.withValues(alpha: 0.9),
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 12.0,
+              ),
+              child: Row(
+                children: [
+                  Builder(
+                    builder: (context) {
+                      String? routeIcon;
+                      if (serviceType == 1) routeIcon = _getRouteIcon(lineName);
+                      if (routeIcon != null && routeIcon.isNotEmpty) {
+                        return Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: lineColor.withValues(alpha: 0.15),
+                                shape: BoxShape.circle,
+                              ),
+                              child: SvgPicture.asset(
+                                routeIcon,
+                                width: 24,
+                                height: 24,
+                              ),
+                            ),
+                            if (stop.code != null && stop.code!.isNotEmpty) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: lineColor,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  stop.code!,
+                                  style: TextStyle(
+                                    color: (lineColor.computeLuminance() > 0.5)
+                                        ? Colors.black87
+                                        : Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        );
+                      }
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: lineColor,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              getIconForType(serviceType),
+                              color: (lineColor.computeLuminance() > 0.5)
+                                  ? Colors.black87
+                                  : Colors.white,
+                              size: 16,
+                            ),
+                            if (stop.code != null && stop.code!.isNotEmpty) ...[
+                              const SizedBox(width: 6),
+                              Text(
+                                stop.code!,
+                                style: TextStyle(
+                                  color: (lineColor.computeLuminance() > 0.5)
+                                      ? Colors.black87
+                                      : Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          stop.name,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        if (stop.thaiName != null &&
+                            stop.thaiName!.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            stop.thaiName!,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color:
+                                  theme.textTheme.bodySmall?.color ??
+                                  Colors.grey,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-          overflow: TextOverflow.ellipsis,
         ),
       ),
-      title: Text(stop.name),
-      subtitle: Text(
-        (stop.thaiName != null && stop.thaiName!.isNotEmpty)
-            ? stop.thaiName!
-            : 'Thai Station provide later',
-        style: theme.textTheme.bodySmall,
-      ),
-      onTap: onTap,
     );
   }
 
