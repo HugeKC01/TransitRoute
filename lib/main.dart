@@ -176,26 +176,41 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   List<FavoritePin> _favoritePins = [];
 
   Future<void> _loadFavoritePins() async {
-    final prefs = await SharedPreferences.getInstance();
-    final jsonStr = prefs.getString('favorite_pins');
-    if (jsonStr != null) {
+    if (_profile.favoritePins != null) {
       try {
-        final List<dynamic> decoded = jsonDecode(jsonStr);
         setState(() {
-          _favoritePins = decoded
+          _favoritePins = _profile.favoritePins!
               .map((e) => FavoritePin.fromJson(e as Map<String, dynamic>))
               .toList();
         });
       } catch (e) {
-        debugPrint('Failed to load favorite pins: $e');
+        debugPrint('Failed to load favorite pins from profile: $e');
+      }
+    } else {
+      // Fallback or migration
+      final prefs = await SharedPreferences.getInstance();
+      final jsonStr = prefs.getString('favorite_pins');
+      if (jsonStr != null) {
+        try {
+          final List<dynamic> decoded = jsonDecode(jsonStr);
+          setState(() {
+            _favoritePins = decoded
+                .map((e) => FavoritePin.fromJson(e as Map<String, dynamic>))
+                .toList();
+          });
+          // Migrate
+          _saveFavoritePins();
+        } catch (e) {
+          debugPrint('Failed to load favorite pins: $e');
+        }
       }
     }
   }
 
   Future<void> _saveFavoritePins() async {
-    final prefs = await SharedPreferences.getInstance();
-    final jsonStr = jsonEncode(_favoritePins.map((e) => e.toJson()).toList());
-    await prefs.setString('favorite_pins', jsonStr);
+    final serialized = _favoritePins.map((e) => e.toJson()).toList();
+    final newProfile = _profile.copyWith(favoritePins: serialized);
+    _saveProfile(newProfile);
   }
 
   late final SearchController _startSearchController;
@@ -245,6 +260,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       _profile = _profile.copyWith(joinedDate: joined);
       _saveProfile(_profile);
     }
+
+    _loadFavoritePins();
   }
 
   Future<void> _saveProfile(Profile newProfile) async {
@@ -1056,6 +1073,15 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   }
 
   void _showDroppedPinDetails(BuildContext context, LatLng point) {
+    FavoritePin? matchingPin;
+    try {
+      matchingPin = _favoritePins.firstWhere(
+        (p) =>
+            p.point.latitude == point.latitude &&
+            p.point.longitude == point.longitude,
+      );
+    } catch (_) {}
+
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -1170,7 +1196,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                       const SizedBox(width: 14),
                       Expanded(
                         child: Text(
-                          'Dropped Pin',
+                          matchingPin?.label ?? 'Dropped Pin',
                           style: theme.textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
@@ -1191,15 +1217,33 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   ],
                 ),
                 const SizedBox(height: 20),
-                quickAction(
-                  icon: Icons.favorite_border,
-                  title: 'Save to Favorites',
-                  subtitle: 'Save this location as a favorite pin',
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    _promptSaveFavorite(point);
-                  },
-                ),
+                if (matchingPin != null)
+                  quickAction(
+                    icon: Icons.favorite,
+                    title: 'Remove from Favorites',
+                    subtitle: 'Delete this location from favorites',
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      setState(() {
+                        _favoritePins.removeWhere(
+                          (p) =>
+                              p.point.latitude == point.latitude &&
+                              p.point.longitude == point.longitude,
+                        );
+                      });
+                      _saveFavoritePins();
+                    },
+                  )
+                else
+                  quickAction(
+                    icon: Icons.favorite_border,
+                    title: 'Save to Favorites',
+                    subtitle: 'Save this location as a favorite pin',
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      _promptSaveFavorite(point);
+                    },
+                  ),
                 quickAction(
                   icon: Icons.trip_origin,
                   title: 'Set as origin',
@@ -1607,6 +1651,44 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
             if (showBusStops) MarkerLayer(markers: _cachedBusMarkers),
             if (showFerryStops) MarkerLayer(markers: _cachedFerryMarkers),
+            if (_favoritePins.isNotEmpty)
+              MarkerLayer(
+                markers: _favoritePins.map((pin) {
+                  return Marker(
+                    point: pin.point,
+                    width: 24,
+                    height: 24,
+                    child: GestureDetector(
+                      onTap: () => _showDroppedPinDetails(context, pin.point),
+                      child: Tooltip(
+                        message: 'Favorite Pin',
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surface,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.redAccent,
+                              width: 2,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.2),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.favorite,
+                            color: Colors.redAccent,
+                            size: 14,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
             if (filteredRailStops.isNotEmpty)
               MarkerLayer(
                 markers: filteredRailStops.map((stop) {
@@ -2363,10 +2445,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                           _collapsedSearchController.text.isNotEmpty ||
                           _startSearchFocus.hasFocus ||
                           (_startSearchController.text.isNotEmpty &&
-                              selectedStartStopId == null) ||
+                              selectedStartStopId == null &&
+                              _customStartPoint == null) ||
                           _destSearchFocus.hasFocus ||
                           (_destSearchController.text.isNotEmpty &&
-                              selectedDestinationStopId == null)))) {
+                              selectedDestinationStopId == null &&
+                              _customDestPoint == null)))) {
                 return GestureDetector(
                   onTap: () {
                     setState(() {
@@ -2442,12 +2526,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                             !isHeaderCollapsed &&
                             (_startSearchFocus.hasFocus ||
                                 (_startSearchController.text.isNotEmpty &&
-                                    selectedStartStopId == null));
+                                    selectedStartStopId == null &&
+                                    _customStartPoint == null));
                         final isWideDestSearching =
                             !isHeaderCollapsed &&
                             (_destSearchFocus.hasFocus ||
                                 (_destSearchController.text.isNotEmpty &&
-                                    selectedDestinationStopId == null));
+                                    selectedDestinationStopId == null &&
+                                    _customDestPoint == null));
                         final isAnyWideSearching =
                             isWideSearching ||
                             isWideStartSearching ||
@@ -2609,12 +2695,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                 !isHeaderCollapsed &&
                 (_startSearchFocus.hasFocus ||
                     (_startSearchController.text.isNotEmpty &&
-                        selectedStartStopId == null));
+                        selectedStartStopId == null &&
+                        _customStartPoint == null));
             final isDestSearching =
                 !isHeaderCollapsed &&
                 (_destSearchFocus.hasFocus ||
                     (_destSearchController.text.isNotEmpty &&
-                        selectedDestinationStopId == null));
+                        selectedDestinationStopId == null &&
+                        _customDestPoint == null));
             final isAnySearching =
                 isSearching || isStartSearching || isDestSearching;
 
@@ -3181,10 +3269,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     } else if (_startSearchFocus.hasFocus) {
       isStart = true;
     } else if (_startSearchController.text.isNotEmpty &&
-        selectedStartStopId == null) {
+        selectedStartStopId == null &&
+        _customStartPoint == null) {
       isStart = true;
     } else if (_destSearchController.text.isNotEmpty &&
-        selectedDestinationStopId == null) {
+        selectedDestinationStopId == null &&
+        _customDestPoint == null) {
       isStart = false;
     }
 
@@ -3918,7 +4008,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         }
       }
     });
-    _loadFavoritePins();
     _loadProfile();
     _startSearchController = SearchController();
     _startSearchFocus = FocusNode();
@@ -4916,6 +5005,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         onOpenTransitUpdates: _openTransitUpdatePage,
         onOpenGraphicMap: _openGraphicMap,
         onOpenCards: _openCardsPage,
+        onSelectFavoritePin: (lat, lon) {
+          setState(() => _selectedNavIndex = 0);
+          final point = LatLng(lat, lon);
+          _mapController.move(point, 15);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _showDroppedPinDetails(context, point);
+          });
+        },
         profile: _profile,
         onProfileUpdated: _saveProfile,
         currentAccentColor: widget.currentAccentColor,
