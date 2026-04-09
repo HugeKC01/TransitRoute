@@ -532,6 +532,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     if (lineName.isEmpty) return null;
     if (_routeIconCache.containsKey(lineName)) return _routeIconCache[lineName];
     final firstLine = lineName.split(', ').first;
+    
+    if (firstLine.toUpperCase() == 'BRT') {
+      _routeIconCache[lineName] = 'assets/icons/BRT.svg';
+      return 'assets/icons/BRT.svg';
+    }
+
     try {
       final route = allRoutes.firstWhere(
         (r) => r.shortName == firstLine || r.longName == firstLine,
@@ -3025,7 +3031,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   Builder(
                     builder: (context) {
                       String? routeIcon;
-                      if (serviceType == 1) routeIcon = _getRouteIcon(lineName);
+                      if (serviceType == 1 || lineName.toUpperCase() == 'BRT') {
+                        routeIcon = _getRouteIcon(lineName);
+                      }
                       if (routeIcon != null && routeIcon.isNotEmpty) {
                         return Row(
                           mainAxisSize: MainAxisSize.min,
@@ -3970,6 +3978,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       }
     }
     colorMap['BMTA Bus'] = Colors.blueAccent;
+    colorMap['BRT'] = Colors.yellow.shade700; // More readable than raw FFFF00
     final combinedStops = <gtfs.Stop>[...stops, ...busStopList, ...ferryStops];
     final stopMap = {for (final stop in combinedStops) stop.stopId: stop};
 
