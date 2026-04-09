@@ -1544,6 +1544,28 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                 setState(() => _currentZoom = newZoom);
               }
             },
+            onTap: (tapPosition, point) {
+              setState(() {
+                if (_collapsedSearchFocus.hasFocus) {
+                  _collapsedSearchFocus.unfocus();
+                }
+                if (_collapsedSearchController.text.isNotEmpty) {
+                  _collapsedSearchController.clear();
+                }
+                if (_startSearchFocus.hasFocus) {
+                  _startSearchFocus.unfocus();
+                }
+                if (_startSearchController.text.isNotEmpty && selectedStartStopId == null && _customStartPoint == null) {
+                  _startSearchController.clear();
+                }
+                if (_destSearchFocus.hasFocus) {
+                  _destSearchFocus.unfocus();
+                }
+                if (_destSearchController.text.isNotEmpty && selectedDestinationStopId == null && _customDestPoint == null) {
+                  _destSearchController.clear();
+                }
+              });
+            },
             onLongPress: (tapPosition, point) {
               if (directionOptions.isEmpty) {
                 _showDroppedPinDetails(context, point);
@@ -2273,9 +2295,33 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                           _destSearchFocus.hasFocus ||
                           (_destSearchController.text.isNotEmpty &&
                               selectedDestinationStopId == null)))) {
-                return BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                  child: Container(color: Colors.black.withValues(alpha: 0.1)),
+                return GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      if (_collapsedSearchFocus.hasFocus) {
+                        _collapsedSearchFocus.unfocus();
+                      }
+                      if (_collapsedSearchController.text.isNotEmpty) {
+                        _collapsedSearchController.clear();
+                      }
+                      if (_startSearchFocus.hasFocus) {
+                        _startSearchFocus.unfocus();
+                      }
+                      if (_startSearchController.text.isNotEmpty && selectedStartStopId == null && _customStartPoint == null) {
+                        _startSearchController.clear();
+                      }
+                      if (_destSearchFocus.hasFocus) {
+                        _destSearchFocus.unfocus();
+                      }
+                      if (_destSearchController.text.isNotEmpty && selectedDestinationStopId == null && _customDestPoint == null) {
+                        _destSearchController.clear();
+                      }
+                    });
+                  },
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                    child: Container(color: Colors.black.withValues(alpha: 0.1)),
+                  ),
                 );
               }
               return const SizedBox.shrink();
@@ -2508,9 +2554,26 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   Positioned.fill(
                     child: GestureDetector(
                       onTap: () {
-                        _collapsedSearchFocus.unfocus();
-                        _startSearchFocus.unfocus();
-                        _destSearchFocus.unfocus();
+                        setState(() {
+                          if (_collapsedSearchFocus.hasFocus) {
+                            _collapsedSearchFocus.unfocus();
+                          }
+                          if (_collapsedSearchController.text.isNotEmpty) {
+                            _collapsedSearchController.clear();
+                          }
+                          if (_startSearchFocus.hasFocus) {
+                            _startSearchFocus.unfocus();
+                          }
+                          if (_startSearchController.text.isNotEmpty && selectedStartStopId == null && _customStartPoint == null) {
+                            _startSearchController.clear();
+                          }
+                          if (_destSearchFocus.hasFocus) {
+                            _destSearchFocus.unfocus();
+                          }
+                          if (_destSearchController.text.isNotEmpty && selectedDestinationStopId == null && _customDestPoint == null) {
+                            _destSearchController.clear();
+                          }
+                        });
                       },
                       child: BackdropFilter(
                         filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
