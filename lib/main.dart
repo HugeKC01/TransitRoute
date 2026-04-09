@@ -444,6 +444,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   List<DirectionOption> directionOptions = [];
   DirectionOption? _viewingDetailsOption;
   gtfs.Stop? _viewingStop;
+  LatLng? _viewingDroppedPin;
   int selectedDirectionIndex = 0;
 
   Future<void> _findDirection() async {
@@ -1005,6 +1006,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   void _showStopDetails(BuildContext context, gtfs.Stop stop) {
     setState(() {
       _viewingStop = stop;
+      _viewingDroppedPin = null;
       _viewingDetailsOption = null;
     });
   }
@@ -1081,6 +1083,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       return;
     } catch (_) {}
 
+    setState(() {
+      _viewingDroppedPin = point;
+      _viewingStop = null;
+      _viewingDetailsOption = null;
+    });
+  }
+
+  Widget _buildDroppedPinPanelContent(BuildContext context, LatLng point) {
     FavoritePin? matchingPin;
     try {
       matchingPin = _favoritePins.firstWhere(
@@ -1090,191 +1100,199 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       );
     } catch (_) {}
 
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) {
-        final theme = Theme.of(sheetContext);
-        final colorScheme = theme.colorScheme;
-        final bottomInset = MediaQuery.of(sheetContext).padding.bottom;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final bottomInset = MediaQuery.of(context).padding.bottom;
 
-        Widget infoChip(String label, String value) {
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: colorScheme.outlineVariant),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  label.toUpperCase(),
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          );
-        }
-
-        Widget quickAction({
-          required IconData icon,
-          required String title,
-          required String subtitle,
-          required VoidCallback onTap,
-        }) {
-          return Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(16),
-              onTap: onTap,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: colorScheme.surfaceContainerHigh,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Icon(icon, color: colorScheme.primary),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(title, style: theme.textTheme.titleMedium),
-                          const SizedBox(height: 2),
-                          Text(
-                            subtitle,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Icon(Icons.chevron_right),
-                  ],
-                ),
+    Widget infoChip(String label, String value) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: colorScheme.outlineVariant),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label.toUpperCase(),
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
               ),
             ),
-          );
-        }
+            const SizedBox(height: 2),
+            Text(
+              value,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
-        return SafeArea(
-          top: false,
-          child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(24, 12, 24, bottomInset + 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    Widget quickAction({
+      required IconData icon,
+      required String title,
+      required String subtitle,
+      required VoidCallback onTap,
+    }) {
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+            child: Row(
               children: [
                 Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
                     color: colorScheme.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Row(
+                  child: Icon(icon, color: colorScheme.primary),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: Colors.redAccent,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: const Icon(Icons.place, color: Colors.white),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Text(
-                          matchingPin?.label ?? 'Dropped Pin',
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
+                      Text(title, style: theme.textTheme.titleMedium),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 8,
-                  children: [
-                    infoChip(
-                      'Coordinates',
-                      'Lat ${point.latitude.toStringAsFixed(4)}, Lon ${point.longitude.toStringAsFixed(4)}',
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                if (matchingPin != null)
-                  quickAction(
-                    icon: Icons.favorite,
-                    title: 'Remove from Favorites',
-                    subtitle: 'Delete this location from favorites',
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      setState(() {
-                        _favoritePins.removeWhere(
-                          (p) =>
-                              p.point.latitude == point.latitude &&
-                              p.point.longitude == point.longitude,
-                        );
-                      });
-                      _saveFavoritePins();
-                    },
-                  )
-                else
-                  quickAction(
-                    icon: Icons.favorite_border,
-                    title: 'Save to Favorites',
-                    subtitle: 'Save this location as a favorite pin',
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      _promptSaveFavorite(point);
-                    },
-                  ),
-                quickAction(
-                  icon: Icons.trip_origin,
-                  title: 'Set as origin',
-                  subtitle: 'Plan a route starting here',
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    _assignCustomPointSelection(point, asStart: true);
-                  },
-                ),
-                quickAction(
-                  icon: Icons.flag,
-                  title: 'Set as destination',
-                  subtitle: 'Use this location as your endpoint',
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    _assignCustomPointSelection(point, asStart: false);
-                  },
-                ),
+                const Icon(Icons.chevron_right),
               ],
             ),
           ),
-        );
-      },
+        ),
+      );
+    }
+
+    return Container(
+      color: theme.colorScheme.surface,
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(24, 24, 24, bottomInset + 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const SizedBox(width: 48), // For balance
+                  Text("Location", style: theme.textTheme.titleMedium),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () {
+                      setState(() => _viewingDroppedPin = null);
+                    },
+                  ),
+                ],
+              ),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: Colors.redAccent,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Icon(Icons.place, color: Colors.white),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        matchingPin?.label ?? "Dropped Pin",
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                children: [
+                  infoChip(
+                    "Coordinates",
+                    "Lat ${point.latitude.toStringAsFixed(4)}, Lon ${point.longitude.toStringAsFixed(4)}",
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              if (matchingPin != null)
+                quickAction(
+                  icon: Icons.favorite,
+                  title: "Remove from Favorites",
+                  subtitle: "Delete this location from favorites",
+                  onTap: () {
+                    setState(() {
+                      _favoritePins.removeWhere(
+                        (p) =>
+                            p.point.latitude == point.latitude &&
+                            p.point.longitude == point.longitude,
+                      );
+                    });
+                    _saveFavoritePins();
+                  },
+                )
+              else
+                quickAction(
+                  icon: Icons.favorite_border,
+                  title: "Save to Favorites",
+                  subtitle: "Save this location as a favorite pin",
+                  onTap: () {
+                    _promptSaveFavorite(point);
+                  },
+                ),
+              quickAction(
+                icon: Icons.trip_origin,
+                title: "Set as origin",
+                subtitle: "Plan a route starting here",
+                onTap: () {
+                  _assignCustomPointSelection(point, asStart: true);
+                  setState(() => _viewingDroppedPin = null);
+                },
+              ),
+              quickAction(
+                icon: Icons.flag,
+                title: "Set as destination",
+                subtitle: "Use this location as your endpoint",
+                onTap: () {
+                  _assignCustomPointSelection(point, asStart: false);
+                  setState(() => _viewingDroppedPin = null);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -1398,6 +1416,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   }
 
   Widget _buildPanelContent(BuildContext context) {
+    if (_viewingDroppedPin != null) {
+      return _buildDroppedPinPanelContent(context, _viewingDroppedPin!);
+    }
     if (_viewingStop != null) {
       final stop = _viewingStop!;
       final lineName = _getLineName(stop.stopId);
@@ -1554,7 +1575,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
     final isWide = screenWidth > 600;
-    final hasPanelContent = directionOptions.isNotEmpty || _viewingStop != null;
+    final hasPanelContent = directionOptions.isNotEmpty || _viewingStop != null || _viewingDroppedPin != null;
 
     // Responsive bottom offset that animates up if there are routes
     final zoomBottomOffset = isWide
@@ -2576,6 +2597,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                         final hasPanelContent =
                             directionOptions.isNotEmpty ||
                             _viewingStop != null ||
+                            _viewingDroppedPin != null ||
                             isAnyWideSearching;
                         return AnimatedSwitcher(
                           duration: const Duration(milliseconds: 350),
@@ -2740,7 +2762,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                 isSearching || isStartSearching || isDestSearching;
 
             final hasPanelContent =
-                directionOptions.isNotEmpty || _viewingStop != null;
+                directionOptions.isNotEmpty || _viewingStop != null || _viewingDroppedPin != null;
             // Dynamic initial sheet height when content exist
             final sheetInitialSize = hasPanelContent ? 0.45 : 0.0;
 
@@ -5077,6 +5099,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       canPop:
           directionOptions.isEmpty &&
           _viewingStop == null &&
+          _viewingDroppedPin == null &&
           !_collapsedSearchFocus.hasFocus &&
           !_startSearchFocus.hasFocus &&
           !_destSearchFocus.hasFocus &&
@@ -5094,6 +5117,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             _collapsedSearchController.clear();
           } else if (_viewingStop != null) {
             _viewingStop = null;
+          } else if (_viewingDroppedPin != null) {
+            _viewingDroppedPin = null;
           } else if (directionOptions.isNotEmpty ||
               _startSearchController.text.isNotEmpty ||
               _destSearchController.text.isNotEmpty) {
