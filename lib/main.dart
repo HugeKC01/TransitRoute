@@ -4266,11 +4266,11 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         return AlertDialog(
           title: const Text('Welcome / ยินดีต้อนรับ'),
           content: const Text(
-            'This application is a prototype developed as part of a final project by a KMUTT student.\n\n'
-            'Please note that the data in this app currently covers only Bangkok, Thailand, and may be inaccurate or incomplete data.\n\n'
+            'This application is a prototype developed as part of a senior project by students at King Mongkut\'s University of Technology Thonburi (KMUTT).\n\n'
+            'The data in this app covers only the Bangkok metropolitan area and may contain inaccuracies or incomplete information. For example, travel time and fare data are partially estimated and may be outdated. Users should verify with official staff for the most accurate information.\n\n'
             '---\n\n'
-            'แอปพลิเคชันนี้เป็นต้นแบบที่พัฒนาขึ้นโดยเป็นส่วนหนึ่งของโครงงานก่อนจบการศึกษาของนักศึกษามหาวิทยาลัยเทคโนโลยีพระจอมเกล้าธนบุรี (KMUTT)\n\n'
-            'ข้อมูลในแอปนี้ครอบคลุมเฉพาะพื้นที่กรุงเทพมหานคร และอาจมีความคลาดเคลื่อนหรือไม่สมบูรณ์ของข้อมูล',
+            'แอปพลิเคชันนี้เป็นเพียงต้นแบบที่พัฒนาขึ้นเพื่อเป็นส่วนหนึ่งของโครงงานก่อนจบการศึกษาของนักศึกษามหาวิทยาลัยเทคโนโลยีพระจอมเกล้าธนบุรี (KMUTT)\n\n'
+            'ข้อมูลในแอปนี้ครอบคลุมเฉพาะพื้นที่กรุงเทพมหานครเท่านั้น และอาจมีความคลาดเคลื่อนหรือไม่สมบูรณ์ของข้อมูล อาทิ ข้อมูลเวลาเดินทางและค่าโดยสารมีการใช้ประมาณเป็นบางส่วนอาจมีความคลาดเคลื่อนและไม่เป็นปัจจุบัน ผู้ใช้ควรสอบถามกับเจ้าหน้าที่อีกครั้งเพื่อความถูกต้องของข้อมูล',
           ),
           actions: <Widget>[
             TextButton(
