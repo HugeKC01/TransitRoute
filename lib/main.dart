@@ -3474,9 +3474,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
         ),
       ),
-      onTap: () {
-        _collapsedSearchFocus.requestFocus();
-      },
       onChanged: (value) {
         // UI updates handled by ListenableBuilder now
       },
@@ -3893,9 +3890,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
         ),
       ),
-      onTap: () {
-        focusNode.requestFocus();
-      },
       onChanged: (value) {
         // UI updates handled by ListenableBuilder now
       },
