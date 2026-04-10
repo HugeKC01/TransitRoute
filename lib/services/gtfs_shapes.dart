@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:route/services/gtfs_sync_service.dart';
@@ -101,6 +102,10 @@ class GtfsShapesService {
   Future<Map<String, List<_SeqPoint>>> _parseShapes(String assetPath) async {
     final text = await gtfsSyncService.getGtfsFile(assetPath);
     if (text.trim().isEmpty) return <String, List<_SeqPoint>>{};
+    return await compute(_parseShapesIsolate, text);
+  }
+
+  static Map<String, List<_SeqPoint>> _parseShapesIsolate(String text) {
     final lines = const LineSplitter()
         .convert(text)
         .map((l) => l.trimRight())
@@ -200,7 +205,7 @@ class GtfsShapesService {
     return _ShapeTripMeta(shapeToRoute: mapRoute, shapeToColor: mapColor);
   }
 
-  List<String> _splitCsvLine(String line) {
+  static List<String> _splitCsvLine(String line) {
     final out = <String>[];
     final buf = StringBuffer();
     var inQuotes = false;
