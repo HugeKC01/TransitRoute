@@ -174,6 +174,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   final LayerHitNotifier<int> _routeHitNotifier = ValueNotifier(null);
 
   List<FavoritePin> _favoritePins = [];
+  bool _isGtfsDataLoaded = false;
+  List<LatLng> _initialCameraPts = [];
 
   Future<void> _loadFavoritePins() async {
     if (_profile.favoritePins != null) {
@@ -4185,30 +4187,34 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         final bTop = topZ.contains(b.routeId) ? 1 : 0;
         return aTop.compareTo(bTop);
       });
-      shapes = mutableShapes;
+      // Calculate initial camera bounds based only on rail/BRT to avoid zooming out too far
+      final initialPts = <LatLng>[];
+      if (!_didFitRails) {
+        for (final seg in mutableShapes) {
+          initialPts.addAll(seg.points);
+        }
+      }
 
-      // Load heavy shapes asynchronously so it doesn't block initial launch
-      // or zoom out the map too far.
-      Future.microtask(() async {
-        try {
-          final heavyShapes = await GtfsShapesService().loadSegments(
-            shapesAssets: ['assets/gtfs_data/shapes_source.txt'],
-            routeColors: {
-              for (final r in routes)
-                r.routeId: (r.color != null && r.color!.isNotEmpty)
-                    ? Color(int.parse('0xFF${r.color!}'))
-                    : Colors.purple,
-            },
-            tripMap: tripMap,
-          );
-          if (mounted) {
-            setState(() {
-              shapeSegments.addAll(heavyShapes);
-              _recalculateMapLayers();
-            });
-          }
-        } catch (_) {}
-      });
+      // Load heavy shapes directly here to keep the loading screen active until everything is done
+      try {
+        final heavyShapes = await GtfsShapesService().loadSegments(
+          shapesAssets: ['assets/gtfs_data/shapes_source.txt'],
+          routeColors: {
+            for (final r in routes)
+              r.routeId: (r.color != null && r.color!.isNotEmpty)
+                  ? Color(int.parse('0xFF${r.color!}'))
+                  : Colors.purple,
+          },
+          tripMap: tripMap,
+        );
+        mutableShapes.addAll(heavyShapes);
+      } catch (_) {}
+      
+      shapes = mutableShapes;
+      
+      if (initialPts.isNotEmpty) {
+        _initialCameraPts = initialPts;
+      }
     } catch (_) {}
 
     stops.sort((a, b) {
@@ -4232,20 +4238,20 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       stopLookup = stopMap;
       shapeSegments = shapes;
       _recalculateMapLayers();
+      _isGtfsDataLoaded = true;
     });
-    // Fit camera once on initial load based on shapes
-    if (!_didFitRails) {
-      final allPts = <LatLng>[];
-      for (final seg in shapeSegments) {
-        allPts.addAll(seg.points);
-      }
-      if (allPts.isNotEmpty) {
-        final bounds = LatLngBounds.fromPoints(allPts);
-        _mapController.fitCamera(
-          CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(24)),
-        );
-        _didFitRails = true;
-      }
+    
+    // Fit camera once on initial load based on the limited shapes we calculated earlier
+    if (!_didFitRails && _initialCameraPts.isNotEmpty) {
+      final bounds = LatLngBounds.fromPoints(_initialCameraPts);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _mapController.fitCamera(
+            CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(24)),
+          );
+        }
+      });
+      _didFitRails = true;
     }
 
     if (!_hasShownWelcome) {
@@ -5135,44 +5141,71 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           }
         });
       },
-      child: Scaffold(
-        extendBody: true,
-        backgroundColor: theme.colorScheme.surface,
-        body: (isWideLayout && showNav)
-            ? Row(
-                children: [
-                  NavigationRail(
-                    selectedIndex: _selectedNavIndex,
-                    onDestinationSelected: (index) {
-                      setState(() => _selectedNavIndex = index);
-                    },
-                    labelType: NavigationRailLabelType.all,
-                    destinations: const [
-                      NavigationRailDestination(
-                        icon: Icon(Icons.home_outlined),
-                        selectedIcon: Icon(Icons.home_rounded),
-                        label: Text('Home'),
+      child: Stack(
+        children: [
+          Scaffold(
+            extendBody: true,
+            backgroundColor: theme.colorScheme.surface,
+            body: (isWideLayout && showNav)
+                ? Row(
+                    children: [
+                      NavigationRail(
+                        selectedIndex: _selectedNavIndex,
+                        onDestinationSelected: (index) {
+                          setState(() => _selectedNavIndex = index);
+                        },
+                        labelType: NavigationRailLabelType.all,
+                        destinations: const [
+                          NavigationRailDestination(
+                            icon: Icon(Icons.home_outlined),
+                            selectedIcon: Icon(Icons.home_rounded),
+                            label: Text('Home'),
+                          ),
+                          NavigationRailDestination(
+                            icon: Icon(Icons.campaign_outlined),
+                            selectedIcon: Icon(Icons.campaign),
+                            label: Text('Updates'),
+                          ),
+                          NavigationRailDestination(
+                            icon: Icon(Icons.more_horiz),
+                            selectedIcon: Icon(Icons.more),
+                            label: Text('More'),
+                          ),
+                        ],
                       ),
-                      NavigationRailDestination(
-                        icon: Icon(Icons.campaign_outlined),
-                        selectedIcon: Icon(Icons.campaign),
-                        label: Text('Updates'),
-                      ),
-                      NavigationRailDestination(
-                        icon: Icon(Icons.more_horiz),
-                        selectedIcon: Icon(Icons.more),
-                        label: Text('More'),
-                      ),
+                      const VerticalDivider(thickness: 1, width: 1),
+                      Expanded(child: bodyContent),
                     ],
-                  ),
-                  const VerticalDivider(thickness: 1, width: 1),
-                  Expanded(child: bodyContent),
-                ],
-              )
-            : bodyContent,
-        bottomNavigationBar: (!isWideLayout && showNav)
-            ? _buildNavigationBar()
-            : null,
+                  )
+                : bodyContent,
+            bottomNavigationBar: (!isWideLayout && showNav)
+                ? _buildNavigationBar()
+                : null,
+          ),
+          if (!_isGtfsDataLoaded)
+            Container(
+              color: theme.colorScheme.surface,
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(color: widget.currentAccentColor),
+                    const SizedBox(height: 24),
+                    Text(
+                      'Loading Transit Data...',
+                      style: GoogleFonts.googleSans(
+                        textStyle: TextStyle(
+                          color: widget.currentAccentColor,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
