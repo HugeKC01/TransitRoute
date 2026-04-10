@@ -60,12 +60,32 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   Color _accentColor = Colors.blue;
+  ThemeMode _themeMode = ThemeMode.system;
   bool _isReady = false;
 
   @override
   void initState() {
     super.initState();
+    _loadThemeMode();
     _initializeApp();
+  }
+
+  Future<void> _loadThemeMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    final themeIndex = prefs.getInt('theme_mode') ?? ThemeMode.system.index;
+    if (mounted) {
+      setState(() {
+        _themeMode = ThemeMode.values[themeIndex];
+      });
+    }
+  }
+
+  Future<void> _saveThemeMode(ThemeMode mode) async {
+    setState(() {
+      _themeMode = mode;
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('theme_mode', mode.index);
   }
 
   Future<void> _initializeApp() async {
@@ -96,16 +116,27 @@ class _MyAppState extends State<MyApp> {
     return MaterialApp(
       scrollBehavior: AppScrollBehavior(),
       title: 'Route Transit',
+      themeMode: _themeMode,
       theme: ThemeData(
         useMaterial3: true,
         textTheme: GoogleFonts.googleSansTextTheme(),
         colorScheme: ColorScheme.fromSeed(seedColor: _accentColor),
+      ),
+      darkTheme: ThemeData(
+        useMaterial3: true,
+        textTheme: GoogleFonts.googleSansTextTheme(ThemeData.dark().textTheme),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: _accentColor,
+          brightness: Brightness.dark,
+        ),
       ),
       home: _isReady
           ? MyHomePage(
               title: 'Route Transit',
               currentAccentColor: _accentColor,
               onAccentColorChanged: _updateAccentColor,
+              currentThemeMode: _themeMode,
+              onThemeModeChanged: _saveThemeMode,
             )
           : Scaffold(
               body: Center(
@@ -138,11 +169,15 @@ class MyHomePage extends StatefulWidget {
     required this.title,
     required this.currentAccentColor,
     required this.onAccentColorChanged,
+    required this.currentThemeMode,
+    required this.onThemeModeChanged,
   });
 
   final String title;
   final Color currentAccentColor;
   final ValueChanged<Color> onAccentColorChanged;
+  final ThemeMode currentThemeMode;
+  final ValueChanged<ThemeMode> onThemeModeChanged;
 
   @override
   State<MyHomePage> createState() => _MyHomePageState();
@@ -5086,6 +5121,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         onProfileUpdated: _saveProfile,
         currentAccentColor: widget.currentAccentColor,
         onAccentColorChanged: widget.onAccentColorChanged,
+        currentThemeMode: widget.currentThemeMode,
+        onThemeModeChanged: widget.onThemeModeChanged,
       );
     }
 

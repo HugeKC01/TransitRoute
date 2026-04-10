@@ -71,6 +71,8 @@ class MorePage extends StatelessWidget {
     required this.onProfileUpdated,
     required this.currentAccentColor,
     required this.onAccentColorChanged,
+    required this.currentThemeMode,
+    required this.onThemeModeChanged,
     required this.allStops,
     required this.routeIconByName,
     required this.lineColorByName,
@@ -87,6 +89,8 @@ class MorePage extends StatelessWidget {
 
   final Color currentAccentColor;
   final ValueChanged<Color> onAccentColorChanged;
+  final ThemeMode currentThemeMode;
+  final ValueChanged<ThemeMode> onThemeModeChanged;
   
   final List<gtfs.Stop> allStops;
   final String? Function(String) routeIconByName;
@@ -253,6 +257,35 @@ class MorePage extends StatelessWidget {
             children: [
               Divider(height: 1, color: theme.colorScheme.outlineVariant),
               const _GtfsVersionTile(),
+              Divider(height: 1, color: theme.colorScheme.outlineVariant),
+              ListTile(
+                leading: const Icon(Icons.dark_mode_outlined),
+                title: const Text('Theme Mode'),
+                subtitle: const Text('Select application theme'),
+                trailing: DropdownButton<ThemeMode>(
+                  value: currentThemeMode,
+                  underline: const SizedBox(),
+                  items: const [
+                    DropdownMenuItem(
+                      value: ThemeMode.system,
+                      child: Text('System'),
+                    ),
+                    DropdownMenuItem(
+                      value: ThemeMode.light,
+                      child: Text('Light'),
+                    ),
+                    DropdownMenuItem(
+                      value: ThemeMode.dark,
+                      child: Text('Dark'),
+                    ),
+                  ],
+                  onChanged: (mode) {
+                    if (mode != null) {
+                      onThemeModeChanged(mode);
+                    }
+                  },
+                ),
+              ),
               Divider(height: 1, color: theme.colorScheme.outlineVariant),
               ListTile(
                 leading: const Icon(Icons.palette_outlined),

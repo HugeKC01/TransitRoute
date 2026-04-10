@@ -168,7 +168,9 @@ class StationDetailsContent extends StatelessWidget {
                 height: 52,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: lineColor.withValues(alpha: 0.15),
+                  color: theme.brightness == Brightness.dark 
+                      ? Colors.white 
+                      : lineColor.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
                 child: Builder(
