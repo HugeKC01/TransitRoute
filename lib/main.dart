@@ -3246,7 +3246,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                               height: 36,
                               padding: const EdgeInsets.all(6),
                               decoration: BoxDecoration(
-                                color: lineColor.withValues(alpha: 0.15),
+                                color: theme.brightness == Brightness.dark 
+                                    ? Colors.white 
+                                    : lineColor.withValues(alpha: 0.15),
                                 shape: BoxShape.circle,
                               ),
                               child: SvgPicture.asset(
@@ -3388,6 +3390,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         getLineName: _getLineName,
         getLineNames: _getLineNames,
         getServicePriority: _getServicePriority,
+        routeIconByName: _getRouteIcon,
         onSelect: closeAndSelect,
       );
     }
@@ -3426,6 +3429,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         getLineName: _getLineName,
         getLineNames: _getLineNames,
         getServicePriority: _getServicePriority,
+        routeIconByName: _getRouteIcon,
         onSelect: (stop) {
           _collapsedSearchFocus.unfocus();
           _handleCollapsedStopSelection(stop);

@@ -156,7 +156,9 @@ class _ServiceTabsState extends State<ServiceTabs>
                               height: 36,
                               padding: const EdgeInsets.all(6),
                               decoration: BoxDecoration(
-                                color: lineColor.withValues(alpha: 0.15),
+                                color: theme.brightness == Brightness.dark
+                                    ? Colors.white
+                                    : lineColor.withValues(alpha: 0.15),
                                 shape: BoxShape.circle,
                               ),
                               child: SvgPicture.asset(
