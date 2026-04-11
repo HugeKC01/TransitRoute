@@ -1575,90 +1575,66 @@ class DirectionService {
       entry.tags.addAll(tags);
     }
 
-    await Future.delayed(Duration.zero);
-    final fewestStops = await _dijkstraWeightedPath(
-      start,
+    await Future.wait([
+      _dijkstraWeightedPath(
+        start,
       dest,
       distanceWeight: 0.1,
       timeWeight: 0.1,
       transferPenalty: 8000,
-    );
-    addRoute(fewestStops, {'Fewest stops'});
-
-    await Future.delayed(Duration.zero);
-    final shortestDistance = await _dijkstraWeightedPath(
-      start,
+      ).then((r) => addRoute(r, {'Fewest stops'})),
+      _dijkstraWeightedPath(
+        start,
       dest,
       distanceWeight: 1.0,
       timeWeight: 0.2,
-    );
-    addRoute(shortestDistance, {'Shortest'});
-
-    await Future.delayed(Duration.zero);
-    final fastest = await _dijkstraWeightedPath(
-      start,
+      ).then((r) => addRoute(r, {'Shortest'})),
+      _dijkstraWeightedPath(
+        start,
       dest,
       distanceWeight: 0.1,
       timeWeight: 1.0,
-    );
-    addRoute(fastest, {'Fastest'});
-
-    await Future.delayed(Duration.zero);
-    final balanced = await _dijkstraWeightedPath(
-      start,
+      ).then((r) => addRoute(r, {'Fastest'})),
+      _dijkstraWeightedPath(
+        start,
       dest,
       distanceWeight: 1.0,
       timeWeight: 1.0,
-    );
-    addRoute(balanced, {'Balanced'});
-
-    await Future.delayed(Duration.zero);
-    final lowTransfers = await _dijkstraWeightedPath(
-      start,
+      ).then((r) => addRoute(r, {'Balanced'})),
+      _dijkstraWeightedPath(
+        start,
       dest,
       distanceWeight: 1.0,
       timeWeight: 0.4,
       transferPenalty: 4000,
-    );
-    addRoute(lowTransfers, {'Low transfers'});
-
-    await Future.delayed(Duration.zero);
-    final speedPriority = await _dijkstraWeightedPath(
-      start,
+      ).then((r) => addRoute(r, {'Low transfers'})),
+      _dijkstraWeightedPath(
+        start,
       dest,
       distanceWeight: 0.3,
       timeWeight: 1.2,
-    );
-    addRoute(speedPriority, {'Speed priority'});
-
-    await Future.delayed(Duration.zero);
-    final distancePriority = await _dijkstraWeightedPath(
-      start,
+      ).then((r) => addRoute(r, {'Speed priority'})),
+      _dijkstraWeightedPath(
+        start,
       dest,
       distanceWeight: 1.2,
       timeWeight: 0.3,
-    );
-    addRoute(distancePriority, {'Distance priority'});
-
-    await Future.delayed(Duration.zero);
-    final busPriority = await _dijkstraWeightedPath(
-      start,
+      ).then((r) => addRoute(r, {'Distance priority'})),
+      _dijkstraWeightedPath(
+        start,
       dest,
       distanceWeight: 1.0,
       timeWeight: 1.0,
       railCostPenalty: 5000.0,
-    );
-    addRoute(busPriority, {'Bus priority'});
-
-    await Future.delayed(Duration.zero);
-    final railPriority = await _dijkstraWeightedPath(
-      start,
+      ).then((r) => addRoute(r, {'Bus priority'})),
+      _dijkstraWeightedPath(
+        start,
       dest,
       distanceWeight: 1.0,
       timeWeight: 0.2, // fast rail
       busCostPenalty: 5000.0,
-    );
-    addRoute(railPriority, {'Rail priority'});
+      ).then((r) => addRoute(r, {'Rail priority'}))
+    ]);
 
     final taggedRoutes = routes.values.toList();
     if (taggedRoutes.isEmpty) {
