@@ -66,8 +66,7 @@ class FareCalculator {
     final id = stopId.trim();
     if (_isBtsStop(id)) return 'BTS';
     if (id.startsWith('F_')) {
-      final prefix = id.split('_').sublist(0, 2).join('_');
-      return prefix;
+      return 'FERRY';
     }
     final match = RegExp(r'^([A-Za-z]+)').firstMatch(id);
     final prefix = match?.group(1)?.toUpperCase() ?? 'UNKNOWN';
@@ -337,7 +336,9 @@ class FareCalculator {
         total += result['total'] ?? 0;
       } else if (group == 'BRT') {
         total += 15; // Flat fare for BRT
-      } else if (group == 'F_CPX' || group.startsWith('F_')) {
+      } else if (group == 'FERRY' ||
+          group == 'F_CPX' ||
+          group.startsWith('F_')) {
         final fare = _calculateFerryFare(segment);
         total += fare;
       } else {

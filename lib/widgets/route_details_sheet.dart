@@ -419,17 +419,24 @@ class _TagPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final hsl = HSLColor.fromColor(color);
+    final textColor = isDark
+        ? hsl.withLightness(hsl.lightness.clamp(0.7, 1.0)).toColor()
+        : hsl.withLightness(hsl.lightness.clamp(0.2, 0.4)).toColor();
+    final bgColor = color.withValues(alpha: isDark ? 0.25 : 0.15);
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
+        color: bgColor,
         borderRadius: BorderRadius.circular(6),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 14, color: color),
+            Icon(icon, size: 14, color: textColor),
             const SizedBox(width: 4),
           ],
           Text(
@@ -437,7 +444,7 @@ class _TagPill extends StatelessWidget {
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.bold,
-              color: color,
+              color: textColor,
             ),
           ),
         ],

@@ -346,7 +346,8 @@ class DirectionService {
         fareTableMap != null ||
         ferryFlatFares != null ||
         ferryZoneMatrix != null ||
-        ferryZones != null) {
+        ferryZones != null ||
+        busRouteInfoMap != null) {
       _fareCalculator.updateData(
         fareTypeMap: fareTypeMap,
         fareDataMap: fareDataMap,
@@ -355,6 +356,7 @@ class DirectionService {
         ferryFlatFares: ferryFlatFares,
         ferryZoneMatrix: ferryZoneMatrix,
         ferryZones: ferryZones,
+        busRouteInfoMap: busRouteInfoMap,
       );
     }
     if (resetGraphs) {
@@ -768,14 +770,17 @@ class DirectionService {
             seg.routeShortName!,
           );
           seg.fare = sFare;
-          
+
           if (sFare > 0) {
             String subLabel = seg.instruction ?? 'Transit';
             fareBreakdown[subLabel] = (fareBreakdown[subLabel] ?? 0) + sFare;
             fareBreakdown['total'] = (fareBreakdown['total'] ?? 0) + sFare;
           }
-        } else if (seg.mode == TravelMode.transit && seg.intermediateStops != null) {
-          seg.fare = _fareCalculator.calculateFare(seg.intermediateStops!)['total'] ?? 0;
+        } else if (seg.mode == TravelMode.transit &&
+            seg.intermediateStops != null) {
+          seg.fare =
+              _fareCalculator.calculateFare(seg.intermediateStops!)['total'] ??
+              0;
         } else if (seg.fare > 0) {
           // If a pre-calculated non-transit fare exists
           String subLabel = seg.instruction ?? 'Transit';
@@ -1676,8 +1681,11 @@ class DirectionService {
           );
           seg.fare = sFare;
           fare += sFare;
-        } else if (seg.mode == TravelMode.transit && seg.intermediateStops != null) {
-          seg.fare = _fareCalculator.calculateFare(seg.intermediateStops!)['total'] ?? 0;
+        } else if (seg.mode == TravelMode.transit &&
+            seg.intermediateStops != null) {
+          seg.fare =
+              _fareCalculator.calculateFare(seg.intermediateStops!)['total'] ??
+              0;
         } else if (seg.fare > 0) {
           fare += seg.fare;
         }
