@@ -2164,6 +2164,34 @@ class DirectionService {
       return lines.toList();
     }
 
+    String? _getBestLine(List<String> candidates, int startIndex) {
+      if (candidates.isEmpty) return null;
+      if (candidates.length == 1) return candidates.first;
+      int bestReach = -1;
+      String bestLine = candidates.first;
+      for (final line in candidates) {
+        int reach = 0;
+        for (int k = startIndex; k < stops.length - 1; k++) {
+          final s1 = stops[k].stopId;
+          final s2 = stops[k + 1].stopId;
+          final d = _transitEdges[s1]?[s2] ?? <String>{};
+          if (d.isNotEmpty) {
+            if (!d.contains(line)) break;
+          } else {
+            final a = getLinesForStop(s1);
+            final b = getLinesForStop(s2);
+            if (!a.contains(line) || !b.contains(line)) break;
+          }
+          reach++;
+        }
+        if (reach > bestReach) {
+          bestReach = reach;
+          bestLine = line;
+        }
+      }
+      return bestLine;
+    }
+
     String? currentLineName;
     if (stops.length > 1) {
       final a = getLinesForStop(stops[0].stopId);
@@ -2175,11 +2203,11 @@ class DirectionService {
           .where((x) => directLines.isEmpty || directLines.contains(x))
           .toList();
       currentLineName = validShared.isNotEmpty
-          ? validShared.first
+          ? _getBestLine(validShared, 0)
           : (shared.isNotEmpty
-                ? shared.first
+                ? _getBestLine(shared, 0)
                 : (a.isNotEmpty
-                      ? a.first
+                      ? _getBestLine(a.toList(), 0)
                       : lineNameResolver(stops[0].stopId)?.split(', ').first));
     } else {
       final a = getLinesForStop(stops[0].stopId);
@@ -2258,11 +2286,11 @@ class DirectionService {
               )
               .toList();
           currentLineName = validNs.isNotEmpty
-              ? validNs.first
+              ? _getBestLine(validNs, i)
               : (ns.isNotEmpty
-                    ? ns.first
+                    ? _getBestLine(ns, i)
                     : (na.isNotEmpty
-                          ? na.first
+                          ? _getBestLine(na.toList(), i)
                           : lineNameResolver(stop.stopId)?.split(', ').first));
         } else {
           final na = getLinesForStop(stop.stopId);
@@ -2282,7 +2310,9 @@ class DirectionService {
           final validShared = shared
               .where((x) => directLines.isEmpty || directLines.contains(x))
               .toList();
-          edgeLine = validShared.isNotEmpty ? validShared.first : shared.first;
+          edgeLine = validShared.isNotEmpty
+              ? _getBestLine(validShared, i - 1)
+              : _getBestLine(shared, i - 1);
         }
 
         if (edgeLine != currentLineName) {
