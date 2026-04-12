@@ -43,7 +43,9 @@ class TerminalLoader {
         final tripRouteMap = <String, String>{};
 
         if (tripsLines.length > 1) {
-          final tHeader = _parseCsvLine(tripsLines.first).map((e) => e.trim()).toList();
+          final tHeader = _parseCsvLine(
+            tripsLines.first,
+          ).map((e) => e.trim()).toList();
           final tTripIdIdx = tHeader.indexOf('trip_id');
           final tRouteIdIdx = tHeader.indexOf('route_id');
 
@@ -67,12 +69,14 @@ class TerminalLoader {
             }
           }
         } else if (tripsLines.length == 1) {
-           // Single line? Skip or handle if no header.
+          // Single line? Skip or handle if no header.
         }
 
         final stopTimesLines = const LineSplitter().convert(stopTimesStr);
         if (stopTimesLines.length <= 1) return;
-        final stHeader = _parseCsvLine(stopTimesLines.first).map((e) => e.trim()).toList();
+        final stHeader = _parseCsvLine(
+          stopTimesLines.first,
+        ).map((e) => e.trim()).toList();
         final stTripIdIdx = stHeader.indexOf('trip_id');
         final stStopIdIdx = stHeader.indexOf('stop_id');
         final stSeqIdx = stHeader.indexOf('stop_sequence');
@@ -81,7 +85,9 @@ class TerminalLoader {
         if (stTripIdIdx >= 0 && stStopIdIdx >= 0 && stSeqIdx >= 0) {
           for (int i = 1; i < stopTimesLines.length; i++) {
             final row = _parseCsvLine(stopTimesLines[i]);
-            if (row.length > stTripIdIdx && row.length > stStopIdIdx && row.length > stSeqIdx) {
+            if (row.length > stTripIdIdx &&
+                row.length > stStopIdIdx &&
+                row.length > stSeqIdx) {
               final tripId = row[stTripIdIdx];
               if (tripRouteMap.containsKey(tripId)) {
                 tripStopsMap.putIfAbsent(tripId, () => []).add({
@@ -95,7 +101,9 @@ class TerminalLoader {
 
         final stopsLines = const LineSplitter().convert(stopsStr);
         if (stopsLines.length <= 1) return;
-        final sHeader = _parseCsvLine(stopsLines.first).map((e) => e.trim()).toList();
+        final sHeader = _parseCsvLine(
+          stopsLines.first,
+        ).map((e) => e.trim()).toList();
         final sStopIdIdx = sHeader.indexOf('stop_id');
         final sNameIdx = sHeader.indexOf('stop_name');
 
@@ -129,7 +137,9 @@ class TerminalLoader {
           }
 
           final sequence = tripStopsMap[longestTrip]!;
-          sequence.sort((a, b) => (a['sequence'] as int).compareTo(b['sequence'] as int));
+          sequence.sort(
+            (a, b) => (a['sequence'] as int).compareTo(b['sequence'] as int),
+          );
 
           final firstStopId = sequence.first['stop_id'] as String;
           final lastStopId = sequence.last['stop_id'] as String;

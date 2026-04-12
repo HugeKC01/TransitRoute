@@ -35,6 +35,74 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
     super.dispose();
   }
 
+  Future<List<gtfs.Route>> _loadBusRoutesFromStops() async {
+    try {
+      final content = await rootBundle.loadString(
+        'assets/gtfs_data/bus_route_stop.txt',
+      );
+      final lines = const LineSplitter().convert(content);
+      if (lines.length <= 1) return [];
+
+      final Map<String, gtfs.Route> busR = {};
+      for (int i = 1; i < lines.length; i++) {
+        final row = _parseCsvLine(lines[i]);
+        if (row.length > 5) {
+          final rShortName = row[1].trim();
+          if (rShortName.isEmpty) continue;
+          final routeId = rShortName.split(' ')[0].trim();
+          final desc = row[2].trim();
+          final typeId = row[3].trim().toLowerCase();
+          final agencyId = row[4].trim();
+
+          String color = '0000FF';
+          if (typeId.contains('air')) {
+            color = '0068b3';
+          } else if (typeId.contains('ngv')) {
+            color = '1752b0';
+          } else {
+            color = 'ff0000';
+          }
+
+          if (!busR.containsKey(routeId)) {
+            busR[routeId] = gtfs.Route(
+              routeId: routeId,
+              agencyId: agencyId,
+              shortName: rShortName,
+              longName: desc,
+              type: '3',
+              color: color,
+              textColor: 'FFFFFF',
+              routeIcon: null,
+              linePrefixes: [],
+            );
+            // Pre-fill routeTerminals
+            routeTerminals[routeId] = desc;
+          } else {
+            // Append to description if it's a different direction
+            final existingDesc = busR[routeId]!.longName;
+            if (!existingDesc.contains(desc.split('-')[0].trim())) {
+              busR[routeId] = gtfs.Route(
+                routeId: busR[routeId]!.routeId,
+                agencyId: busR[routeId]!.agencyId,
+                shortName: busR[routeId]!.shortName,
+                longName: '$existingDesc / $desc',
+                type: busR[routeId]!.type,
+                color: busR[routeId]!.color,
+                textColor: busR[routeId]!.textColor,
+                routeIcon: busR[routeId]!.routeIcon,
+                linePrefixes: busR[routeId]!.linePrefixes,
+              );
+              routeTerminals[routeId] = busR[routeId]!.longName;
+            }
+          }
+        }
+      }
+      return busR.values.toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
   Future<void> _loadRoutes() async {
     try {
       final loadedRoutes = <gtfs.Route>[];
@@ -49,20 +117,23 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
       final busRoutes = await RouteAssetLoader.loadRoutes(
         'assets/gtfs_data/bus_route.txt',
       );
+      final extraBusRoutes = await _loadBusRoutesFromStops();
 
       loadedRoutes.addAll(mainRoutes);
       loadedRoutes.addAll(ferryRoutes);
       loadedRoutes.addAll(busRoutes);
+      loadedRoutes.addAll(extraBusRoutes);
 
       final agencyContent = await agencyFuture;
       final loadedAgencies = _parseAgencies(agencyContent);
-      
+
       final terminals = await TerminalLoader.loadAllTerminals();
-      
+
       setState(() {
         routes = loadedRoutes;
         agencies = loadedAgencies;
-        routeTerminals = terminals;
+        // Merge so we don't overwrite the bus terminals we just populated
+        routeTerminals.addAll(terminals);
         _loading = false;
       });
     } catch (e) {
@@ -154,6 +225,7 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
     final filteredRoutes = _getFilteredRoutes();
     final grouped = _groupRoutes(filteredRoutes);
     final activeCategories = ['All'] + _getAvailableCategories();
+    final groupedWidgets = _buildGroupedRouteWidgets(theme, grouped);
 
     return Scaffold(
       body: CustomScrollView(
@@ -174,6 +246,9 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
                     ),
                     child: TextField(
                       controller: _searchController,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      textInputAction: TextInputAction.search,
                       decoration: InputDecoration(
                         hintText: 'Search lines, agencies, or codes...',
                         prefixIcon: const Icon(Icons.search),
@@ -264,8 +339,9 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
                 right: 16,
                 top: 8,
               ),
-              sliver: SliverList.list(
-                children: _buildGroupedRouteWidgets(theme, grouped),
+              sliver: SliverList.builder(
+                itemCount: groupedWidgets.length,
+                itemBuilder: (context, index) => groupedWidgets[index],
               ),
             ),
         ],
@@ -431,9 +507,7 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
                           height: 28,
                           child: FittedBox(
                             fit: BoxFit.contain,
-                            child: SvgPicture.asset(
-                              route.routeIcon!,
-                            ),
+                            child: SvgPicture.asset(route.routeIcon!),
                           ),
                         )
                       : Icon(
@@ -452,6 +526,8 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
                   children: [
                     Text(
                       route.longName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
@@ -461,6 +537,8 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
                       const SizedBox(height: 4),
                       Text(
                         routeTerminals[route.routeId]!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -470,6 +548,8 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
                       const SizedBox(height: 4),
                       Text(
                         route.shortName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),

@@ -796,7 +796,9 @@ class _ReportIssueSheetState extends State<_ReportIssueSheet> {
 
   IconData _getIconForLine(String line) {
     final upper = line.toUpperCase();
-    if (upper.contains('MRT') || upper.contains('BTS') || upper.contains('ARL')) {
+    if (upper.contains('MRT') ||
+        upper.contains('BTS') ||
+        upper.contains('ARL')) {
       return Icons.subway;
     }
     if (upper.contains('SRT')) return Icons.train;

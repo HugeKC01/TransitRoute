@@ -9,7 +9,6 @@ import 'widgets/station_details_content.dart';
 
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:flutter/services.dart';
 import 'package:route/services/gtfs_sync_service.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:location/location.dart';
@@ -351,7 +350,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   Set<String> _routeStopIds = {};
 
   List<Polyline<int>> _cachedActiveDirectionPolylines = [];
-  Map<int, List<Polyline<int>>> _cachedInactiveDirectionPolylines = {};
+  final Map<int, List<Polyline<int>>> _cachedInactiveDirectionPolylines = {};
 
   final Map<String, bool> _isTrainCache = {};
   final Map<String, bool> _isMetroCache = {};
@@ -1674,8 +1673,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       if (activeSegments.isNotEmpty &&
           !_routeStopIds.contains(stop.stopId) &&
           stop.stopId != startId &&
-          stop.stopId != destId)
+          stop.stopId != destId) {
         return false;
+      }
 
       if (isTrain && !_showTrainPins) return false;
       if (isMetro && !_showMetroPins) return false;
@@ -3986,8 +3986,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   }
 
   bool _isStopMetro(gtfs.Stop stop) {
-    if (_isMetroCache.containsKey(stop.stopId))
+    if (_isMetroCache.containsKey(stop.stopId)) {
       return _isMetroCache[stop.stopId]!;
+    }
     final lineNames = _stopToLinesMap[stop.stopId];
     if (lineNames != null) {
       for (final lName in lineNames) {
@@ -4009,8 +4010,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   }
 
   bool _isStopTrain(gtfs.Stop stop) {
-    if (_isTrainCache.containsKey(stop.stopId))
+    if (_isTrainCache.containsKey(stop.stopId)) {
       return _isTrainCache[stop.stopId]!;
+    }
     final lineNames = _stopToLinesMap[stop.stopId];
     if (lineNames != null) {
       for (final lName in lineNames) {
@@ -4858,8 +4860,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     _cachedBusMarkers = busStops
         .where((stop) {
           if (activeRouteSegments.isNotEmpty &&
-              !_routeStopIds.contains(stop.stopId))
+              !_routeStopIds.contains(stop.stopId)) {
             return false;
+          }
           return true;
         })
         .map((stop) {
@@ -4913,8 +4916,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     _cachedFerryMarkers = ferryStops
         .where((stop) {
           if (activeRouteSegments.isNotEmpty &&
-              !_routeStopIds.contains(stop.stopId))
+              !_routeStopIds.contains(stop.stopId)) {
             return false;
+          }
           return true;
         })
         .map((stop) {

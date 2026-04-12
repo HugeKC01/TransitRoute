@@ -68,7 +68,8 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
       String? tIdIdxName = 'trip_id';
       String? rIdIdxName = 'route_id';
 
-      bool isBus = widget.route.type.toLowerCase() == 'bus' || widget.route.type == '3';
+      bool isBus =
+          widget.route.type.toLowerCase() == 'bus' || widget.route.type == '3';
       if (routeId == 'BRT') {
         isBus = false;
         tripsFile = 'assets/gtfs_data/brt_trips.txt';
@@ -135,7 +136,7 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
               if (row[0].contains('BRT')) {
                 targetTripIds.add(row[0]);
                 if (row.length > 1 && row[1].isNotEmpty && row[0] == 'BRT_0') {
-                  targetShapeId = row[1].trim(); 
+                  targetShapeId = row[1].trim();
                 }
               }
             } else if (routeIdIdx >= 0 &&
@@ -147,6 +148,17 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
                   row.length > shapeIdIdx &&
                   row[shapeIdIdx].isNotEmpty) {
                 targetShapeId = row[shapeIdIdx];
+              }
+            } else if (routeIdIdx < 0 &&
+                tripIdIdx >= 0 &&
+                row.length > tripIdIdx) {
+              if (row[tripIdIdx].contains(routeId)) {
+                targetTripIds.add(row[tripIdIdx]);
+                if (shapeIdIdx >= 0 &&
+                    row.length > shapeIdIdx &&
+                    row[shapeIdIdx].isNotEmpty) {
+                  targetShapeId = row[shapeIdIdx];
+                }
               }
             }
           }
@@ -160,15 +172,13 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
           if (stopTimesLines.isNotEmpty) {
             final headerRow = _parseCsvLine(stopTimesLines.first);
             int tripIdIdx = headerRow.indexOf('trip_id');
+            if (tripIdIdx < 0) tripIdIdx = 0;
             int stopIdIdx = headerRow.indexOf('stop_id');
+            if (stopIdIdx < 0) stopIdIdx = 3;
             int seqIdx = headerRow.indexOf('stop_sequence');
+            if (seqIdx < 0) seqIdx = 4;
 
-            bool stFallback = tripIdIdx < 0;
-            if (stFallback) {
-              tripIdIdx = 0;
-              stopIdIdx = 3;
-              seqIdx = 4;
-            }
+            bool stFallback = !headerRow.contains('trip_id');
 
             final tripStopsMap = <String, List<Map<String, dynamic>>>{};
             for (int i = stFallback ? 0 : 1; i < stopTimesLines.length; i++) {
@@ -209,11 +219,15 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
 
       if (stopsLines.length > 1) {
         final headerRow = _parseCsvLine(stopsLines.first);
-        final idIdx = headerRow.indexOf('stop_id');
-        final nameIdx = headerRow.indexOf('stop_name');
-        final thaiIdx = headerRow.indexOf('stop_name_th');
-        final latIdx = headerRow.indexOf('stop_lat');
-        final lonIdx = headerRow.indexOf('stop_lon');
+        int idIdx = headerRow.indexOf('stop_id');
+        if (idIdx < 0) idIdx = 0;
+        int nameIdx = headerRow.indexOf('stop_name');
+        if (nameIdx < 0) nameIdx = 1;
+        int thaiIdx = headerRow.indexOf('stop_name_th');
+        int latIdx = headerRow.indexOf('stop_lat');
+        if (latIdx < 0) latIdx = 2;
+        int lonIdx = headerRow.indexOf('stop_lon');
+        if (lonIdx < 0) lonIdx = 3;
         final codeIdx = headerRow.indexOf('stop_code');
         final descIdx = headerRow.indexOf('stop_desc');
         final zoneIdx = headerRow.indexOf('zone_id');
@@ -602,7 +616,7 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
                                 // Can be implemented if needed
                               },
                               onSelectAsDestination: () {
-                                // Can be implemented if needed  
+                                // Can be implemented if needed
                               },
                             ),
                           ),
