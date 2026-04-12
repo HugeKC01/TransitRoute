@@ -381,17 +381,17 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
       theme.colorScheme.onPrimaryContainer,
     );
 
-    return Card(
-      elevation: 0,
+    return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
         ),
       ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(24),
         onTap: () {
           final agency = agencies[route.agencyId];
           Navigator.push(
@@ -408,24 +408,21 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
-                width: 56,
-                height: 56,
+                width: 52,
+                height: 52,
                 decoration: BoxDecoration(
-                  color: routeColor,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: routeColor.withValues(alpha: 0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
+                  color: theme.brightness == Brightness.dark
+                      ? Colors.white
+                      : routeColor.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
                 ),
                 child: Center(
                   child: Text(
                     route.shortName.isNotEmpty ? route.shortName : "—",
                     style: TextStyle(
-                      color: routeTextColor,
+                      color: theme.brightness == Brightness.dark
+                          ? routeColor
+                          : routeColor,
                       fontWeight: FontWeight.bold,
                       fontSize: route.shortName.length > 3 ? 14 : 18,
                     ),

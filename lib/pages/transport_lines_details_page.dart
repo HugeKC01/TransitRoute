@@ -237,21 +237,18 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Route Details'),
-        backgroundColor: routeColor,
-        foregroundColor: routeTextColor,
         centerTitle: true,
       ),
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
           // Hero Header Section
-          Card(
-            elevation: 0,
-            color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
-            shape: RoundedRectangleBorder(
+          Container(
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface.withValues(alpha: 0.6),
               borderRadius: BorderRadius.circular(24),
-              side: BorderSide(
-                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+              border: Border.all(
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
               ),
             ),
             child: Padding(
@@ -265,21 +262,16 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
                     width: 96,
                     height: 96,
                     decoration: BoxDecoration(
-                      color: routeColor,
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: routeColor.withValues(alpha: 0.3),
-                          blurRadius: 16,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
+                      color: theme.brightness == Brightness.dark
+                          ? Colors.white
+                          : routeColor.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
                     ),
                     child: Center(
                       child: Text(
                         route.shortName.isNotEmpty ? route.shortName : "—",
                         style: TextStyle(
-                          color: routeTextColor,
+                          color: routeColor,
                           fontWeight: FontWeight.bold,
                           fontSize: route.shortName.length > 3 ? 24 : 36,
                         ),
@@ -331,23 +323,19 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
           const SizedBox(height: 32),
 
           // Details Information Section
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            child: Text(
-              'Information',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.primary,
-              ),
+          Text(
+            'Information',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 8),
-          Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: BorderSide(
-                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+          const SizedBox(height: 12),
+          Container(
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface.withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
               ),
             ),
             child: Column(
@@ -398,25 +386,21 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
             )
           else if (_routeStops.isNotEmpty) ...[
             const SizedBox(height: 32),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0),
-              child: Text(
-                'Stations (${_routeStops.length})',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary,
-                ),
+            Text(
+              'Stations (${_routeStops.length})',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
               ),
             ),
-            const SizedBox(height: 8),
-            Card(
-              elevation: 0,
+            const SizedBox(height: 12),
+            Container(
               clipBehavior: Clip.antiAlias,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: BorderSide(
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface.withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
                   color: theme.colorScheme.outlineVariant.withValues(
-                    alpha: 0.5,
+                    alpha: 0.3,
                   ),
                 ),
               ),
