@@ -101,7 +101,7 @@ class StationDetailsContent extends StatelessWidget {
             ),
           ),
         ] else ...[
-          if (stop.desc != null && stop.desc!.isNotEmpty) ...[
+          if (stop.desc != null && stop.desc!.isNotEmpty && stop.desc != '0' && stop.desc != '1') ...[
             _SectionHeader('About'),
             const SizedBox(height: 8),
             Text(

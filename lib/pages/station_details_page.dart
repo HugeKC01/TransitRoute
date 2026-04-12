@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:route/services/gtfs_models.dart' as gtfs;
 import 'package:route/widgets/station_details_content.dart';
 
@@ -89,47 +91,67 @@ class _StationDetailsPageState extends State<StationDetailsPage> {
       },
     );
 
-    if (isWide) {
-      return Scaffold(
-        backgroundColor: Colors
-            .transparent, // Make background transparent to show map underneath
-        body: Stack(
-          children: [
-            // Detect taps outside the panel to close it
-            Positioned.fill(
-              child: GestureDetector(
-                onTap: () => Navigator.pop(context),
-                behavior: HitTestBehavior.opaque,
-                child: Container(color: Colors.transparent),
-              ),
-            ),
-            // Right-aligned side panel
-            Align(
-              alignment: Alignment.centerRight,
+
+    final mapWidget = FlutterMap(
+      options: MapOptions(
+        initialCenter: LatLng(widget.stop.lat, widget.stop.lon),
+        initialZoom: 16.0,
+      ),
+      children: [
+        TileLayer(
+          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          userAgentPackageName: 'com.example.transit_route',
+        ),
+        MarkerLayer(
+          markers: [
+            Marker(
+              point: LatLng(widget.stop.lat, widget.stop.lon),
+              width: 24,
+              height: 24,
               child: Container(
-                width: 420,
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface,
+                  color: widget.lineColor,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white,
+                    width: 3.0,
+                  ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.1),
-                      blurRadius: 10,
-                      offset: const Offset(-2, 0),
+                      color: Colors.black.withValues(alpha: 0.3),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
                     ),
                   ],
                 ),
-                child: Column(
-                  children: [
-                    AppBar(
-                      title: Text(hasThaiName ? widget.stop.thaiName! : widget.stop.name),
-                      centerTitle: true,
-                      backgroundColor: Colors.transparent,
-                      elevation: 0,
-                    ),
-                    Expanded(child: content),
-                  ],
-                ),
+                child: _isFavorite
+                    ? const Center(
+                        child: Icon(Icons.favorite, size: 14, color: Colors.white),
+                      )
+                    : null,
               ),
+            ),
+          ],
+        ),
+      ],
+    );
+
+    if (isWide) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(hasThaiName ? widget.stop.thaiName! : widget.stop.name),
+          centerTitle: true,
+        ),
+        body: Row(
+          children: [
+            Expanded(
+              flex: 4,
+              child: content,
+            ),
+            const VerticalDivider(width: 1, thickness: 1),
+            Expanded(
+              flex: 6,
+              child: mapWidget,
             ),
           ],
         ),
@@ -141,7 +163,16 @@ class _StationDetailsPageState extends State<StationDetailsPage> {
         title: Text(hasThaiName ? widget.stop.thaiName! : widget.stop.name),
         centerTitle: true,
       ),
-      body: content,
+      body: Column(
+        children: [
+          SizedBox(
+            height: 250,
+            child: mapWidget,
+          ),
+          const Divider(height: 1, thickness: 1),
+          Expanded(child: content),
+        ],
+      ),
     );
   }
 }

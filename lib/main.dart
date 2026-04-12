@@ -567,7 +567,29 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         _lineColorCache[stopId] = col;
         return col;
       }
+      
+      final type = _directionService.getRouteTypeForLine(firstLine);
+      if (type == '3') {
+        _lineColorCache[stopId] = Colors.blue;
+        return Colors.blue;
+      }
+      if (type == '4') {
+        _lineColorCache[stopId] = Colors.orange;
+        return Colors.orange;
+      }
     }
+    
+    // Also check the stop itself if lineName didn't yield a type
+    final stopType = _directionService.getRouteTypeForStop(stopId);
+    if (stopType == '3' || stopId.startsWith('ST_') || stopId.startsWith('STOP_') || int.tryParse(stopId) != null || stopId.startsWith('B') || stopId.startsWith('BUS_')) {
+      _lineColorCache[stopId] = Colors.blue;
+      return Colors.blue;
+    }
+    if (stopType == '4' || stopId.startsWith('F_') || stopId.startsWith('CRF_')) {
+      _lineColorCache[stopId] = Colors.orange;
+      return Colors.orange;
+    }
+
     _lineColorCache[stopId] = Colors.purple;
     return Colors.purple;
   }
@@ -580,6 +602,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     if (lineColors.containsKey(firstLine)) {
       return lineColors[firstLine]!;
     }
+    final type = _directionService.getRouteTypeForLine(firstLine);
+    if (type == '3') return Colors.blue;
+    if (type == '4') return Colors.orange;
     return Colors.purple;
   }
 
