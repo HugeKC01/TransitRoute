@@ -1484,6 +1484,36 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     });
   }
 
+  static const List<List<String>> _mergedStopGroups = [
+    ['BL10', 'PP16'],
+    ['S12', 'BL34'],
+    ['S7', 'G1'],
+    ['BKK', 'BKK01', 'BKK02'],
+    ['TCJ', 'TCJ01', 'RW06'],
+    ['PTM', 'PTM01'],
+    ['YMR', 'YMR01'],
+    ['RMD', 'RMD01'],
+    ['SAM', 'SAM01'],
+    ['BSJ', 'BSJ01'],
+    ['STS', 'STS01'],
+    ['KTW', 'KTW01'],
+    ['BGB', 'BGB01'],
+    ['DMU', 'DMU01'],
+    ['RSI', 'RSI01'],
+    ['RW01', 'RN01', 'KTW', 'KTW01'],
+  ];
+
+  List<gtfs.Stop> _getActualMergedStops(gtfs.Stop stop) {
+    for (final group in _mergedStopGroups) {
+      if (group.contains(stop.stopId)) {
+        final matches = allStops.where((s) => group.contains(s.stopId)).toList();
+        matches.sort((a, b) => a.stopId.compareTo(b.stopId));
+        return matches;
+      }
+    }
+    return const <gtfs.Stop>[];
+  }
+
   Widget _buildPanelContent(BuildContext context) {
     if (_viewingDroppedPin != null) {
       return _buildDroppedPinPanelContent(context, _viewingDroppedPin!);
@@ -1496,6 +1526,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       final bool isFavorite = _favoritePins.any(
         (p) => p.point.latitude == stop.lat && p.point.longitude == stop.lon,
       );
+      final actualMergedStops = _getActualMergedStops(stop);
 
       return Stack(
         key: const ValueKey('station_details'),
@@ -1507,6 +1538,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             isBottomSheet: true,
             isSidePanel: true,
             isFavorite: isFavorite,
+            mergedGroupStops: actualMergedStops,
             onToggleFavorite: () {
               setState(() {
                 if (isFavorite) {
@@ -1665,7 +1697,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         ferryStops.isNotEmpty &&
         _currentZoom >= _busStopZoomThreshold;
 
-    final filteredRailStops = railStops.where((stop) {
+    final rawFilteredRailStops = railStops.where((stop) {
       final isTrain = _isStopTrain(stop);
       final isMetro = _isStopMetro(stop);
 
@@ -1684,6 +1716,44 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       }
       return true;
     }).toList();
+
+    // Deduplicate rail stops by user groups explicit manual list
+    int getMarkerPriority(gtfs.Stop s) {
+      if (activeSegments.isNotEmpty && _routeStopIds.contains(s.stopId)) return 0;
+      if (s.stopId == startId || s.stopId == destId) return 0;
+      
+      if (_isStopMetro(s)) return 1;
+      
+      if (_isStopTrain(s)) {
+        final lineName = _getLineName(s.stopId) ?? '';
+        if (lineName.contains('SRT Red') || lineName.contains('SRT Light Red')) {
+          return 2;
+        }
+        return 3;
+      }
+      return 4;
+    }
+
+    final mergedMap = <String, gtfs.Stop>{};
+    for (final stop in rawFilteredRailStops) {
+      String key = stop.stopId;
+      for (final group in _mergedStopGroups) {
+        if (group.contains(stop.stopId)) {
+          key = group.join('_');
+          break;
+        }
+      }
+
+      if (!mergedMap.containsKey(key)) {
+        mergedMap[key] = stop;
+      } else {
+        // If current stop has higher priority (lower number), prefer it
+        if (getMarkerPriority(stop) < getMarkerPriority(mergedMap[key]!)) {
+          mergedMap[key] = stop;
+        }
+      }
+    }
+    final filteredRailStops = mergedMap.values.toList();
 
     // Dynamic marker sizing based on zoom
     final double railBaseSize = math.max(

@@ -3,8 +3,13 @@ import 'package:route/services/timetable_service.dart';
 
 class UpcomingDeparturesWidget extends StatefulWidget {
   final String stopId;
+  final List<String> mergedStopIds;
 
-  const UpcomingDeparturesWidget({super.key, required this.stopId});
+  const UpcomingDeparturesWidget({
+    super.key, 
+    required this.stopId,
+    this.mergedStopIds = const [],
+  });
 
   @override
   State<UpcomingDeparturesWidget> createState() =>
@@ -17,17 +22,28 @@ class _UpcomingDeparturesWidgetState extends State<UpcomingDeparturesWidget> {
   @override
   void initState() {
     super.initState();
-    _timetableFuture = TimetableService.getTimetableForStop(widget.stopId);
+    _loadTimetable();
   }
 
   @override
   void didUpdateWidget(UpcomingDeparturesWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.stopId != widget.stopId) {
-      setState(() {
-        _timetableFuture = TimetableService.getTimetableForStop(widget.stopId);
-      });
+    if (widget.stopId != oldWidget.stopId || widget.mergedStopIds != oldWidget.mergedStopIds) {
+      _loadTimetable();
     }
+  }
+
+  void _loadTimetable() {
+    final stopIds = widget.mergedStopIds.isNotEmpty ? widget.mergedStopIds : [widget.stopId];
+    _timetableFuture = _fetchCombinedTimetables(stopIds);
+  }
+
+  Future<List<TimetableEntry>> _fetchCombinedTimetables(List<String> ids) async {
+    final futures = ids.map((id) => TimetableService.getTimetableForStop(id));
+    final results = await Future.wait(futures);
+    final combined = results.expand((list) => list).toList();
+    combined.sort((a, b) => a.departureTime.compareTo(b.departureTime));
+    return combined;
   }
 
   @override

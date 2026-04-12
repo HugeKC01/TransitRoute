@@ -12,6 +12,7 @@ class StationDetailsContent extends StatelessWidget {
   final VoidCallback onSelectAsStart;
   final VoidCallback onSelectAsDestination;
   final List<gtfs.Stop> transferStops;
+  final List<gtfs.Stop> mergedGroupStops;
   final String? Function(String stopId)? lineNameResolver;
   final Color Function(String stopId)? lineColorResolver;
   final Color Function(String lineName)? lineColorByName;
@@ -31,6 +32,7 @@ class StationDetailsContent extends StatelessWidget {
     required this.onSelectAsStart,
     required this.onSelectAsDestination,
     this.transferStops = const [],
+    this.mergedGroupStops = const [],
     this.lineNameResolver,
     this.lineColorResolver,
     this.lineColorByName,
@@ -50,6 +52,10 @@ class StationDetailsContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    
+    final filteredTransferStops = transferStops.where((t) {
+      return !mergedGroupStops.any((m) => m.stopId == t.stopId) && t.stopId != stop.stopId;
+    }).toList();
 
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -62,12 +68,15 @@ class StationDetailsContent extends StatelessWidget {
         if (isBottomSheet) ...[
           _SectionHeader('Upcoming Departures'),
           const SizedBox(height: 12),
-          UpcomingDeparturesWidget(stopId: stop.stopId),
+          UpcomingDeparturesWidget(
+            stopId: stop.stopId,
+            mergedStopIds: mergedGroupStops.map((s) => s.stopId).toList(),
+          ),
           const SizedBox(height: 24),
-          if (transferStops.isNotEmpty) ...[
+          if (filteredTransferStops.isNotEmpty) ...[
             _SectionHeader('Transfers'),
             const SizedBox(height: 12),
-            _buildFullTransfersList(context, theme, scheme),
+            _buildFullTransfersList(context, theme, scheme, filteredTransferStops),
             const SizedBox(height: 24),
           ],
           SizedBox(
@@ -86,6 +95,7 @@ class StationDetailsContent extends StatelessWidget {
                       onSelectAsStart: onSelectAsStart,
                       onSelectAsDestination: onSelectAsDestination,
                       transferStops: transferStops,
+                      mergedGroupStops: mergedGroupStops,
                       lineNameResolver: lineNameResolver,
                       lineColorResolver: lineColorResolver,
                       lineColorByName: lineColorByName,
@@ -115,10 +125,10 @@ class StationDetailsContent extends StatelessWidget {
             ),
             const SizedBox(height: 24),
           ],
-          if (transferStops.isNotEmpty) ...[
+          if (filteredTransferStops.isNotEmpty) ...[
             _SectionHeader('Transfers'),
             const SizedBox(height: 12),
-            _buildFullTransfersList(context, theme, scheme),
+            _buildFullTransfersList(context, theme, scheme, filteredTransferStops),
             const SizedBox(height: 24),
           ],
           _SectionHeader('Timetable & Departures'),
@@ -153,33 +163,12 @@ class StationDetailsContent extends StatelessWidget {
     ThemeData theme,
     ColorScheme scheme,
   ) {
-    bool isFerry =
-        stop.stopId.startsWith('F_') || stop.stopId.startsWith('CRF_');
-    bool isBRT = stop.stopId.startsWith('BRT');
+    // Use the merged stops, or fallback to the single stop if the list is empty
+    final baseStops = mergedGroupStops.isNotEmpty ? mergedGroupStops : [stop];
     
-    bool isRailLine = lineName != null && 
-        (lineName!.contains('BTS') || 
-         lineName!.contains('MRT') || 
-         lineName!.contains('SRT') || 
-         lineName!.contains('ARL') ||
-         lineName!.contains('Metro') ||
-         lineName!.contains('Line'));
-
-    bool isBus =
-        !isFerry &&
-        !isRailLine &&
-        (stop.stopId.startsWith('ST_') ||
-            stop.stopId.startsWith('STOP_') ||
-            int.tryParse(stop.stopId) != null ||
-            stop.stopId.startsWith('BUS_') ||
-            (stop.stopId.startsWith('B') && !stop.stopId.startsWith('BL') && !stop.stopId.startsWith('BKK')) ||
-            isBRT ||
-            (lineName != null &&
-                (lineName!.contains('Bus') || lineName!.contains('BMTA'))));
-
-    String displayCode = stop.code ?? '';
-    if (isFerry) displayCode = stop.stopId;
-    if (isBus && !isBRT) displayCode = '';
+    // Sort merged stops by stop.code if available A..Z
+    final sortedStops = List<gtfs.Stop>.from(baseStops);
+    sortedStops.sort((a, b) => (a.code ?? a.stopId).compareTo(b.code ?? b.stopId));
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -194,207 +183,236 @@ class StationDetailsContent extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 52,
-                height: 52,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: theme.brightness == Brightness.dark
-                      ? Colors.white
-                      : lineColor.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: Builder(
-                  builder: (context) {
-                    String? routeIcon;
-                    if (lineName != null &&
-                        lineName!.isNotEmpty &&
-                        routeIconByName != null) {
-                      final lines = lineName!.split(', ');
-                      for (var line in lines) {
-                        routeIcon = routeIconByName!(line);
-                        if (routeIcon != null && routeIcon.isNotEmpty) break;
-                      }
-                    }
-
-                    if (routeIcon != null && routeIcon.isNotEmpty) {
-                      return SizedBox(
-                        width: 28,
-                        height: 28,
-                        child: SvgPicture.asset(
-                          routeIcon,
-                          width: 28,
-                          height: 28,
-                        ),
-                      );
-                    }
-                    if (isFerry) {
-                      return Icon(
-                        Icons.directions_boat,
-                        color: lineColor,
-                        size: 28,
-                      );
-                    }
-                    if (isBus) {
-                      return Icon(
-                        Icons.directions_bus,
-                        color: lineColor,
-                        size: 28,
-                      );
-                    }
-                    return Icon(
-                      Icons.directions_transit,
-                      color: lineColor,
-                      size: 28,
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(width: 16),
               Expanded(
-                child: Row(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _hasThaiName ? stop.thaiName! : stop.name,
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          if (_hasThaiName)
-                            Text(
-                              stop.name,
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                              ),
-                            ),
-                        ],
+                    Text(
+                      _hasThaiName ? stop.thaiName! : stop.name,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                    if (onToggleFavorite != null)
-                      IconButton(
-                        icon: Icon(
-                          isFavorite ? Icons.favorite : Icons.favorite_border,
-                        ),
-                        color: isFavorite
-                            ? Colors.red
-                            : scheme.onSurfaceVariant,
-                        onPressed: onToggleFavorite,
-                        style: IconButton.styleFrom(
-                          backgroundColor: scheme.surface.withValues(
-                            alpha: 0.8,
-                          ),
-                          padding: const EdgeInsets.all(8),
-                          visualDensity: VisualDensity.compact,
-                        ),
-                      ),
-                    if (onClose != null)
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: onClose,
-                        style: IconButton.styleFrom(
-                          backgroundColor: scheme.surface.withValues(
-                            alpha: 0.8,
-                          ),
-                          padding: const EdgeInsets.all(8),
-                          visualDensity: VisualDensity.compact,
+                    if (_hasThaiName)
+                      Text(
+                        stop.name,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
                         ),
                       ),
                   ],
                 ),
               ),
+              if (onToggleFavorite != null)
+                IconButton(
+                  icon: Icon(
+                    isFavorite ? Icons.favorite : Icons.favorite_border,
+                  ),
+                  color: isFavorite
+                      ? Colors.red
+                      : scheme.onSurfaceVariant,
+                  onPressed: onToggleFavorite,
+                  style: IconButton.styleFrom(
+                    backgroundColor: scheme.surface.withValues(
+                      alpha: 0.8,
+                    ),
+                    padding: const EdgeInsets.all(8),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+              if (onClose != null)
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: onClose,
+                  style: IconButton.styleFrom(
+                    backgroundColor: scheme.surface.withValues(
+                      alpha: 0.8,
+                    ),
+                    padding: const EdgeInsets.all(8),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
             ],
           ),
-          if ((displayCode.isNotEmpty) ||
-              (lineName != null && lineName!.isNotEmpty))
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: 52,
-                    child: (displayCode.isNotEmpty)
-                        ? Align(
-                            alignment: Alignment.topCenter,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
+          const SizedBox(height: 16),
+          // Stop Codes and Graphical Lines List
+          Builder(
+            builder: (context) {
+              final List<Map<String, dynamic>> grouped = [];
+              for (final s in sortedStops) {
+                final sLineColor = lineColorResolver?.call(s.stopId) ?? lineColor;
+                final sLineName = lineNameResolver?.call(s.stopId) ?? '';
+                String? routeIcon;
+                if (sLineName.isNotEmpty && routeIconByName != null) {
+                  final lines = sLineName.split(', ');
+                  for (var line in lines) {
+                    routeIcon = routeIconByName!(line);
+                    if (routeIcon != null && routeIcon.isNotEmpty) break;
+                  }
+                }
+                
+                bool isMetro = sLineName.contains('BTS') || sLineName.contains('MRT');
+                bool isBRT = s.stopId.startsWith('BRT') || sLineName.contains('BRT');
+                bool isFerry = s.stopId.startsWith('F_') || s.stopId.startsWith('CRF_');
+                bool isTrain = sLineName.contains('SRT') || sLineName.contains('ARL') || (!isMetro && sLineName.contains('Line'));
+                bool isBus = !isFerry && !isTrain && !isMetro &&
+                    (s.stopId.startsWith('ST_') || s.stopId.startsWith('STOP_') || int.tryParse(s.stopId) != null || s.stopId.startsWith('BUS_') || s.stopId.startsWith('B') || sLineName.contains('Bus') || sLineName.contains('BMTA'));
+                
+                String stopCode = s.code ?? '';
+                if (isFerry) stopCode = s.stopId;
+                
+                bool hideTrainCode = isTrain && !sLineName.contains('SRT Red') && !sLineName.contains('SRT Light Red');
+                if (hideTrainCode || (isBus && !isBRT)) stopCode = '';
+                
+                final existingIdx = grouped.indexWhere((g) => 
+                  (g['color'] as Color) == sLineColor && 
+                  (g['icon'] as String?) == routeIcon
+                );
+                
+                if (existingIdx != -1) {
+                  if (stopCode.isNotEmpty && !(grouped[existingIdx]['codes'] as List<String>).contains(stopCode)) {
+                    (grouped[existingIdx]['codes'] as List<String>).add(stopCode);
+                  }
+                  if (sLineName.isNotEmpty && !(grouped[existingIdx]['lineName'] as String).contains(sLineName)) {
+                    grouped[existingIdx]['lineName'] = '${grouped[existingIdx]['lineName']}, $sLineName';
+                  }
+                } else {
+                  grouped.add({
+                    'color': sLineColor,
+                    'icon': routeIcon,
+                    'lineName': sLineName,
+                    'isMetro': isMetro,
+                    'isTrain': isTrain,
+                    'isBus': isBus,
+                    'isFerry': isFerry,
+                    'codes': stopCode.isNotEmpty ? [stopCode] : <String>[],
+                  });
+                }
+              }
+
+              // Sort the grouped stops: Metro > Train > Ferry > Bus
+              grouped.sort((a, b) {
+                int getScore(Map<String, dynamic> g) {
+                  if (g['isMetro'] as bool? ?? false) return 0;
+                  if (g['isTrain'] as bool? ?? false) return 1;
+                  if (g['isFerry'] as bool? ?? false) return 2;
+                  if (g['isBus'] as bool? ?? false) return 3;
+                  return 4; // Other types
+                }
+                return getScore(a).compareTo(getScore(b));
+              });
+
+              return Column(
+                children: List.generate(grouped.length, (index) {
+                  final group = grouped[index];
+                  final sLineColor = group['color'] as Color;
+                  final sLineName = group['lineName'] as String;
+                  final routeIcon = group['icon'] as String?;
+                  final isBus = group['isBus'] as bool? ?? false;
+                  final isFerry = group['isFerry'] as bool? ?? false;
+                  final codes = group['codes'] as List<String>;
+                  final sCodeLabel = codes.join('/');
+                  final isLast = index == grouped.length - 1;
+
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: 52,
+                        child: Column(
+                          children: [
+                            // Circle Graphic
+                            Container(
+                              width: 48,
+                              height: 48,
+                              padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: lineColor,
-                                borderRadius: BorderRadius.circular(8),
+                                color: theme.brightness == Brightness.dark
+                                    ? Colors.white
+                                    : sLineColor.withValues(alpha: 0.15),
+                                shape: BoxShape.circle,
                               ),
-                              child: Text(
-                                displayCode,
-                                style: theme.textTheme.labelMedium?.copyWith(
-                                  color: lineColor.computeLuminance() > 0.5
-                                      ? Colors.black87
-                                      : Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                textAlign: TextAlign.center,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                              child: routeIcon != null && routeIcon.isNotEmpty
+                                  ? SvgPicture.asset(routeIcon, width: 24, height: 24)
+                                  : Icon(
+                                      isFerry ? Icons.directions_boat : (isBus ? Icons.directions_bus : Icons.directions_transit),
+                                      color: sLineColor,
+                                      size: 24,
+                                    ),
                             ),
-                          )
-                        : null,
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: (lineName != null && lineName!.isNotEmpty)
-                        ? LayoutBuilder(
-                            builder: (context, constraints) {
-                              return Wrap(
-                                spacing: 6,
-                                runSpacing: 6,
-                                children: lineName!.split(', ').map((
-                                  singleLine,
-                                ) {
-                                  final specificColor =
-                                      lineColorByName?.call(singleLine) ??
-                                      lineColor;
-                                  return Container(
-                                    constraints: BoxConstraints(
-                                      maxWidth: constraints.maxWidth,
+                            if (!isLast)
+                              Container(
+                                width: 3,
+                                height: 24, // vertical connecting line
+                                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+                              )
+                            else
+                              const SizedBox(height: 8), // final spacing
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      // Left Code, Right Lines
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (sCodeLabel.isNotEmpty) ...[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: sLineColor,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    sCodeLabel,
+                                    style: theme.textTheme.labelMedium?.copyWith(
+                                      color: sLineColor.computeLuminance() > 0.5 ? Colors.black87 : Colors.white,
+                                      fontWeight: FontWeight.bold,
                                     ),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: specificColor,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text(
-                                      singleLine,
-                                      style: theme.textTheme.labelMedium
-                                          ?.copyWith(
-                                            color:
-                                                specificColor
-                                                        .computeLuminance() >
-                                                    0.5
-                                                ? Colors.black87
-                                                : Colors.white,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  );
-                                }).toList(),
-                              );
-                            },
-                          )
-                        : const SizedBox.shrink(),
-                  ),
-                ],
-              ),
-            ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                              ],
+                              Expanded(
+                                child: sLineName.isNotEmpty
+                                    ? Wrap(
+                                        spacing: 6,
+                                        runSpacing: 6,
+                                        children: sLineName.split(', ').map((singleLine) {
+                                          final specificColor = lineColorByName?.call(singleLine) ?? sLineColor;
+                                          return Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: specificColor,
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            child: Text(
+                                              singleLine,
+                                              style: theme.textTheme.labelMedium?.copyWith(
+                                                color: specificColor.computeLuminance() > 0.5 ? Colors.black87 : Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          );
+                                        }).toList(),
+                                      )
+                                    : const SizedBox.shrink(),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                }),
+              );
+            },
+          )
         ],
       ),
     );
@@ -438,9 +456,10 @@ class StationDetailsContent extends StatelessWidget {
     BuildContext context,
     ThemeData theme,
     ColorScheme scheme,
+    List<gtfs.Stop> filteredTransferStops,
   ) {
     return _TransferListWithTabs(
-      transferStops: transferStops,
+      transferStops: filteredTransferStops,
       lineNameResolver: lineNameResolver,
       lineColorResolver: lineColorResolver,
       lineColorByName: lineColorByName,

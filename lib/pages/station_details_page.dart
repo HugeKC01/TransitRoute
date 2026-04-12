@@ -16,6 +16,7 @@ class StationDetailsPage extends StatefulWidget {
     required this.onSelectAsStart,
     required this.onSelectAsDestination,
     this.transferStops = const [],
+    this.mergedGroupStops = const [],
     this.lineNameResolver,
     this.lineColorResolver,
     this.lineColorByName,
@@ -31,6 +32,7 @@ class StationDetailsPage extends StatefulWidget {
   final VoidCallback onSelectAsStart;
   final VoidCallback onSelectAsDestination;
   final List<gtfs.Stop> transferStops;
+  final List<gtfs.Stop> mergedGroupStops;
   final String? Function(String stopId)? lineNameResolver;
   final Color Function(String stopId)? lineColorResolver;
   final Color Function(String lineName)? lineColorByName;
@@ -70,6 +72,7 @@ class _StationDetailsPageState extends State<StationDetailsPage> {
         Navigator.pop(context);
       },
       transferStops: widget.transferStops,
+      mergedGroupStops: widget.mergedGroupStops,
       lineNameResolver: widget.lineNameResolver,
       lineColorResolver: widget.lineColorResolver,
       lineColorByName: widget.lineColorByName,
