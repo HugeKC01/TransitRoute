@@ -1,5 +1,13 @@
 import pandas as pd
 import numpy as np
+import re
+from collections import defaultdict
+
+def make_route_key(name):
+    # Standardize route format for matching (e.g., "75 (4-13)" matches "4-13 (75)")
+    name = str(name).replace('(', ' ').replace(')', ' ')
+    parts = [p.strip() for p in re.split(r'[^\w-]', name) if p.strip()]
+    return tuple(sorted(parts))
 
 def match_shapes_to_custom_routes():
     print("Loading custom stops...")
@@ -33,6 +41,23 @@ def match_shapes_to_custom_routes():
     shape_starts = shapes.groupby('shape_id').first().reset_index()
     shape_ends = shapes.groupby('shape_id').last().reset_index()
 
+    print("Building route-to-shape mappings...")
+    routes = pd.read_csv('routes_source.txt', dtype=str)
+    trips = pd.read_csv('trips_source.txt', dtype=str)
+    
+    # Map route_id -> set of shape_ids
+    route_to_shapes = defaultdict(set)
+    for _, row in trips.iterrows():
+        if pd.notna(row['shape_id']) and pd.notna(row['route_id']):
+            route_to_shapes[row['route_id']].add(row['shape_id'])
+            
+    # Map route_key -> set of shape_ids
+    route_key_to_shapes = defaultdict(set)
+    for _, row in routes.iterrows():
+        if pd.notna(row['route_short_name']) and pd.notna(row['route_id']):
+            key = make_route_key(row['route_short_name'])
+            route_key_to_shapes[key].update(route_to_shapes[row['route_id']])
+
     print("Processing ragged bus routes and matching spatially...")
     # 3. Read Custom Routes (Ragged CSV) and match
     output_rows = []
@@ -59,6 +84,10 @@ def match_shapes_to_custom_routes():
         start_stop = stop_ids[0]
         end_stop = stop_ids[-1]
         
+        route_short_name = metadata[1]
+        route_key = make_route_key(route_short_name)
+        candidate_shapes = route_key_to_shapes.get(route_key, set())
+        
         best_shape_id = ""
         
         # If we have coordinates for both terminals in our bus_stop.txt
@@ -75,7 +104,18 @@ def match_shapes_to_custom_routes():
             
             # Combine distances to find the shape that best aligns with BOTH terminals
             total_dists = start_dists + end_dists
-            best_idx = total_dists.idxmin()
+            
+            if candidate_shapes:
+                # Mask out shapes that don't match the route short name
+                mask = shape_starts['shape_id'].isin(candidate_shapes)
+                if mask.any():
+                    # Pick best only from shapes of this route
+                    best_idx = total_dists[mask].idxmin()
+                else:
+                    # Fallback to nearest of all shapes
+                    best_idx = total_dists.idxmin()
+            else:
+                best_idx = total_dists.idxmin()
             
             best_shape_id = shape_starts.loc[best_idx, 'shape_id']
             

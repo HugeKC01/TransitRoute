@@ -1630,6 +1630,14 @@ class DirectionService {
       _dijkstraWeightedPath(
         start,
       dest,
+      distanceWeight: 1.0,
+      timeWeight: 0.2, // fast rail, distance focused
+      busCostPenalty: 5000.0,
+      transferPenalty: 2500.0,
+      ).then((r) => addRoute(r, {'Rail priority', 'Alternative'})),
+      _dijkstraWeightedPath(
+        start,
+      dest,
       distanceWeight: 0.8,
       timeWeight: 1.0,
       busCostPenalty: 5000.0,
