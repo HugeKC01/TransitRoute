@@ -248,6 +248,8 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
                       controller: _searchController,
                       autocorrect: false,
                       enableSuggestions: false,
+                      keyboardType: TextInputType.text,
+                      autofillHints: const [],
                       textInputAction: TextInputAction.search,
                       decoration: InputDecoration(
                         hintText: 'Search lines, agencies, or codes...',
@@ -286,11 +288,20 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
                     ),
                     child: Row(
                       children: activeCategories.map((cat) {
+                        final isSelected = _selectedCategory == cat;
                         return Padding(
                           padding: const EdgeInsets.only(right: 8.0),
                           child: ChoiceChip(
+                            showCheckmark: false,
+                            avatar: Icon(
+                              cat == 'All' ? Icons.apps : _iconForCategory(cat),
+                              size: 18,
+                              color: isSelected
+                                  ? theme.colorScheme.onSecondaryContainer
+                                  : theme.colorScheme.onSurfaceVariant,
+                            ),
                             label: Text(cat),
-                            selected: _selectedCategory == cat,
+                            selected: isSelected,
                             onSelected: (selected) {
                               if (selected) {
                                 setState(() {

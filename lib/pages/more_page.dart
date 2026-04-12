@@ -323,106 +323,6 @@ class MorePage extends StatelessWidget {
                           ),
                         ),
                       ),
-                      GestureDetector(
-                        onTap: () {
-                          Color tempColor = currentAccentColor;
-                          showDialog(
-                            context: context,
-                            builder: (context) => StatefulBuilder(
-                              builder: (context, setState) => AlertDialog(
-                                title: const Text('Custom Color'),
-                                content: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Container(
-                                      width: double.infinity,
-                                      height: 50,
-                                      decoration: BoxDecoration(
-                                        color: tempColor,
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Slider(
-                                      value: (tempColor.r * 255.0)
-                                          .round()
-                                          .toDouble(),
-                                      min: 0,
-                                      max: 255,
-                                      activeColor: Colors.red,
-                                      onChanged: (v) => setState(
-                                        () => tempColor = Color.fromARGB(
-                                          (tempColor.a * 255).round(),
-                                          v.toInt(),
-                                          (tempColor.g * 255).round(),
-                                          (tempColor.b * 255).round(),
-                                        ),
-                                      ),
-                                    ),
-                                    Slider(
-                                      value: (tempColor.g * 255.0)
-                                          .round()
-                                          .toDouble(),
-                                      min: 0,
-                                      max: 255,
-                                      activeColor: Colors.green,
-                                      onChanged: (v) => setState(
-                                        () => tempColor = Color.fromARGB(
-                                          (tempColor.a * 255).round(),
-                                          (tempColor.r * 255).round(),
-                                          v.toInt(),
-                                          (tempColor.b * 255).round(),
-                                        ),
-                                      ),
-                                    ),
-                                    Slider(
-                                      value: (tempColor.b * 255.0)
-                                          .round()
-                                          .toDouble(),
-                                      min: 0,
-                                      max: 255,
-                                      activeColor: Colors.blue,
-                                      onChanged: (v) => setState(
-                                        () => tempColor = Color.fromARGB(
-                                          (tempColor.a * 255).round(),
-                                          (tempColor.r * 255).round(),
-                                          (tempColor.g * 255).round(),
-                                          v.toInt(),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(context),
-                                    child: const Text('Cancel'),
-                                  ),
-                                  TextButton(
-                                    onPressed: () {
-                                      onAccentColorChanged(tempColor);
-                                      Navigator.pop(context);
-                                    },
-                                    child: const Text('Save'),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                        child: Container(
-                          width: 24,
-                          height: 24,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: theme.colorScheme.onSurface,
-                              width: 2,
-                            ),
-                          ),
-                          child: const Icon(Icons.add, size: 16),
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -442,13 +342,6 @@ class MorePage extends StatelessWidget {
           clipBehavior: Clip.antiAlias,
           child: Column(
             children: [
-              const ListTile(
-                leading: Icon(Icons.help_outline),
-                title: Text('Help & feedback'),
-                subtitle: Text('FAQs, chat with support'),
-                trailing: Icon(Icons.chevron_right),
-              ),
-              const Divider(height: 1),
               ListTile(
                 leading: const Icon(Icons.info_outline),
                 title: const Text('About'),

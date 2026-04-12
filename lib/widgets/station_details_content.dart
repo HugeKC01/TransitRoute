@@ -67,7 +67,7 @@ class StationDetailsContent extends StatelessWidget {
           if (transferStops.isNotEmpty) ...[
             _SectionHeader('Transfers'),
             const SizedBox(height: 12),
-            _buildCompactTransfersList(context, theme, scheme),
+            _buildFullTransfersList(context, theme, scheme),
             const SizedBox(height: 24),
           ],
           SizedBox(
@@ -156,13 +156,23 @@ class StationDetailsContent extends StatelessWidget {
     bool isFerry =
         stop.stopId.startsWith('F_') || stop.stopId.startsWith('CRF_');
     bool isBRT = stop.stopId.startsWith('BRT');
+    
+    bool isRailLine = lineName != null && 
+        (lineName!.contains('BTS') || 
+         lineName!.contains('MRT') || 
+         lineName!.contains('SRT') || 
+         lineName!.contains('ARL') ||
+         lineName!.contains('Metro') ||
+         lineName!.contains('Line'));
+
     bool isBus =
         !isFerry &&
+        !isRailLine &&
         (stop.stopId.startsWith('ST_') ||
             stop.stopId.startsWith('STOP_') ||
             int.tryParse(stop.stopId) != null ||
             stop.stopId.startsWith('BUS_') ||
-            stop.stopId.startsWith('B') ||
+            (stop.stopId.startsWith('B') && !stop.stopId.startsWith('BL') && !stop.stopId.startsWith('BKK')) ||
             isBRT ||
             (lineName != null &&
                 (lineName!.contains('Bus') || lineName!.contains('BMTA'))));
@@ -424,114 +434,6 @@ class StationDetailsContent extends StatelessWidget {
     );
   }
 
-  Widget _buildCompactTransfersList(
-    BuildContext context,
-    ThemeData theme,
-    ColorScheme scheme,
-  ) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: transferStops.map((tStop) {
-            final tLineName =
-                lineNameResolver?.call(tStop.stopId) ?? 'Unknown Line';
-            final tLineColor =
-                lineColorResolver?.call(tStop.stopId) ?? Colors.grey;
-
-            final isSameName =
-                (tStop.name == stop.name) ||
-                (tStop.thaiName == stop.thaiName && stop.thaiName != null);
-
-            return InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: () => onTransferStationSelected?.call(tStop),
-              child: Container(
-                constraints: BoxConstraints(maxWidth: constraints.maxWidth),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: scheme.outlineVariant.withValues(alpha: 0.5),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 20,
-                      height: 20,
-                      decoration: BoxDecoration(
-                        color: tLineColor.withValues(alpha: 0.2),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Builder(
-                        builder: (context) {
-                          String? routeSvg;
-                          if (routeIconByName != null) {
-                            final lines = tLineName.split(', ');
-                            for (var l in lines) {
-                              routeSvg = routeIconByName!(l);
-                              if (routeSvg != null && routeSvg.isNotEmpty) {
-                                break;
-                              }
-                            }
-                          }
-                          if (routeSvg != null && routeSvg.isNotEmpty) {
-                            return Center(
-                              child: SvgPicture.asset(
-                                routeSvg,
-                                width: 12,
-                                height: 12,
-                              ),
-                            );
-                          }
-
-                          IconData defaultIcon = Icons.directions_transit;
-                          if (tStop.stopId.startsWith('F_') ||
-                              tStop.stopId.startsWith('CRF_')) {
-                            defaultIcon = Icons.directions_boat;
-                          } else if (tStop.stopId.startsWith('BUS_') ||
-                              tStop.stopId.startsWith('ST_') ||
-                              tStop.stopId.startsWith('STOP_') ||
-                              int.tryParse(tStop.stopId) != null ||
-                              tStop.stopId.startsWith('B')) {
-                            defaultIcon = Icons.directions_bus;
-                          }
-                          return Icon(defaultIcon, size: 12, color: tLineColor);
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        isSameName
-                            ? tLineName
-                            : ((tStop.thaiName != null &&
-                                      tStop.thaiName!.trim().isNotEmpty)
-                                  ? tStop.thaiName!
-                                  : tStop.name),
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }).toList(),
-        );
-      },
-    );
-  }
-
   Widget _buildFullTransfersList(
     BuildContext context,
     ThemeData theme,
@@ -658,15 +560,27 @@ class _TransferListWithTabsState extends State<_TransferListWithTabs> {
 
   String _getCategory(String stopId) {
     if (stopId.startsWith('F_') || stopId.startsWith('CRF_')) return 'Ferry';
-    if (stopId.startsWith('BRT')) return 'BRT';
+    
+    final lineName = widget.lineNameResolver?.call(stopId) ?? '';
+    
+    if (lineName.contains('BTS') || lineName.contains('MRT')) return 'Metro';
+    if (lineName.contains('SRT') || lineName.contains('ARL') || lineName.contains('Line')) return 'Train';
+
+    if (lineName.contains('Bus') || lineName.contains('BMTA') || lineName.contains('BRT')) {
+       return 'Bus';
+    }
+    if (lineName.contains('Ferry') || lineName.contains('Boat') || lineName.contains('Chao Phraya')) return 'Ferry';
+
     if (stopId.startsWith('BUS_') ||
         stopId.startsWith('ST_') ||
         stopId.startsWith('STOP_') ||
+        stopId.startsWith('BRT') ||
         int.tryParse(stopId) != null ||
-        stopId.startsWith('B')) {
+        stopId.startsWith('B') ||
+        stopId.length > 5) {
       return 'Bus';
     }
-    return 'Rail';
+    return 'Metro';
   }
 
   @override
@@ -676,17 +590,21 @@ class _TransferListWithTabsState extends State<_TransferListWithTabs> {
       categories.add(_getCategory(s.stopId));
     }
 
-    final catsList = categories.toList()
-      ..sort((a, b) {
-        if (a == 'All') return -1;
-        if (b == 'All') return 1;
-        return a.compareTo(b);
-      });
+    int catWeight(String c) {
+      if (c == 'All') return 0;
+      if (c == 'Metro') return 1;
+      if (c == 'Train') return 2;
+      if (c == 'Ferry') return 3;
+      if (c == 'Bus') return 4;
+      return 5;
+    }
 
-    final filteredStops = widget.transferStops.where((s) {
-      if (_selectedCategory == 'All') return true;
-      return _getCategory(s.stopId) == _selectedCategory;
-    }).toList();
+    final catsList = categories.toList()
+      ..sort((a, b) => catWeight(a).compareTo(catWeight(b)));
+
+    final displayCategories = _selectedCategory == 'All'
+        ? catsList.where((c) => c != 'All').toList()
+        : [_selectedCategory];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -714,129 +632,199 @@ class _TransferListWithTabsState extends State<_TransferListWithTabs> {
               ),
             ),
           ),
-        ListView.separated(
-          physics: const NeverScrollableScrollPhysics(),
-          shrinkWrap: true,
-          padding: EdgeInsets.zero,
-          itemCount: filteredStops.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 8),
-          itemBuilder: (context, index) {
-            final tStop = filteredStops[index];
-            final tLineName =
-                widget.lineNameResolver?.call(tStop.stopId) ?? 'Unknown Line';
-            final tLineColor =
-                widget.lineColorResolver?.call(tStop.stopId) ?? Colors.grey;
+        ...displayCategories.map((cat) {
+          final stopsInCat = widget.transferStops
+              .where((s) => _getCategory(s.stopId) == cat)
+              .toList();
 
-            final cat = _getCategory(tStop.stopId);
-            IconData defaultIcon = Icons.train;
-            if (cat == 'Bus' || cat == 'BRT') {
-              defaultIcon = Icons.directions_bus;
-            }
-            if (cat == 'Ferry') defaultIcon = Icons.directions_boat;
+          if (stopsInCat.isEmpty) return const SizedBox.shrink();
 
-            return InkWell(
-              borderRadius: BorderRadius.circular(16),
-              onTap: () => widget.onTransferStationSelected?.call(tStop),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: widget.scheme.surfaceContainerHighest.withValues(
-                    alpha: 0.5,
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: widget.scheme.outlineVariant.withValues(alpha: 0.5),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: tLineColor.withValues(alpha: 0.2),
-                        shape: BoxShape.circle,
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (_selectedCategory == 'All' && displayCategories.length > 1)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16, bottom: 8, left: 4),
+                  child: Row(
+                    children: [
+                      Icon(
+                        cat == 'Bus'
+                            ? Icons.directions_bus
+                            : cat == 'Ferry'
+                                ? Icons.directions_boat
+                                : cat == 'Metro'
+                                    ? Icons.subway
+                                    : Icons.train,
+                        size: 18,
+                        color: widget.scheme.primary,
                       ),
-                      child: Icon(defaultIcon, size: 16, color: tLineColor),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      const SizedBox(width: 8),
+                      Text(
+                        cat,
+                        style: widget.theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: widget.scheme.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ListView.separated(
+                physics: const NeverScrollableScrollPhysics(),
+                shrinkWrap: true,
+                padding: EdgeInsets.only(bottom: _selectedCategory == 'All' && displayCategories.length > 1 ? 8 : 0),
+                itemCount: stopsInCat.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                itemBuilder: (context, index) {
+                  final tStop = stopsInCat[index];
+                  final tLineName =
+                      widget.lineNameResolver?.call(tStop.stopId) ??
+                      'Unknown Line';
+                  final tLineColor =
+                      widget.lineColorResolver?.call(tStop.stopId) ??
+                      Colors.grey;
+
+                  IconData defaultIcon = Icons.train;
+                  if (cat == 'Bus') {
+                    defaultIcon = Icons.directions_bus;
+                  } else if (cat == 'Ferry') {
+                    defaultIcon = Icons.directions_boat;
+                  } else if (cat == 'Metro') {
+                    defaultIcon = Icons.subway;
+                  }
+
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: () => widget.onTransferStationSelected?.call(tStop),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: widget.scheme.surfaceContainerHighest.withValues(
+                          alpha: 0.5,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: widget.scheme.outlineVariant
+                              .withValues(alpha: 0.5),
+                        ),
+                      ),
+                      child: Row(
                         children: [
-                          Text(
-                            (tStop.thaiName != null &&
-                                    tStop.thaiName!.trim().isNotEmpty)
-                                ? tStop.thaiName!
-                                : tStop.name,
-                            style: widget.theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w600,
+                          Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: tLineColor.withValues(alpha: 0.2),
+                              shape: BoxShape.circle,
+                            ),
+                            child:
+                                Icon(defaultIcon, size: 16, color: tLineColor),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  (tStop.thaiName != null &&
+                                          tStop.thaiName!.trim().isNotEmpty)
+                                      ? tStop.thaiName!
+                                      : tStop.name,
+                                  style: widget.theme.textTheme.titleSmall
+                                      ?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Builder(
+                                  builder: (context) {
+                                    final lines = tLineName.split(', ');
+                                    lines.sort((a, b) {
+                                      int lineWeight(String l) {
+                                        if (l.contains('BTS') || l.contains('MRT')) return 1;
+                                        if (l.contains('SRT') || l.contains('ARL') || l.contains('Line')) return 2;
+                                        if (l.contains('Ferry') || l.contains('Boat') || l.contains('Chao Phraya')) return 3;
+                                        if (l.contains('Bus') || l.contains('BMTA') || l.contains('BRT')) return 4;
+                                        return 5;
+                                      }
+                                      return lineWeight(a).compareTo(lineWeight(b));
+                                    });
+
+                                    final displayLines = lines.take(3).toList();
+                                    final extra = lines.length - 3;
+                                    
+                                    return Wrap(
+                                      spacing: 4,
+                                      runSpacing: 4,
+                                      children: [
+                                        ...displayLines.map((sl) {
+                                          final slColor = widget.lineColorByName?.call(sl) ?? tLineColor;
+                                          String? routeSvg;
+                                          if (widget.routeIconByName != null) {
+                                            routeSvg = widget.routeIconByName!(sl);
+                                          }
+                                          return Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: slColor.withValues(alpha: 0.15),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                if (routeSvg != null && routeSvg.isNotEmpty)
+                                                  Padding(
+                                                    padding: const EdgeInsets.only(right: 4),
+                                                    child: SvgPicture.asset(routeSvg, width: 14, height: 14),
+                                                  ),
+                                                Text(
+                                                  sl,
+                                                  style: widget.theme.textTheme.bodySmall?.copyWith(
+                                                    color: slColor,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        }),
+                                        if (extra > 0)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: widget.theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.15),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Text(
+                                              '+$extra',
+                                              style: widget.theme.textTheme.bodySmall?.copyWith(
+                                                color: widget.theme.colorScheme.onSurfaceVariant,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    );
+                                  },
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Wrap(
-                            spacing: 4,
-                            runSpacing: 4,
-                            children: tLineName.split(', ').map((sl) {
-                              final slColor =
-                                  widget.lineColorByName?.call(sl) ??
-                                  tLineColor;
-
-                              String? routeSvg;
-                              if (widget.routeIconByName != null) {
-                                routeSvg = widget.routeIconByName!(sl);
-                              }
-
-                              return Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: slColor.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    if (routeSvg != null && routeSvg.isNotEmpty)
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                          right: 4,
-                                        ),
-                                        child: SvgPicture.asset(
-                                          routeSvg,
-                                          width: 14,
-                                          height: 14,
-                                        ),
-                                      ),
-                                    Text(
-                                      sl,
-                                      style: widget.theme.textTheme.bodySmall
-                                          ?.copyWith(
-                                            color: slColor,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }).toList(),
-                          ),
+                          const Icon(Icons.chevron_right, size: 20),
                         ],
                       ),
                     ),
-                    const Icon(Icons.chevron_right, size: 20),
-                  ],
-                ),
+                  );
+                },
               ),
-            );
-          },
-        ),
+            ],
+          );
+        }),
       ],
     );
   }
 }
+

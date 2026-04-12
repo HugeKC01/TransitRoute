@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class AboutPage extends StatelessWidget {
   const AboutPage({super.key});
@@ -13,37 +14,107 @@ class AboutPage extends StatelessWidget {
         padding: const EdgeInsets.all(16.0),
         children: [
           // App Header
-          Center(
-            child: Column(
-              children: [
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(20),
+          Card(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            elevation: 2,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              child: Row(
+                children: [
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Icon(
+                      Icons.directions_transit,
+                      size: 40,
+                      color: theme.colorScheme.onPrimaryContainer,
+                    ),
                   ),
-                  child: Icon(
-                    Icons.directions_transit,
-                    size: 48,
-                    color: theme.colorScheme.onPrimaryContainer,
+                  const SizedBox(width: 20),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'TransitRoute',
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.new_releases_outlined,
+                              size: 16,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Version 1.0.0',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'TransitRoute',
-                  style: theme.textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 32),
+
+          // Disclaimer / Welcome Text
+          Card(
+            clipBehavior: Clip.antiAlias,
+            color: theme.colorScheme.surfaceContainerHighest,
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Welcome / ยินดีต้อนรับ',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Version 1.0.0',
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                  const SizedBox(height: 12),
+                  Text(
+                    'This application is a prototype developed as part of a senior project by students at King Mongkut\'s University of Technology Thonburi (KMUTT).\n\n'
+                    'The data in this app covers only the Bangkok metropolitan area and may contain inaccuracies or incomplete information. For example, travel time and fare data are partially estimated and may be outdated. Users should verify with official staff for the most accurate information.\n\n'
+                    '---\n\n'
+                    'แอปพลิเคชันนี้เป็นเพียงต้นแบบที่พัฒนาขึ้นเพื่อเป็นส่วนหนึ่งของโครงงานก่อนจบการศึกษาของนักศึกษามหาวิทยาลัยเทคโนโลยีพระจอมเกล้าธนบุรี (KMUTT)\n\n'
+                    'ข้อมูลในแอปนี้ครอบคลุมเฉพาะพื้นที่กรุงเทพมหานครเท่านั้น และอาจมีความคลาดเคลื่อนหรือไม่สมบูรณ์ของข้อมูล อาทิ ข้อมูลเวลาเดินทางและค่าโดยสารมีการใช้ประมาณเป็นบางส่วนอาจมีความคลาดเคลื่อนและไม่เป็นปัจจุบัน ผู้ใช้ควรสอบถามกับเจ้าหน้าที่อีกครั้งเพื่อความถูกต้องของข้อมูล',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      height: 1.4,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 32),
@@ -51,47 +122,108 @@ class AboutPage extends StatelessWidget {
           // Data Credits
           Text(
             'Data Sources',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: theme.colorScheme.primary,
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Card(
             clipBehavior: Clip.antiAlias,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Padding(
+              children: [
+                const Padding(
                   padding: EdgeInsets.all(16.0),
                   child: Text(
                     'Transit data (routes, stops, timetables) is sourced from public GTFS data and individual transit agency websites. We credit the local transit authorities and agencies for making their data available on the web.',
                   ),
                 ),
-                Divider(height: 1),
+                Divider(height: 1, color: theme.colorScheme.outlineVariant),
                 ListTile(
-                  title: Text('Mobility Database (GTFS)'),
-                  subtitle: Text(
+                  title: const Text('Mobility Database (GTFS)'),
+                  subtitle: const Text(
                     'https://mobilitydatabase.org/feeds/gtfs/mdb-1831',
                   ),
+                  trailing: const Icon(Icons.open_in_browser),
+                  onTap: () async {
+                    final uri = Uri.parse(
+                      'https://mobilitydatabase.org/feeds/gtfs/mdb-1831',
+                    );
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri);
+                    }
+                  },
                 ),
                 ListTile(
+                  title: const Text('License: CC-BY-4.0'),
+                  subtitle: const Text(
+                    'https://creativecommons.org/licenses/by/4.0/',
+                  ),
+                  trailing: const Icon(Icons.open_in_browser),
+                  onTap: () async {
+                    final uri = Uri.parse(
+                      'https://creativecommons.org/licenses/by/4.0/',
+                    );
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri);
+                    }
+                  },
+                ),
+                Divider(height: 1, color: theme.colorScheme.outlineVariant),
+                const ListTile(
                   title: Text('Chao Phraya Express Boat'),
                   subtitle: Text(
                     'https://www.chaophrayaexpressboat.com/chaophrayaexpressboat',
                   ),
                 ),
-                ListTile(
+                const ListTile(
                   title: Text('BMTA'),
                   subtitle: Text('https://www.bmta.co.th/bus-lines'),
                 ),
-                ListTile(
+                const ListTile(
                   title: Text('BEM Metro'),
                   subtitle: Text('https://metro.bemplc.co.th/?lang=th'),
                 ),
-                ListTile(
+                const ListTile(
                   title: Text('BTS SkyTrain'),
                   subtitle: Text('https://www.bts.co.th/'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // GTFS License
+          Text(
+            'GTFS License',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Text(
+                    'Except as otherwise noted, the content of this site is licensed under the Creative Commons Attribution 3.0 License, and code samples are licensed under the Apache 2.0 License.',
+                  ),
+                ),
+                Divider(height: 1, color: theme.colorScheme.outlineVariant),
+                ListTile(
+                  leading: const Icon(Icons.open_in_browser),
+                  title: const Text('GTFS About Page'),
+                  subtitle: const Text('https://gtfs.org/about/'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () async {
+                    final uri = Uri.parse('https://gtfs.org/about/');
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri);
+                    }
+                  },
                 ),
               ],
             ),
@@ -101,12 +233,11 @@ class AboutPage extends StatelessWidget {
           // Asset Credits
           Text(
             'Assets & Design',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: theme.colorScheme.primary,
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           const Card(
             child: Padding(
               padding: EdgeInsets.all(16.0),
@@ -120,12 +251,11 @@ class AboutPage extends StatelessWidget {
           // Open Source Packages
           Text(
             'Open Source Packages',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: theme.colorScheme.primary,
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Card(
             clipBehavior: Clip.antiAlias,
             child: Column(
@@ -133,10 +263,10 @@ class AboutPage extends StatelessWidget {
                 const ListTile(
                   title: Text('Flutter Packages'),
                   subtitle: Text(
-                    'archive, cloud_firestore, collection, cupertino_icons, firebase_core, firebase_storage, flutter_map, flutter_svg, google_fonts, http, latlong2, location, path_provider, shared_preferences, sqflite.',
+                    'archive, cloud_firestore, collection, cupertino_icons, firebase_core, firebase_storage, flutter_map, flutter_svg, google_fonts, http, latlong2, location, path_provider, shared_preferences, sqflite, url_launcher.',
                   ),
                 ),
-                const Divider(height: 1),
+                Divider(height: 1, color: theme.colorScheme.outlineVariant),
                 ListTile(
                   leading: const Icon(Icons.description_outlined),
                   title: const Text('View OSS Licenses'),
