@@ -567,7 +567,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         _lineColorCache[stopId] = col;
         return col;
       }
-      
+
       final type = _directionService.getRouteTypeForLine(firstLine);
       if (type == '3') {
         _lineColorCache[stopId] = Colors.blue;
@@ -578,14 +578,21 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         return Colors.orange;
       }
     }
-    
+
     // Also check the stop itself if lineName didn't yield a type
     final stopType = _directionService.getRouteTypeForStop(stopId);
-    if (stopType == '3' || stopId.startsWith('ST_') || stopId.startsWith('STOP_') || int.tryParse(stopId) != null || stopId.startsWith('B') || stopId.startsWith('BUS_')) {
+    if (stopType == '3' ||
+        stopId.startsWith('ST_') ||
+        stopId.startsWith('STOP_') ||
+        int.tryParse(stopId) != null ||
+        stopId.startsWith('B') ||
+        stopId.startsWith('BUS_')) {
       _lineColorCache[stopId] = Colors.blue;
       return Colors.blue;
     }
-    if (stopType == '4' || stopId.startsWith('F_') || stopId.startsWith('CRF_')) {
+    if (stopType == '4' ||
+        stopId.startsWith('F_') ||
+        stopId.startsWith('CRF_')) {
       _lineColorCache[stopId] = Colors.orange;
       return Colors.orange;
     }
@@ -1487,8 +1494,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       final lineColor = _getLineColor(stop.stopId);
       final transferStops = _directionService.getTransferStations(stop.stopId);
       final bool isFavorite = _favoritePins.any(
-        (p) =>
-            p.point.latitude == stop.lat && p.point.longitude == stop.lon,
+        (p) => p.point.latitude == stop.lat && p.point.longitude == stop.lon,
       );
 
       return Stack(
@@ -1510,7 +1516,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                         p.point.longitude == stop.lon,
                   );
                 } else {
-                  _favoritePins.add(FavoritePin(stop.name, LatLng(stop.lat, stop.lon)));
+                  _favoritePins.add(
+                    FavoritePin(stop.name, LatLng(stop.lat, stop.lon)),
+                  );
                 }
                 _saveFavoritePins();
                 _recalculateMapLayers();
@@ -1637,7 +1645,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
     final isWide = screenWidth > 600;
-    final hasPanelContent = directionOptions.isNotEmpty || _viewingStop != null || _viewingDroppedPin != null;
+    final hasPanelContent =
+        directionOptions.isNotEmpty ||
+        _viewingStop != null ||
+        _viewingDroppedPin != null;
 
     // Responsive bottom offset that animates up if there are routes
     final zoomBottomOffset = isWide
@@ -1764,46 +1775,53 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             if (showFerryStops) MarkerLayer(markers: _cachedFerryMarkers),
             if (_favoritePins.isNotEmpty)
               MarkerLayer(
-                markers: _favoritePins.where((pin) {
-                  // Only draw the generic heart pin if it's not a transit stop.
-                  // Transit stops handle their own "favorite" red border rendering.
-                    return !allStops.any((s) => s.lat == pin.point.latitude && s.lon == pin.point.longitude);
-
-                }).map((pin) {
-                  return Marker(
-                    point: pin.point,
-                    width: 24,
-                    height: 24,
-                    child: GestureDetector(
-                      onTap: () => _showDroppedPinDetails(context, pin.point),
-                      child: Tooltip(
-                        message: 'Favorite Pin',
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.surface,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Colors.redAccent,
-                              width: 2,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.2),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2),
+                markers: _favoritePins
+                    .where((pin) {
+                      // Only draw the generic heart pin if it's not a transit stop.
+                      // Transit stops handle their own "favorite" red border rendering.
+                      return !allStops.any(
+                        (s) =>
+                            s.lat == pin.point.latitude &&
+                            s.lon == pin.point.longitude,
+                      );
+                    })
+                    .map((pin) {
+                      return Marker(
+                        point: pin.point,
+                        width: 24,
+                        height: 24,
+                        child: GestureDetector(
+                          onTap: () =>
+                              _showDroppedPinDetails(context, pin.point),
+                          child: Tooltip(
+                            message: 'Favorite Pin',
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.surface,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.redAccent,
+                                  width: 2,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.2),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.favorite,
-                            color: Colors.redAccent,
-                            size: 14,
+                              child: const Icon(
+                                Icons.favorite,
+                                color: Colors.redAccent,
+                                size: 14,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                  );
-                }).toList(),
+                      );
+                    })
+                    .toList(),
               ),
             if (filteredRailStops.isNotEmpty)
               MarkerLayer(
@@ -2824,7 +2842,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                 isSearching || isStartSearching || isDestSearching;
 
             final hasPanelContent =
-                directionOptions.isNotEmpty || _viewingStop != null || _viewingDroppedPin != null;
+                directionOptions.isNotEmpty ||
+                _viewingStop != null ||
+                _viewingDroppedPin != null;
             // Dynamic initial sheet height when content exist
             final sheetInitialSize = hasPanelContent ? 0.45 : 0.0;
 
@@ -3271,8 +3291,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                               height: 36,
                               padding: const EdgeInsets.all(6),
                               decoration: BoxDecoration(
-                                color: theme.brightness == Brightness.dark 
-                                    ? Colors.white 
+                                color: theme.brightness == Brightness.dark
+                                    ? Colors.white
                                     : lineColor.withValues(alpha: 0.15),
                                 shape: BoxShape.circle,
                               ),
@@ -4267,9 +4287,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         );
         mutableShapes.addAll(heavyShapes);
       } catch (_) {}
-      
+
       shapes = mutableShapes;
-      
+
       if (initialPts.isNotEmpty) {
         _initialCameraPts = initialPts;
       }
@@ -4298,7 +4318,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       _recalculateMapLayers();
       _isGtfsDataLoaded = true;
     });
-    
+
     // Fit camera once on initial load based on the limited shapes we calculated earlier
     if (!_didFitRails && _initialCameraPts.isNotEmpty) {
       final bounds = LatLngBounds.fromPoints(_initialCameraPts);
@@ -4428,6 +4448,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       if (idxStopId < 0) idxStopId = 0;
       int idxName = header.indexOf('stop_name');
       if (idxName < 0) idxName = 1;
+      int idxThai = header.indexOf('stop_name_th');
       int idxLat = header.indexOf('stop_lat');
       if (idxLat < 0) idxLat = 2;
       int idxLon = header.indexOf('stop_lon');
@@ -4449,10 +4470,18 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         final lat = double.tryParse(row[idxLat].trim());
         final lon = double.tryParse(row[idxLon].trim());
         if (name.isEmpty || lat == null || lon == null) continue;
+
+        String? thaiName;
+        if (idxThai >= 0 && row.length > idxThai) {
+          final th = row[idxThai].trim();
+          if (th.isNotEmpty) thaiName = th;
+        }
+
         stops.add(
           gtfs.Stop(
             stopId: stopId,
             name: name,
+            thaiName: thaiName,
             lat: lat,
             lon: lon,
             code: (idxCode >= 0 && row.length > idxCode)
@@ -4855,7 +4884,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                       color: isFav
                           ? Colors.red
                           : (activeRouteSegments.isNotEmpty &&
-                              !_routeStopIds.contains(stop.stopId))
+                                !_routeStopIds.contains(stop.stopId))
                           ? Colors.grey.shade600
                           : Colors.black.withValues(alpha: 0.18),
                       width: isFav ? 2 : 1,
@@ -4911,7 +4940,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                       color: isFav
                           ? Colors.red
                           : (activeRouteSegments.isNotEmpty &&
-                              !_routeStopIds.contains(stop.stopId))
+                                !_routeStopIds.contains(stop.stopId))
                           ? Colors.grey.shade600
                           : Colors.black.withValues(alpha: 0.2),
                       width: isFav ? 2.5 : 1.5,
@@ -5142,10 +5171,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           setState(() => _selectedNavIndex = 0);
           final point = LatLng(lat, lon);
           _mapController.move(point, 15);
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              _showDroppedPinDetails(context, point);
-            });
-          },
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _showDroppedPinDetails(context, point);
+          });
+        },
         profile: _profile,
         onProfileUpdated: _saveProfile,
         currentAccentColor: widget.currentAccentColor,

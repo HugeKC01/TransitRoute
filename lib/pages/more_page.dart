@@ -91,7 +91,7 @@ class MorePage extends StatelessWidget {
   final ValueChanged<Color> onAccentColorChanged;
   final ThemeMode currentThemeMode;
   final ValueChanged<ThemeMode> onThemeModeChanged;
-  
+
   final List<gtfs.Stop> allStops;
   final String? Function(String) routeIconByName;
   final Color Function(String) lineColorByName;
@@ -669,7 +669,8 @@ class _FavoritedPinsPageState extends State<_FavoritedPinsPage> {
                   );
                 } catch (_) {}
 
-                final lines = (matchedStop != null &&
+                final lines =
+                    (matchedStop != null &&
                         widget.stopToLinesMap.containsKey(matchedStop.stopId))
                     ? widget.stopToLinesMap[matchedStop.stopId]!
                     : <String>{};
@@ -781,11 +782,14 @@ class _FavoritedPinsPageState extends State<_FavoritedPinsPage> {
                                     children: [
                                       Container(
                                         padding: const EdgeInsets.symmetric(
-                                            horizontal: 4, vertical: 2),
+                                          horizontal: 4,
+                                          vertical: 2,
+                                        ),
                                         decoration: BoxDecoration(
                                           color: Colors.grey.shade200,
-                                          borderRadius:
-                                              BorderRadius.circular(4),
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
                                         ),
                                         child: Text(
                                           matchedStop.code ?? '',
@@ -810,35 +814,56 @@ class _FavoritedPinsPageState extends State<_FavoritedPinsPage> {
 
                                                 if (iconSvg != null) {
                                                   return Padding(
-                                                    padding: const EdgeInsets.only(right: 4.0),
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                          right: 4.0,
+                                                        ),
                                                     child: SvgPicture.string(
                                                       iconSvg,
                                                       width: 16,
                                                       height: 16,
-                                                      placeholderBuilder: (BuildContext context) => Container(
-                                                          width: 16,
-                                                          height: 16,
-                                                          decoration: BoxDecoration(
-                                                            color: color,
-                                                            shape: BoxShape.circle,
-                                                          )),
+                                                      placeholderBuilder:
+                                                          (
+                                                            BuildContext
+                                                            context,
+                                                          ) => Container(
+                                                            width: 16,
+                                                            height: 16,
+                                                            decoration:
+                                                                BoxDecoration(
+                                                                  color: color,
+                                                                  shape: BoxShape
+                                                                      .circle,
+                                                                ),
+                                                          ),
                                                     ),
                                                   );
                                                 } else {
                                                   return Padding(
-                                                    padding: const EdgeInsets.only(right: 4.0),
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                          right: 4.0,
+                                                        ),
                                                     child: Container(
-                                                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 4,
+                                                            vertical: 2,
+                                                          ),
                                                       decoration: BoxDecoration(
                                                         color: color,
-                                                        borderRadius: BorderRadius.circular(4),
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              4,
+                                                            ),
                                                       ),
                                                       child: Text(
                                                         shortName,
                                                         style: const TextStyle(
                                                           color: Colors.white,
                                                           fontSize: 9,
-                                                          fontWeight: FontWeight.bold,
+                                                          fontWeight:
+                                                              FontWeight.bold,
                                                         ),
                                                       ),
                                                     ),

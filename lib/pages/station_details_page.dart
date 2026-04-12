@@ -91,7 +91,6 @@ class _StationDetailsPageState extends State<StationDetailsPage> {
       },
     );
 
-
     final mapWidget = FlutterMap(
       options: MapOptions(
         initialCenter: LatLng(widget.stop.lat, widget.stop.lon),
@@ -112,10 +111,7 @@ class _StationDetailsPageState extends State<StationDetailsPage> {
                 decoration: BoxDecoration(
                   color: widget.lineColor,
                   shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.white,
-                    width: 3.0,
-                  ),
+                  border: Border.all(color: Colors.white, width: 3.0),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.3),
@@ -126,7 +122,11 @@ class _StationDetailsPageState extends State<StationDetailsPage> {
                 ),
                 child: _isFavorite
                     ? const Center(
-                        child: Icon(Icons.favorite, size: 14, color: Colors.white),
+                        child: Icon(
+                          Icons.favorite,
+                          size: 14,
+                          color: Colors.white,
+                        ),
                       )
                     : null,
               ),
@@ -144,15 +144,9 @@ class _StationDetailsPageState extends State<StationDetailsPage> {
         ),
         body: Row(
           children: [
-            Expanded(
-              flex: 4,
-              child: content,
-            ),
+            Expanded(flex: 4, child: content),
             const VerticalDivider(width: 1, thickness: 1),
-            Expanded(
-              flex: 6,
-              child: mapWidget,
-            ),
+            Expanded(flex: 6, child: mapWidget),
           ],
         ),
       );
@@ -165,10 +159,7 @@ class _StationDetailsPageState extends State<StationDetailsPage> {
       ),
       body: Column(
         children: [
-          SizedBox(
-            height: 250,
-            child: mapWidget,
-          ),
+          SizedBox(height: 250, child: mapWidget),
           const Divider(height: 1, thickness: 1),
           Expanded(child: content),
         ],

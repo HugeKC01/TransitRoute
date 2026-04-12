@@ -47,7 +47,8 @@ class _CustomInlineDropdownState<T> extends State<CustomInlineDropdown<T>> {
             ),
             child: Row(
               children: [
-                if (widget.itemLeading != null && widget.itemLeading!(widget.value) != null)
+                if (widget.itemLeading != null &&
+                    widget.itemLeading!(widget.value) != null)
                   Container(
                     margin: const EdgeInsets.only(right: 12),
                     child: widget.itemLeading!(widget.value)!,

@@ -230,14 +230,22 @@ class TimetableService {
     // Helper to read stop times from memory
     void readStopTimes(List<String> lines) {
       try {
-        if (lines.length <= 1) return;
+        if (lines.isEmpty) return;
 
-        final header = lines[0].split(',');
-        final tripIdx = header.indexOf('trip_id');
-        final stopIdx = header.indexOf('stop_id');
-        final depIdx = header.indexOf('departure_time');
+        int tripIdx = 0;
+        int stopIdx = 3;
+        int depIdx = 2;
+        int startIdx = 0;
 
-        for (int i = 1; i < lines.length; i++) {
+        if (lines[0].contains('trip_id')) {
+          final header = lines[0].split(',');
+          tripIdx = header.indexOf('trip_id');
+          stopIdx = header.indexOf('stop_id');
+          depIdx = header.indexOf('departure_time');
+          startIdx = 1;
+        }
+
+        for (int i = startIdx; i < lines.length; i++) {
           final row = lines[i].split(',');
           if (row.length > stopIdx) {
             final sId = row[stopIdx].trim();

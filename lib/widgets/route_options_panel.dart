@@ -498,24 +498,31 @@ class _RouteOptionCard extends StatelessWidget {
                               Builder(
                                 builder: (context) {
                                   final segment = displaySegments[i];
-                                  final isWalk = segment.mode == TravelMode.walk;
-                                  
-                                  final lineName = isWalk 
+                                  final isWalk =
+                                      segment.mode == TravelMode.walk;
+
+                                  final lineName = isWalk
                                       ? formatDistance(segment.distanceMeters)
-                                      : (segment.routeShortName ?? 'Unknown line');
-                                  
+                                      : (segment.routeShortName ??
+                                            'Unknown line');
+
                                   final color = isWalk
-                                      ? theme.colorScheme.surfaceContainerHighest
-                                      : (lineColors[lineName] ?? theme.colorScheme.primary);
-                                  
+                                      ? theme
+                                            .colorScheme
+                                            .surfaceContainerHighest
+                                      : (lineColors[lineName] ??
+                                            theme.colorScheme.primary);
+
                                   final textColor = isWalk
                                       ? theme.colorScheme.onSurface
-                                      : (color.computeLuminance() > 0.5 ? Colors.black87 : Colors.white);
+                                      : (color.computeLuminance() > 0.5
+                                            ? Colors.black87
+                                            : Colors.white);
 
                                   final String? iconPath =
                                       (!isWalk && routeIconResolver != null)
-                                          ? routeIconResolver!(lineName)
-                                          : null;
+                                      ? routeIconResolver!(lineName)
+                                      : null;
 
                                   IconData getTransportIcon(
                                     RouteSegment segment,
@@ -560,7 +567,8 @@ class _RouteOptionCard extends StatelessWidget {
                                             style: TextStyle(
                                               fontSize: 12,
                                               fontWeight: FontWeight.bold,
-                                              color: theme.colorScheme.onSurface,
+                                              color:
+                                                  theme.colorScheme.onSurface,
                                             ),
                                           ),
                                         ] else ...[
