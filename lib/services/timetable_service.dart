@@ -27,11 +27,17 @@ class TimetableEntry {
 
   String get displayTime {
     if (isFrequency) {
+      final start = startTime != null
+          ? startTime!.split(':').take(2).join(':')
+          : '';
+      final end = endTime != null ? endTime!.split(':').take(2).join(':') : '';
       if (headwaySecs != null) {
         final mins = headwaySecs! ~/ 60;
-        return 'Every $mins mins ($startTime - $endTime)';
+        final sec = headwaySecs! % 60;
+        final timeStr = sec > 0 ? '$mins min ${sec}s' : '$mins mins';
+        return 'Every $timeStr ($start - $end)';
       }
-      return 'Freq: $startTime - $endTime';
+      return 'Freq: $start - $end';
     } else {
       if (departureTime.isEmpty) return 'Unknown Time';
       final parts = departureTime.split(':');
@@ -193,11 +199,14 @@ class TimetableService {
                 if (tSvc.isEmpty || tSvc == 'ALL' || tSvc == 'EVERYDAY') {
                   isValid = true;
                 } else if (serviceId != null) {
-                  if (tSvc == serviceId)
+                  if (tSvc == serviceId) {
                     isValid = true;
-                  else if (serviceId == 'SUN_SAT' &&
+                  } else if ((serviceId == 'SAT' || serviceId == 'SUN') &&
                       tSvc == 'WKD' &&
                       !_weekendRoutes.contains(rId)) {
+                    isValid = true;
+                  } else if ((serviceId == 'SAT' || serviceId == 'SUN') &&
+                      tSvc == 'SUN_SAT') {
                     isValid = true;
                   }
                 } else {
@@ -284,11 +293,14 @@ class TimetableService {
               if (tSvc.isEmpty || tSvc == 'ALL' || tSvc == 'EVERYDAY') {
                 isValid = true;
               } else if (serviceId != null) {
-                if (tSvc == serviceId)
+                if (tSvc == serviceId) {
                   isValid = true;
-                else if (serviceId == 'SUN_SAT' &&
+                } else if ((serviceId == 'SAT' || serviceId == 'SUN') &&
                     tSvc == 'WKD' &&
                     !_weekendRoutes.contains(rId)) {
+                  isValid = true;
+                } else if ((serviceId == 'SAT' || serviceId == 'SUN') &&
+                    tSvc == 'SUN_SAT') {
                   isValid = true;
                 }
               } else {
@@ -326,7 +338,8 @@ class TimetableService {
                     ),
                   );
                 }
-              } else if (dTime.isNotEmpty) {
+              }
+              if (dTime.isNotEmpty) {
                 entries.add(
                   TimetableEntry(
                     tripId: tId,

@@ -146,7 +146,11 @@ class _UpcomingDeparturesWidgetState extends State<UpcomingDeparturesWidget> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        e.displayTime,
+                        e.isFrequency
+                            ? (e.headwaySecs != null
+                                  ? 'Every ${e.headwaySecs! ~/ 60}m${e.headwaySecs! % 60 > 0 ? ' ${e.headwaySecs! % 60}s' : ''}'
+                                  : 'Frequent')
+                            : e.displayTime,
                         style: theme.textTheme.labelMedium?.copyWith(
                           color: scheme.onPrimary,
                           fontWeight: FontWeight.w700,
