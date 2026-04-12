@@ -18,9 +18,13 @@ class _StationTimetableSectionState extends State<StationTimetableSection> {
   void initState() {
     super.initState();
     final now = DateTime.now();
-    final isWeekend =
-        now.weekday == DateTime.saturday || now.weekday == DateTime.sunday;
-    _selectedDay = isWeekend ? 'SUN_SAT' : 'WKD';
+    if (now.weekday == DateTime.saturday) {
+      _selectedDay = 'SAT';
+    } else if (now.weekday == DateTime.sunday) {
+      _selectedDay = 'SUN';
+    } else {
+      _selectedDay = 'WKD';
+    }
     _loadTimetable();
   }
 
@@ -29,6 +33,16 @@ class _StationTimetableSectionState extends State<StationTimetableSection> {
       widget.stopId,
       serviceId: _selectedDay,
     );
+  }
+
+  @override
+  void didUpdateWidget(StationTimetableSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.stopId != widget.stopId) {
+      setState(() {
+        _loadTimetable();
+      });
+    }
   }
 
   @override
@@ -56,7 +70,8 @@ class _StationTimetableSectionState extends State<StationTimetableSection> {
               value: _selectedDay,
               items: const [
                 DropdownMenuItem(value: 'WKD', child: Text('Weekday')),
-                DropdownMenuItem(value: 'SUN_SAT', child: Text('Weekend')),
+                DropdownMenuItem(value: 'SAT', child: Text('Saturday')),
+                DropdownMenuItem(value: 'SUN', child: Text('Sunday/Holiday')),
               ],
               onChanged: (value) {
                 if (value != null && value != _selectedDay) {

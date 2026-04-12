@@ -21,6 +21,16 @@ class _UpcomingDeparturesWidgetState extends State<UpcomingDeparturesWidget> {
   }
 
   @override
+  void didUpdateWidget(UpcomingDeparturesWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.stopId != widget.stopId) {
+      setState(() {
+        _timetableFuture = TimetableService.getTimetableForStop(widget.stopId);
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
@@ -38,7 +48,13 @@ class _UpcomingDeparturesWidgetState extends State<UpcomingDeparturesWidget> {
         }
 
         if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
-          return const SizedBox.shrink(); // Hide if no valid departures
+          return Padding(
+            padding: const EdgeInsets.only(top: 16.0),
+            child: Text(
+              'No upcoming departures found for this time.',
+              style: TextStyle(color: scheme.onSurfaceVariant),
+            ),
+          );
         }
 
         final now = DateTime.now();
@@ -84,8 +100,13 @@ class _UpcomingDeparturesWidgetState extends State<UpcomingDeparturesWidget> {
         final topEntries = groupedDepartures.values.toList();
 
         if (topEntries.isEmpty) {
-          // If all are finished for the day, show earliest from tomorrow or just hide
-          return const SizedBox.shrink();
+          return Padding(
+            padding: const EdgeInsets.only(top: 16.0),
+            child: Text(
+              'All trips finished for the day.',
+              style: TextStyle(color: scheme.onSurfaceVariant),
+            ),
+          );
         }
 
         return Column(
