@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:route/services/gtfs_models.dart' as gtfs;
 
 class TransportLinesDetailsPage extends StatefulWidget {
@@ -220,6 +221,21 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
     return 'Other Transport';
   }
 
+  IconData _iconForCategory(String type) {
+    switch (type) {
+      case 'Metro':
+        return Icons.subway;
+      case 'Train':
+        return Icons.train;
+      case 'Bus':
+        return Icons.directions_bus;
+      case 'Ferry':
+        return Icons.directions_boat;
+      default:
+        return Icons.directions_transit;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -227,12 +243,6 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
     final agency = widget.agency;
 
     final routeColor = _colorFromHexOr(route.color, theme.colorScheme.primary);
-
-    // Choose text color based on background luminance, ensuring readability
-    final routeTextColor = _colorFromHexOr(
-      route.textColor,
-      routeColor.computeLuminance() > 0.5 ? Colors.black : Colors.white,
-    );
 
     return Scaffold(
       appBar: AppBar(
@@ -286,36 +296,18 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  if (route.linePrefixes.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    Wrap(
-                      alignment: WrapAlignment.center,
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: route.linePrefixes
-                          .where((p) => p.isNotEmpty)
-                          .map(
-                            (p) => Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.secondaryContainer,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                p,
-                                style: theme.textTheme.labelLarge?.copyWith(
-                                  color: theme.colorScheme.onSecondaryContainer,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          )
-                          .toList(),
+                  const SizedBox(height: 16),
+                  if (route.routeIcon != null && route.routeIcon!.isNotEmpty)
+                    SvgPicture.asset(
+                      route.routeIcon!,
+                      height: 28,
+                    )
+                  else
+                    Icon(
+                      _iconForCategory(_transportCategory(route.type)),
+                      size: 28,
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
-                  ],
                 ],
               ),
             ),

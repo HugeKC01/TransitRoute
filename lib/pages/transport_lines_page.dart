@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter_svg/flutter_svg.dart';
 import 'dart:convert';
 import 'package:route/services/gtfs_models.dart' as gtfs;
 import 'package:route/services/route_asset_loader.dart';
@@ -376,10 +377,6 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
       route.color,
       theme.colorScheme.primaryContainer,
     );
-    final routeTextColor = _colorFromHexOr(
-      route.textColor,
-      theme.colorScheme.onPrimaryContainer,
-    );
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
@@ -440,33 +437,17 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    if (route.linePrefixes.isNotEmpty)
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 4,
-                        children: route.linePrefixes
-                            .where((p) => p.isNotEmpty)
-                            .map(
-                              (p) => Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: theme.colorScheme.secondaryContainer,
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  p,
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    color:
-                                        theme.colorScheme.onSecondaryContainer,
-                                  ),
-                                ),
-                              ),
-                            )
-                            .toList(),
+                    const SizedBox(height: 8),
+                    if (route.routeIcon != null && route.routeIcon!.isNotEmpty)
+                      SvgPicture.asset(
+                        route.routeIcon!,
+                        height: 20,
+                      )
+                    else
+                      Icon(
+                        _iconForCategory(_transportCategory(route)),
+                        size: 20,
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                   ],
                 ),
