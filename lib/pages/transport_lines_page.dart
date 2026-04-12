@@ -414,16 +414,19 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
                   shape: BoxShape.circle,
                 ),
                 child: Center(
-                  child: Text(
-                    route.shortName.isNotEmpty ? route.shortName : "—",
-                    style: TextStyle(
-                      color: theme.brightness == Brightness.dark
-                          ? routeColor
-                          : routeColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: route.shortName.length > 3 ? 14 : 18,
-                    ),
-                  ),
+                  child: route.routeIcon != null && route.routeIcon!.isNotEmpty
+                      ? SvgPicture.asset(
+                          route.routeIcon!,
+                          width: 28,
+                          height: 28,
+                        )
+                      : Icon(
+                          _iconForCategory(_transportCategory(route)),
+                          size: 28,
+                          color: theme.brightness == Brightness.dark
+                              ? routeColor
+                              : routeColor,
+                        ),
                 ),
               ),
               const SizedBox(width: 16),
@@ -432,23 +435,23 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      route.longName,
+                      route.shortName.isNotEmpty
+                          ? route.shortName
+                          : route.longName,
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    if (route.routeIcon != null && route.routeIcon!.isNotEmpty)
-                      SvgPicture.asset(
-                        route.routeIcon!,
-                        height: 20,
-                      )
-                    else
-                      Icon(
-                        _iconForCategory(_transportCategory(route)),
-                        size: 20,
-                        color: theme.colorScheme.onSurfaceVariant,
+                    if (route.longName.isNotEmpty &&
+                        route.longName != route.shortName) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        route.longName,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
                       ),
+                    ],
                   ],
                 ),
               ),

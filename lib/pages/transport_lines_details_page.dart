@@ -278,14 +278,18 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
                       shape: BoxShape.circle,
                     ),
                     child: Center(
-                      child: Text(
-                        route.shortName.isNotEmpty ? route.shortName : "—",
-                        style: TextStyle(
-                          color: routeColor,
-                          fontWeight: FontWeight.bold,
-                          fontSize: route.shortName.length > 3 ? 24 : 36,
-                        ),
-                      ),
+                      child: route.routeIcon != null &&
+                              route.routeIcon!.isNotEmpty
+                          ? SvgPicture.asset(
+                              route.routeIcon!,
+                              width: 48,
+                              height: 48,
+                            )
+                          : Icon(
+                              _iconForCategory(_transportCategory(route.type)),
+                              size: 48,
+                              color: routeColor,
+                            ),
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -296,18 +300,16 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  if (route.routeIcon != null && route.routeIcon!.isNotEmpty)
-                    SvgPicture.asset(
-                      route.routeIcon!,
-                      height: 28,
-                    )
-                  else
-                    Icon(
-                      _iconForCategory(_transportCategory(route.type)),
-                      size: 28,
-                      color: theme.colorScheme.onSurfaceVariant,
+                  if (!_loading && _routeStops.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      '${_routeStops.first.name} - ${_routeStops.last.name}',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
                     ),
+                  ],
                 ],
               ),
             ),
