@@ -276,14 +276,20 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
                           ? Colors.white
                           : routeColor.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
+                      border: Border.all(color: routeColor, width: 3),
                     ),
                     child: Center(
                       child: route.routeIcon != null &&
                               route.routeIcon!.isNotEmpty
-                          ? SvgPicture.asset(
-                              route.routeIcon!,
+                          ? SizedBox(
                               width: 48,
                               height: 48,
+                              child: FittedBox(
+                                fit: BoxFit.contain,
+                                child: SvgPicture.asset(
+                                  route.routeIcon!,
+                                ),
+                              ),
                             )
                           : Icon(
                               _iconForCategory(_transportCategory(route.type)),
