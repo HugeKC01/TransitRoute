@@ -3,6 +3,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_svg/flutter_svg.dart';
 import 'dart:convert';
 import 'package:route/services/gtfs_models.dart' as gtfs;
+import 'package:route/services/terminal_loader.dart';
 import 'package:route/services/route_asset_loader.dart';
 import 'package:route/pages/transport_lines_details_page.dart';
 
@@ -16,6 +17,7 @@ class TransportLinesPage extends StatefulWidget {
 class _TransportLinesPageState extends State<TransportLinesPage> {
   List<gtfs.Route> routes = [];
   Map<String, gtfs.Agency> agencies = {};
+  Map<String, String> routeTerminals = {};
   bool _loading = true;
   String _searchQuery = '';
   String _selectedCategory = 'All';
@@ -50,9 +52,13 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
 
       final agencyContent = await agencyFuture;
       final loadedAgencies = _parseAgencies(agencyContent);
+      
+      final terminals = await TerminalLoader.loadAllTerminals();
+      
       setState(() {
         routes = loadedRoutes;
         agencies = loadedAgencies;
+        routeTerminals = terminals;
         _loading = false;
       });
     } catch (e) {
@@ -435,18 +441,25 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      route.shortName.isNotEmpty
-                          ? route.shortName
-                          : route.longName,
+                      route.longName,
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    if (route.longName.isNotEmpty &&
-                        route.longName != route.shortName) ...[
+                    if (routeTerminals.containsKey(route.routeId) &&
+                        routeTerminals[route.routeId]!.isNotEmpty) ...[
                       const SizedBox(height: 4),
                       Text(
-                        route.longName,
+                        routeTerminals[route.routeId]!,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ] else if (route.shortName.isNotEmpty &&
+                        route.shortName != route.longName) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        route.shortName,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
