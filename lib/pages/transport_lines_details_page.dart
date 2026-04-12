@@ -68,17 +68,18 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
       String? tIdIdxName = 'trip_id';
       String? rIdIdxName = 'route_id';
 
-      bool isBus = routeId.startsWith('BUS_');
-      if (isBus) {
-        tripsFile = 'assets/gtfs_data/bus_route_stop.txt';
-        stopTimesFile = '';
-        stopsFile = 'assets/gtfs_data/bus_stop.txt';
-        shapesFile = 'assets/gtfs_data/shapes_source.txt';
-      } else if (routeId == 'BRT') {
+      bool isBus = widget.route.type.toLowerCase() == 'bus' || widget.route.type == '3';
+      if (routeId == 'BRT') {
+        isBus = false;
         tripsFile = 'assets/gtfs_data/brt_trips.txt';
         stopTimesFile = 'assets/gtfs_data/bus_stop_times.txt';
         stopsFile = 'assets/gtfs_data/bus_stop.txt';
         shapesFile = 'assets/gtfs_data/shapes.txt';
+      } else if (isBus) {
+        tripsFile = 'assets/gtfs_data/bus_route_stop.txt';
+        stopTimesFile = '';
+        stopsFile = 'assets/gtfs_data/bus_stop.txt';
+        shapesFile = 'assets/gtfs_data/shapes_source.txt';
       } else if (widget.route.type.toLowerCase() == 'ferry' ||
           widget.route.type == '4') {
         tripsFile = 'assets/gtfs_data/ferry_trips.txt';
@@ -92,21 +93,30 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
       final orderedStopIds = <String>[];
 
       if (isBus) {
-        final busLineId = routeId.replaceFirst('BUS_', '');
         final busContent = await gtfsSyncService.getGtfsFile(tripsFile);
         final busLines = const LineSplitter().convert(busContent);
         if (busLines.length > 1) {
+          String? bestShape;
+          List<String> bestStops = [];
           for (int i = 1; i < busLines.length; i++) {
             final row = _parseCsvLine(busLines[i]);
-            if (row.length > 5 && row[0].trim() == busLineId) {
-              targetShapeId = row[5].trim();
-              for (int j = 6; j < row.length; j++) {
-                final sid = row[j].trim();
-                if (sid.isNotEmpty) orderedStopIds.add(sid);
+            if (row.length > 5) {
+              final rShortName = row[1].trim();
+              if (rShortName.split(' ')[0].trim() == routeId) {
+                final stops = <String>[];
+                for (int j = 6; j < row.length; j++) {
+                  final sid = row[j].trim();
+                  if (sid.isNotEmpty) stops.add(sid);
+                }
+                if (stops.length > bestStops.length) {
+                  bestStops = stops;
+                  bestShape = row[5].trim();
+                }
               }
-              break;
             }
           }
+          if (bestShape != null) targetShapeId = bestShape;
+          orderedStopIds.addAll(bestStops);
         }
       } else {
         final tripsContent = await gtfsSyncService.getGtfsFile(tripsFile);
@@ -124,7 +134,9 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
             if (brtFallback) {
               if (row[0].contains('BRT')) {
                 targetTripIds.add(row[0]);
-                if (row.length > 7 && row[7].isNotEmpty) targetShapeId = row[7];
+                if (row.length > 1 && row[1].isNotEmpty && row[0] == 'BRT_0') {
+                  targetShapeId = row[1].trim(); 
+                }
               }
             } else if (routeIdIdx >= 0 &&
                 tripIdIdx >= 0 &&
@@ -145,19 +157,29 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
             stopTimesFile,
           );
           final stopTimesLines = const LineSplitter().convert(stopTimesContent);
-          if (stopTimesLines.length > 1) {
+          if (stopTimesLines.isNotEmpty) {
             final headerRow = _parseCsvLine(stopTimesLines.first);
-            final tripIdIdx = headerRow.indexOf('trip_id');
-            final stopIdIdx = headerRow.indexOf('stop_id');
-            final seqIdx = headerRow.indexOf('stop_sequence');
+            int tripIdIdx = headerRow.indexOf('trip_id');
+            int stopIdIdx = headerRow.indexOf('stop_id');
+            int seqIdx = headerRow.indexOf('stop_sequence');
+
+            bool stFallback = tripIdIdx < 0;
+            if (stFallback) {
+              tripIdIdx = 0;
+              stopIdIdx = 3;
+              seqIdx = 4;
+            }
 
             final tripStopsMap = <String, List<Map<String, dynamic>>>{};
-            for (int i = 1; i < stopTimesLines.length; i++) {
+            for (int i = stFallback ? 0 : 1; i < stopTimesLines.length; i++) {
               final row = _parseCsvLine(stopTimesLines[i]);
               if (row.isEmpty) continue;
               if (tripIdIdx >= 0 &&
                   stopIdIdx >= 0 &&
+                  seqIdx >= 0 &&
                   row.length > tripIdIdx &&
+                  row.length > stopIdIdx &&
+                  row.length > seqIdx &&
                   targetTripIds.contains(row[tripIdIdx])) {
                 tripStopsMap.putIfAbsent(row[tripIdIdx], () => []).add({
                   'stop_id': row[stopIdIdx],
