@@ -1,28 +1,8 @@
 import 'dart:io';
 
 void main() {
-  final file = File('lib/main.dart');
+  final file = File('lib/widgets/upcoming_departures.dart');
   var content = file.readAsStringSync();
-  
-  content = content.replaceFirst(
-'''      _cachedActiveDirectionPolylines = [];
-      if (directionOptions.isNotEmpty && selectedDirectionIndex < directionOptions.length) {
-        _cachedActiveDirectionPolylines = _buildRoutePolylines(
-          directionOptions[selectedDirectionIndex].segments,
-          hitValue: selectedDirectionIndex,
-          isActive: true,
-        );
-      }''',
-'''      _cachedActiveDirectionPolylines = [];
-      if (directionOptions.isNotEmpty && selectedDirectionIndex < directionOptions.length) {
-        _cachedActiveDirectionPolylines = _buildRoutePolylines(
-          directionOptions[selectedDirectionIndex].segments,
-          hitValue: selectedDirectionIndex,
-          isActive: true,
-        );
-      }
-  }'''
-  );
-  
+  content = content.replaceFirst('            ),\n          ],\n        );\n      },\n    );\n  }\n}', '            );\n      },\n    );\n  }\n}');
   file.writeAsStringSync(content);
 }
