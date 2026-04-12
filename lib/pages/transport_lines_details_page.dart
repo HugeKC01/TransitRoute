@@ -410,14 +410,39 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
               ),
             ),
             const SizedBox(height: 24),
-            Text(
-              routeInfo.longName.isNotEmpty
-                  ? routeInfo.longName
-                  : routeInfo.routeId,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+            Builder(
+              builder: (context) {
+                final isBusNotBRT =
+                    _transportCategory(routeInfo.type) == 'Bus' &&
+                    routeInfo.routeId != 'BRT';
+                final heading = isBusNotBRT
+                    ? routeInfo.shortName
+                    : routeInfo.longName;
+                final subHeading = isBusNotBRT ? routeInfo.longName : null;
+                return Column(
+                  children: [
+                    Text(
+                      heading.isNotEmpty ? heading : routeInfo.routeId,
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (subHeading != null &&
+                        subHeading.isNotEmpty &&
+                        subHeading != heading) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        subHeading,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ],
+                );
+              },
             ),
             if (!_loading && _routeStops.isNotEmpty) ...[
               const SizedBox(height: 8),

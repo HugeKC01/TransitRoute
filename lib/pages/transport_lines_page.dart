@@ -524,37 +524,57 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      route.longName,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
+                    Builder(
+                      builder: (context) {
+                        final isBusNotBRT =
+                            _transportCategory(route) == 'Bus' &&
+                            route.routeId != 'BRT';
+                        final heading = isBusNotBRT
+                            ? route.shortName
+                            : route.longName;
+                        final String? terminalText =
+                            routeTerminals[route.routeId];
+                        String? subHeading;
+                        if (isBusNotBRT) {
+                          subHeading = terminalText?.isNotEmpty == true
+                              ? terminalText
+                              : route.longName;
+                        } else {
+                          subHeading = terminalText?.isNotEmpty == true
+                              ? terminalText
+                              : (route.shortName != route.longName
+                                    ? route.shortName
+                                    : null);
+                        }
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              heading.isNotEmpty ? heading : route.routeId,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            if (subHeading != null &&
+                                subHeading.isNotEmpty &&
+                                subHeading != heading) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                subHeading,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ],
+                        );
+                      },
                     ),
-                    if (routeTerminals.containsKey(route.routeId) &&
-                        routeTerminals[route.routeId]!.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        routeTerminals[route.routeId]!,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ] else if (route.shortName.isNotEmpty &&
-                        route.shortName != route.longName) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        route.shortName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ),
