@@ -338,8 +338,7 @@ class TimetableService {
                     ),
                   );
                 }
-              }
-              if (dTime.isNotEmpty) {
+              } else if (dTime.isNotEmpty) {
                 entries.add(
                   TimetableEntry(
                     tripId: tId,
