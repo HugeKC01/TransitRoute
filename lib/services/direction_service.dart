@@ -2149,7 +2149,7 @@ class DirectionService {
       return lines.toList();
     }
 
-    String? _getBestLine(List<String> candidates, int startIndex) {
+    String? getBestLine(List<String> candidates, int startIndex) {
       if (candidates.isEmpty) return null;
       if (candidates.length == 1) return candidates.first;
       int bestReach = -1;
@@ -2188,11 +2188,11 @@ class DirectionService {
           .where((x) => directLines.isEmpty || directLines.contains(x))
           .toList();
       currentLineName = validShared.isNotEmpty
-          ? _getBestLine(validShared, 0)
+          ? getBestLine(validShared, 0)
           : (shared.isNotEmpty
-                ? _getBestLine(shared, 0)
+                ? getBestLine(shared, 0)
                 : (a.isNotEmpty
-                      ? _getBestLine(a.toList(), 0)
+                      ? getBestLine(a.toList(), 0)
                       : lineNameResolver(stops[0].stopId)?.split(', ').first));
     } else {
       final a = getLinesForStop(stops[0].stopId);
@@ -2271,11 +2271,11 @@ class DirectionService {
               )
               .toList();
           currentLineName = validNs.isNotEmpty
-              ? _getBestLine(validNs, i)
+              ? getBestLine(validNs, i)
               : (ns.isNotEmpty
-                    ? _getBestLine(ns, i)
+                    ? getBestLine(ns, i)
                     : (na.isNotEmpty
-                          ? _getBestLine(na.toList(), i)
+                          ? getBestLine(na.toList(), i)
                           : lineNameResolver(stop.stopId)?.split(', ').first));
         } else {
           final na = getLinesForStop(stop.stopId);
@@ -2296,8 +2296,8 @@ class DirectionService {
               .where((x) => directLines.isEmpty || directLines.contains(x))
               .toList();
           edgeLine = validShared.isNotEmpty
-              ? _getBestLine(validShared, i - 1)
-              : _getBestLine(shared, i - 1);
+              ? getBestLine(validShared, i - 1)
+              : getBestLine(shared, i - 1);
         }
 
         if (edgeLine != currentLineName) {

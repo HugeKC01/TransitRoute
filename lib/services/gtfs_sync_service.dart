@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -25,7 +26,7 @@ class GtfsSyncService {
     try {
       await _checkForUpdates();
     } catch (e) {
-      print('Failed to sync GTFS data: $e');
+      debugPrint('Failed to sync GTFS data: $e');
     }
   }
 
@@ -33,14 +34,14 @@ class GtfsSyncService {
     final prefs = await SharedPreferences.getInstance();
     final localVersion = prefs.getInt(_versionKey) ?? 0;
 
-    print('Current local GTFS version: $localVersion');
+    debugPrint('Current local GTFS version: $localVersion');
 
     // Fetch latest version from Firebase Storage
     final versionRef = _storage.ref().child(_gtfsJsonFilename);
     final versionData = await versionRef.getData();
 
     if (versionData == null) {
-      print('No GTFS version data found in Firebase.');
+      debugPrint('No GTFS version data found in Firebase.');
       return;
     }
 
@@ -48,15 +49,15 @@ class GtfsSyncService {
     final jsonMap = json.decode(jsonStr) as Map<String, dynamic>;
     final remoteVersion = jsonMap['version'] as int? ?? 0;
 
-    print('Latest remote GTFS version: $remoteVersion');
+    debugPrint('Latest remote GTFS version: $remoteVersion');
 
     if (remoteVersion > localVersion) {
-      print('New GTFS version detected. Downloading...');
+      debugPrint('New GTFS version detected. Downloading...');
       await _downloadAndExtractGtfs();
       await prefs.setInt(_versionKey, remoteVersion);
-      print('Successfully updated GTFS data to version $remoteVersion');
+      debugPrint('Successfully updated GTFS data to version $remoteVersion');
     } else {
-      print('GTFS data is up to date.');
+      debugPrint('GTFS data is up to date.');
     }
   }
 

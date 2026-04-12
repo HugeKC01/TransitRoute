@@ -46,9 +46,13 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
       final ferryRoutes = await RouteAssetLoader.loadRoutes(
         'assets/gtfs_data/ferry_route.txt',
       );
+      final busRoutes = await RouteAssetLoader.loadRoutes(
+        'assets/gtfs_data/bus_route.txt',
+      );
 
       loadedRoutes.addAll(mainRoutes);
       loadedRoutes.addAll(ferryRoutes);
+      loadedRoutes.addAll(busRoutes);
 
       final agencyContent = await agencyFuture;
       final loadedAgencies = _parseAgencies(agencyContent);

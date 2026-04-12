@@ -513,6 +513,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     setState(() {
       _isLoadingRoute = true;
       directionOptions.clear();
+      _viewingStop = null;
+      _viewingDroppedPin = null;
       _recalculateMapLayers();
     });
 

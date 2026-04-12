@@ -1,7 +1,10 @@
+import 'package:route/pages/station_details_page.dart';
 import 'dart:convert';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:route/services/gtfs_sync_service.dart';
 import 'package:route/services/gtfs_models.dart' as gtfs;
 
 class TransportLinesDetailsPage extends StatefulWidget {
@@ -22,6 +25,7 @@ class TransportLinesDetailsPage extends StatefulWidget {
 class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
   bool _loading = true;
   List<gtfs.Stop> _routeStops = [];
+  List<LatLng> _lineShape = [];
 
   @override
   void initState() {
@@ -56,92 +60,128 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
 
   Future<void> _loadRouteStops() async {
     try {
-      // 1. Load trips to find trip_id for this route
-      final tripsFuture = rootBundle.loadString('assets/gtfs_data/trips.txt');
-      final stopTimesFuture = rootBundle.loadString(
-        'assets/gtfs_data/stop_times.txt',
-      );
-      final stopsFuture = rootBundle.loadString('assets/gtfs_data/stops.txt');
+      final routeId = widget.route.routeId;
+      String tripsFile = 'assets/gtfs_data/trips.txt';
+      String stopTimesFile = 'assets/gtfs_data/stop_times.txt';
+      String stopsFile = 'assets/gtfs_data/stops.txt';
+      String shapesFile = 'assets/gtfs_data/shapes.txt';
+      String? tIdIdxName = 'trip_id';
+      String? rIdIdxName = 'route_id';
 
-      final tripsContent = await tripsFuture;
-      final tripsLines = const LineSplitter().convert(tripsContent);
+      bool isBus = routeId.startsWith('BUS_');
+      if (isBus) {
+        tripsFile = 'assets/gtfs_data/bus_route_stop.txt';
+        stopTimesFile = '';
+        stopsFile = 'assets/gtfs_data/bus_stop.txt';
+        shapesFile = 'assets/gtfs_data/shapes_source.txt';
+      } else if (routeId == 'BRT') {
+        tripsFile = 'assets/gtfs_data/brt_trips.txt';
+        stopTimesFile = 'assets/gtfs_data/bus_stop_times.txt';
+        stopsFile = 'assets/gtfs_data/bus_stop.txt';
+        shapesFile = 'assets/gtfs_data/shapes.txt';
+      } else if (widget.route.type.toLowerCase() == 'ferry' ||
+          widget.route.type == '4') {
+        tripsFile = 'assets/gtfs_data/ferry_trips.txt';
+        stopTimesFile = 'assets/gtfs_data/ferry_stop_times.txt';
+        stopsFile = 'assets/gtfs_data/ferry_stop.txt';
+        shapesFile = '';
+      }
 
       final targetTripIds = <String>{};
-      if (tripsLines.length > 1) {
-        final headerRow = _parseCsvLine(tripsLines.first);
-        final routeIdIdx = headerRow.indexOf('route_id');
-        final tripIdIdx = headerRow.indexOf('trip_id');
-        for (int i = 1; i < tripsLines.length; i++) {
-          final row = _parseCsvLine(tripsLines[i]);
-          if (row.isEmpty) continue;
-          if (routeIdIdx >= 0 &&
-              row.length > routeIdIdx &&
-              row[routeIdIdx] == widget.route.routeId) {
-            targetTripIds.add(row[tripIdIdx]);
-          }
-        }
-      }
-
-      if (targetTripIds.isEmpty) {
-        setState(() {
-          _loading = false;
-        });
-        return;
-      }
-
-      final stopTimesContent = await stopTimesFuture;
-      final stopTimesLines = const LineSplitter().convert(stopTimesContent);
-
+      String? targetShapeId;
       final orderedStopIds = <String>[];
-      if (stopTimesLines.length > 1) {
-        final headerRow = _parseCsvLine(stopTimesLines.first);
-        final tripIdIdx = headerRow.indexOf('trip_id');
-        final stopIdIdx = headerRow.indexOf('stop_id');
-        final seqIdx = headerRow.indexOf('stop_sequence');
 
-        final tripStopsMap = <String, List<Map<String, dynamic>>>{};
+      if (isBus) {
+        final busLineId = routeId.replaceFirst('BUS_', '');
+        final busContent = await gtfsSyncService.getGtfsFile(tripsFile);
+        final busLines = const LineSplitter().convert(busContent);
+        if (busLines.length > 1) {
+          for (int i = 1; i < busLines.length; i++) {
+            final row = _parseCsvLine(busLines[i]);
+            if (row.length > 5 && row[0].trim() == busLineId) {
+              targetShapeId = row[5].trim();
+              for (int j = 6; j < row.length; j++) {
+                final sid = row[j].trim();
+                if (sid.isNotEmpty) orderedStopIds.add(sid);
+              }
+              break;
+            }
+          }
+        }
+      } else {
+        final tripsContent = await gtfsSyncService.getGtfsFile(tripsFile);
+        final tripsLines = const LineSplitter().convert(tripsContent);
+        if (tripsLines.length > 1) {
+          final headerRow = _parseCsvLine(tripsLines.first);
+          final routeIdIdx = headerRow.indexOf(rIdIdxName);
+          final tripIdIdx = headerRow.indexOf(tIdIdxName);
+          final shapeIdIdx = headerRow.indexOf('shape_id');
+          bool brtFallback = tripIdIdx < 0 && routeId == 'BRT';
 
-        for (int i = 1; i < stopTimesLines.length; i++) {
-          final row = _parseCsvLine(stopTimesLines[i]);
-          if (row.isEmpty) continue;
-          if (tripIdIdx >= 0 &&
-              row.length > tripIdIdx &&
-              targetTripIds.contains(row[tripIdIdx])) {
-            tripStopsMap.putIfAbsent(row[tripIdIdx], () => []).add({
-              'stop_id': row[stopIdIdx],
-              'sequence': int.tryParse(row[seqIdx]) ?? 0,
-            });
+          for (int i = brtFallback ? 0 : 1; i < tripsLines.length; i++) {
+            final row = _parseCsvLine(tripsLines[i]);
+            if (row.isEmpty) continue;
+            if (brtFallback) {
+              if (row[0].contains('BRT')) {
+                targetTripIds.add(row[0]);
+                if (row.length > 7 && row[7].isNotEmpty) targetShapeId = row[7];
+              }
+            } else if (routeIdIdx >= 0 &&
+                tripIdIdx >= 0 &&
+                row.length > routeIdIdx &&
+                row[routeIdIdx] == routeId) {
+              targetTripIds.add(row[tripIdIdx]);
+              if (shapeIdIdx >= 0 &&
+                  row.length > shapeIdIdx &&
+                  row[shapeIdIdx].isNotEmpty) {
+                targetShapeId = row[shapeIdIdx];
+              }
+            }
           }
         }
 
-        if (tripStopsMap.isNotEmpty) {
-          final sortedTrips = tripStopsMap.values.toList()
-            ..sort((a, b) => b.length.compareTo(a.length));
-          final longestTrip = sortedTrips.first;
-          longestTrip.sort(
-            (a, b) => (a['sequence'] as int).compareTo(b['sequence'] as int),
+        if (targetTripIds.isNotEmpty && stopTimesFile.isNotEmpty) {
+          final stopTimesContent = await gtfsSyncService.getGtfsFile(
+            stopTimesFile,
           );
+          final stopTimesLines = const LineSplitter().convert(stopTimesContent);
+          if (stopTimesLines.length > 1) {
+            final headerRow = _parseCsvLine(stopTimesLines.first);
+            final tripIdIdx = headerRow.indexOf('trip_id');
+            final stopIdIdx = headerRow.indexOf('stop_id');
+            final seqIdx = headerRow.indexOf('stop_sequence');
 
-          final seen = <String>{};
-          for (final st in longestTrip) {
-            final sid = st['stop_id'] as String;
-            if (seen.add(sid)) orderedStopIds.add(sid);
-          }
-
-          for (final tripStops in sortedTrips.skip(1)) {
-            tripStops.sort(
-              (a, b) => (a['sequence'] as int).compareTo(b['sequence'] as int),
-            );
-            for (final st in tripStops) {
-              final sid = st['stop_id'] as String;
-              if (seen.add(sid)) orderedStopIds.add(sid);
+            final tripStopsMap = <String, List<Map<String, dynamic>>>{};
+            for (int i = 1; i < stopTimesLines.length; i++) {
+              final row = _parseCsvLine(stopTimesLines[i]);
+              if (row.isEmpty) continue;
+              if (tripIdIdx >= 0 &&
+                  stopIdIdx >= 0 &&
+                  row.length > tripIdIdx &&
+                  targetTripIds.contains(row[tripIdIdx])) {
+                tripStopsMap.putIfAbsent(row[tripIdIdx], () => []).add({
+                  'stop_id': row[stopIdIdx],
+                  'sequence': int.tryParse(row[seqIdx]) ?? 0,
+                });
+              }
+            }
+            if (tripStopsMap.isNotEmpty) {
+              final sortedTrips = tripStopsMap.values.toList()
+                ..sort((a, b) => b.length.compareTo(a.length));
+              final longestTrip = sortedTrips.first;
+              longestTrip.sort(
+                (a, b) =>
+                    (a['sequence'] as int).compareTo(b['sequence'] as int),
+              );
+              for (final st in longestTrip) {
+                orderedStopIds.add(st['stop_id'] as String);
+              }
             }
           }
         }
       }
 
-      // 3. Load stops to get details matching those stop_ids
-      final stopsContent = await stopsFuture;
+      final stopsContent = await gtfsSyncService.getGtfsFile(stopsFile);
       final stopsLines = const LineSplitter().convert(stopsContent);
       final Map<String, gtfs.Stop> stopsMap = {};
 
@@ -149,6 +189,7 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
         final headerRow = _parseCsvLine(stopsLines.first);
         final idIdx = headerRow.indexOf('stop_id');
         final nameIdx = headerRow.indexOf('stop_name');
+        final thaiIdx = headerRow.indexOf('stop_name_th');
         final latIdx = headerRow.indexOf('stop_lat');
         final lonIdx = headerRow.indexOf('stop_lon');
         final codeIdx = headerRow.indexOf('stop_code');
@@ -158,17 +199,17 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
         for (int i = 1; i < stopsLines.length; i++) {
           final row = _parseCsvLine(stopsLines[i]);
           if (row.isEmpty || row.length <= idIdx) continue;
-
           final stopId = row[idIdx];
 
-          // Optimization: Only parse stops we actually need
           if (orderedStopIds.contains(stopId)) {
             String valueAt(int idx) =>
                 (idx >= 0 && idx < row.length) ? row[idx].trim() : '';
+            final thaiName = valueAt(thaiIdx);
 
             stopsMap[stopId] = gtfs.Stop(
               stopId: stopId,
               name: valueAt(nameIdx),
+              thaiName: thaiName.isNotEmpty ? thaiName : null,
               lat: double.tryParse(valueAt(latIdx)) ?? 0.0,
               lon: double.tryParse(valueAt(lonIdx)) ?? 0.0,
               code: valueAt(codeIdx).isEmpty ? null : valueAt(codeIdx),
@@ -180,14 +221,56 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
       }
 
       final resultStops = <gtfs.Stop>[];
+      final seenStops = <String>{};
       for (final id in orderedStopIds) {
-        if (stopsMap.containsKey(id)) {
+        if (stopsMap.containsKey(id) && !seenStops.contains(id)) {
           resultStops.add(stopsMap[id]!);
+          seenStops.add(id);
+        }
+      }
+
+      final linePoints = <LatLng>[];
+      if (targetShapeId != null &&
+          targetShapeId.isNotEmpty &&
+          shapesFile.isNotEmpty) {
+        try {
+          final shapeContent = await gtfsSyncService.getGtfsFile(shapesFile);
+          final shapeLines = const LineSplitter().convert(shapeContent);
+          if (shapeLines.length > 1) {
+            final sHead = _parseCsvLine(shapeLines.first);
+            final sidIdx = sHead.indexOf('shape_id');
+            final latIdx = sHead.indexOf('shape_pt_lat');
+            final lonIdx = sHead.indexOf('shape_pt_lon');
+            final seqIdx = sHead.indexOf('shape_pt_sequence');
+
+            final pts = <Map<String, dynamic>>[];
+            for (int i = 1; i < shapeLines.length; i++) {
+              final row = _parseCsvLine(shapeLines[i]);
+              if (row.length > sidIdx && row[sidIdx] == targetShapeId) {
+                pts.add({
+                  'lat': double.tryParse(row[latIdx]) ?? 0.0,
+                  'lon': double.tryParse(row[lonIdx]) ?? 0.0,
+                  'seq': int.tryParse(row[seqIdx]) ?? 0,
+                });
+              }
+            }
+            pts.sort((a, b) => (a['seq'] as int).compareTo(b['seq'] as int));
+            for (final pt in pts) {
+              linePoints.add(LatLng(pt['lat'], pt['lon']));
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (linePoints.isEmpty && resultStops.isNotEmpty) {
+        for (final s in resultStops) {
+          linePoints.add(LatLng(s.lat, s.lon));
         }
       }
 
       setState(() {
         _routeStops = resultStops;
+        _lineShape = linePoints;
         _loading = false;
       });
     } catch (e) {
@@ -239,228 +322,371 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final route = widget.route;
+    final routeInfo = widget.route;
     final agency = widget.agency;
 
-    final routeColor = _colorFromHexOr(route.color, theme.colorScheme.primary);
+    final routeColor = _colorFromHexOr(
+      routeInfo.color,
+      theme.colorScheme.primary,
+    );
+    final isPortrait =
+        MediaQuery.of(context).orientation == Orientation.portrait;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Route Details'),
-        centerTitle: true,
+    final headerSection = Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
+        ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16.0),
-        children: [
-          // Hero Header Section
-          Container(
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface.withValues(alpha: 0.6),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 32.0, horizontal: 16.0),
+        child: Column(
+          children: [
+            Container(
+              width: 96,
+              height: 96,
+              decoration: BoxDecoration(
+                color: theme.brightness == Brightness.dark
+                    ? Colors.white
+                    : routeColor.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+                border: Border.all(color: routeColor, width: 3),
               ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                vertical: 32.0,
-                horizontal: 16.0,
-              ),
-              child: Column(
-                children: [
-                  Container(
-                    width: 96,
-                    height: 96,
-                    decoration: BoxDecoration(
-                      color: theme.brightness == Brightness.dark
-                          ? Colors.white
-                          : routeColor.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: routeColor, width: 3),
-                    ),
-                    child: Center(
-                      child: route.routeIcon != null &&
-                              route.routeIcon!.isNotEmpty
-                          ? SizedBox(
-                              width: 48,
-                              height: 48,
-                              child: FittedBox(
-                                fit: BoxFit.contain,
-                                child: SvgPicture.asset(
-                                  route.routeIcon!,
-                                ),
-                              ),
-                            )
-                          : Icon(
-                              _iconForCategory(_transportCategory(route.type)),
-                              size: 48,
-                              color: routeColor,
-                            ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    route.longName,
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  if (!_loading && _routeStops.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      '${_routeStops.first.name} - ${_routeStops.last.name}',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+              child: Center(
+                child:
+                    routeInfo.routeIcon != null &&
+                        routeInfo.routeIcon!.isNotEmpty
+                    ? SizedBox(
+                        width: 48,
+                        height: 48,
+                        child: FittedBox(
+                          fit: BoxFit.contain,
+                          child: SvgPicture.asset(routeInfo.routeIcon!),
+                        ),
+                      )
+                    : Icon(
+                        _iconForCategory(_transportCategory(routeInfo.type)),
+                        size: 48,
+                        color: routeColor,
                       ),
-                    ),
-                  ],
-                ],
               ),
             ),
-          ),
-          const SizedBox(height: 32),
-
-          // Details Information Section
-          Text(
-            'Information',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface.withValues(alpha: 0.6),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
-              ),
-            ),
-            child: Column(
-              children: [
-                _buildInfoTile(
-                  icon: Icons.directions_transit,
-                  title: 'Transport Type',
-                  subtitle: _transportCategory(route.type),
-                  theme: theme,
-                ),
-                const Divider(height: 1),
-                _buildInfoTile(
-                  icon: Icons.business,
-                  title: 'Operating Agency',
-                  subtitle: agency?.name.isNotEmpty == true
-                      ? agency!.name
-                      : (route.agencyId.isNotEmpty
-                            ? route.agencyId
-                            : 'Unknown Agency'),
-                  theme: theme,
-                ),
-                if (agency?.url.isNotEmpty == true) ...[
-                  const Divider(height: 1),
-                  _buildInfoTile(
-                    icon: Icons.language,
-                    title: 'Website',
-                    subtitle: agency!.url,
-                    theme: theme,
-                  ),
-                ],
-                if (widget.agency?.phone?.isNotEmpty == true) ...[
-                  const Divider(height: 1),
-                  _buildInfoTile(
-                    icon: Icons.phone,
-                    title: 'Contact Phone',
-                    subtitle: widget.agency!.phone ?? '',
-                    theme: theme,
-                  ),
-                ],
-              ],
-            ),
-          ),
-
-          if (_loading)
-            const Padding(
-              padding: EdgeInsets.all(32.0),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (_routeStops.isNotEmpty) ...[
-            const SizedBox(height: 32),
+            const SizedBox(height: 24),
             Text(
-              'Stations (${_routeStops.length})',
-              style: theme.textTheme.titleMedium?.copyWith(
+              routeInfo.longName.isNotEmpty
+                  ? routeInfo.longName
+                  : routeInfo.routeId,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.w700,
               ),
             ),
-            const SizedBox(height: 12),
-            Container(
-              clipBehavior: Clip.antiAlias,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surface.withValues(alpha: 0.6),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: theme.colorScheme.outlineVariant.withValues(
-                    alpha: 0.3,
-                  ),
+            if (!_loading && _routeStops.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                '${_routeStops.first.name} - ${_routeStops.last.name}',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
-              child: ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _routeStops.length,
-                separatorBuilder: (context, index) => const Divider(height: 1),
-                itemBuilder: (context, index) {
-                  final stop = _routeStops[index];
-                  return ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16.0,
-                      vertical: 4.0,
+            ],
+          ],
+        ),
+      ),
+    );
+
+    final infoSection = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Information',
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface.withValues(alpha: 0.6),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
+            ),
+          ),
+          child: Column(
+            children: [
+              _buildInfoTile(
+                icon: Icons.directions_transit,
+                title: 'Transport Type',
+                subtitle: _transportCategory(routeInfo.type),
+                theme: theme,
+              ),
+              const Divider(height: 1),
+              _buildInfoTile(
+                icon: Icons.business,
+                title: 'Operating Agency',
+                subtitle: agency?.name.isNotEmpty == true
+                    ? agency!.name
+                    : (routeInfo.agencyId.isNotEmpty
+                          ? routeInfo.agencyId
+                          : 'Unknown Agency'),
+                theme: theme,
+              ),
+              if (agency?.url.isNotEmpty == true) ...[
+                const Divider(height: 1),
+                _buildInfoTile(
+                  icon: Icons.language,
+                  title: 'Website',
+                  subtitle: agency!.url,
+                  theme: theme,
+                ),
+              ],
+              if (widget.agency?.phone?.isNotEmpty == true) ...[
+                const Divider(height: 1),
+                _buildInfoTile(
+                  icon: Icons.phone,
+                  title: 'Contact Phone',
+                  subtitle: widget.agency!.phone ?? '',
+                  theme: theme,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+
+    final markers = _routeStops.map((stop) {
+      return Marker(
+        point: LatLng(stop.lat, stop.lon),
+        width: 16,
+        height: 16,
+        child: Container(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            shape: BoxShape.circle,
+            border: Border.all(color: routeColor, width: 3),
+          ),
+        ),
+      );
+    }).toList();
+
+    var cLat = 13.7563;
+    var cLon = 100.5018;
+    if (_routeStops.isNotEmpty) {
+      cLat =
+          _routeStops.map((s) => s.lat).reduce((a, b) => a + b) /
+          _routeStops.length;
+      cLon =
+          _routeStops.map((s) => s.lon).reduce((a, b) => a + b) /
+          _routeStops.length;
+    }
+
+    final mapWidget = Container(
+      height: isPortrait ? 250 : double.infinity,
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(isPortrait ? 24 : 0),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
+        ),
+      ),
+      clipBehavior: isPortrait ? Clip.antiAlias : Clip.none,
+      child: FlutterMap(
+        options: MapOptions(
+          initialCenter: LatLng(cLat, cLon),
+          initialZoom: 12.0,
+          interactionOptions: isPortrait
+              ? const InteractionOptions(flags: InteractiveFlag.none)
+              : const InteractionOptions(flags: InteractiveFlag.all),
+        ),
+        children: [
+          TileLayer(
+            urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+            userAgentPackageName: "com.example.transit_route",
+          ),
+          if (_lineShape.isNotEmpty)
+            PolylineLayer(
+              polylines: [
+                Polyline(
+                  points: _lineShape,
+                  color: routeColor,
+                  strokeWidth: 4.0,
+                ),
+              ],
+            ),
+          MarkerLayer(markers: markers),
+        ],
+      ),
+    );
+
+    final stopListSection = _loading
+        ? const Padding(
+            padding: EdgeInsets.all(32.0),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        : _routeStops.isNotEmpty
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Stations (${_routeStops.length})",
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surface.withValues(alpha: 0.6),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: theme.colorScheme.outlineVariant.withValues(
+                      alpha: 0.3,
                     ),
-                    leading: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: routeColor.withValues(alpha: 0.1),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: routeColor, width: 2),
+                  ),
+                ),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _routeStops.length,
+                  separatorBuilder: (context, index) =>
+                      const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final stop = _routeStops[index];
+                    final hasThai =
+                        stop.thaiName != null &&
+                        stop.thaiName!.trim().isNotEmpty;
+                    final displayCode =
+                        (stop.code != null && stop.code!.trim().isNotEmpty)
+                        ? stop.code!
+                        : "${index + 1}";
+                    return ListTile(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => StationDetailsPage(
+                              stop: stop,
+                              lineColor: routeColor,
+                              lineName: routeInfo.shortName.isNotEmpty
+                                  ? routeInfo.shortName
+                                  : routeInfo.longName,
+                              onSelectAsStart: () {
+                                // Can be implemented if needed
+                              },
+                              onSelectAsDestination: () {
+                                // Can be implemented if needed  
+                              },
+                            ),
+                          ),
+                        );
+                      },
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16.0,
+                        vertical: 4.0,
                       ),
-                      child: Center(
-                        child: Text(
-                          '${index + 1}',
-                          style: TextStyle(
-                            color: routeColor,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
+                      leading: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: routeColor.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: routeColor, width: 2),
+                        ),
+                        child: Center(
+                          child: FittedBox(
+                            child: Padding(
+                              padding: const EdgeInsets.all(4.0),
+                              child: Text(
+                                displayCode,
+                                style: TextStyle(
+                                  color: routeColor,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    title: Text(
-                      stop.name,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
+                      title: Text(
+                        hasThai ? stop.thaiName! : stop.name,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
-                    subtitle: (stop.code != null && stop.code!.isNotEmpty)
-                        ? Text(
-                            stop.code!,
-                            style: theme.textTheme.labelMedium?.copyWith(
-                              color: theme.colorScheme.secondary,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          )
-                        : null,
-                    trailing: const Icon(
-                      Icons.location_on,
-                      size: 20,
-                      color: Colors.grey,
-                    ),
-                  );
-                },
+                      subtitle: hasThai
+                          ? Text(
+                              stop.name,
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            )
+                          : null,
+                      trailing: const Icon(
+                        Icons.map,
+                        size: 20,
+                        color: Colors.grey,
+                      ),
+                    );
+                  },
+                ),
               ),
-            ),
-          ],
-        ],
+            ],
+          )
+        : const SizedBox();
+
+    return Theme(
+      data: theme.copyWith(
+        colorScheme: theme.colorScheme.copyWith(
+          primary: routeColor,
+          secondary: routeColor,
+        ),
+      ),
+      child: Scaffold(
+        appBar: AppBar(title: const Text("Route Details"), centerTitle: true),
+        body: isPortrait
+            ? ListView(
+                padding: const EdgeInsets.all(16.0),
+                children: [
+                  headerSection,
+                  const SizedBox(height: 16),
+                  if (!_loading && _routeStops.isNotEmpty) mapWidget,
+                  const SizedBox(height: 32),
+                  infoSection,
+                  const SizedBox(height: 32),
+                  stopListSection,
+                ],
+              )
+            : Row(
+                children: [
+                  Expanded(
+                    flex: 4,
+                    child: ListView(
+                      padding: const EdgeInsets.all(16.0),
+                      children: [
+                        headerSection,
+                        const SizedBox(height: 32),
+                        infoSection,
+                        const SizedBox(height: 32),
+                        stopListSection,
+                      ],
+                    ),
+                  ),
+                  const VerticalDivider(width: 1, thickness: 1),
+                  Expanded(
+                    flex: 6,
+                    child: _loading
+                        ? const Center(child: CircularProgressIndicator())
+                        : mapWidget,
+                  ),
+                ],
+              ),
       ),
     );
   }

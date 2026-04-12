@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:flutter/services.dart';
 import 'package:route/services/gtfs_sync_service.dart';
 import 'package:route/services/csv_utils.dart';
 import 'package:route/services/gtfs_models.dart' as gtfs;

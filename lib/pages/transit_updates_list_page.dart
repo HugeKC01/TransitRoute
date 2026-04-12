@@ -777,8 +777,9 @@ class _ReportIssueSheetState extends State<_ReportIssueSheet> {
       final upper = line.toUpperCase();
       if (upper.contains('MRT') ||
           upper.contains('BTS') ||
-          upper.contains('ARL'))
+          upper.contains('ARL')) {
         return 1;
+      }
       if (upper.contains('SRT')) return 2;
       if (upper.startsWith('BUS') || upper.contains('BUS')) return 3;
       if (upper.contains('FERRY')) return 4;
@@ -795,11 +796,13 @@ class _ReportIssueSheetState extends State<_ReportIssueSheet> {
 
   IconData _getIconForLine(String line) {
     final upper = line.toUpperCase();
-    if (upper.contains('MRT') || upper.contains('BTS') || upper.contains('ARL'))
+    if (upper.contains('MRT') || upper.contains('BTS') || upper.contains('ARL')) {
       return Icons.subway;
+    }
     if (upper.contains('SRT')) return Icons.train;
-    if (upper.startsWith('BUS') || upper.contains('BUS'))
+    if (upper.startsWith('BUS') || upper.contains('BUS')) {
       return Icons.directions_bus;
+    }
     if (upper.contains('FERRY')) return Icons.directions_boat;
     return Icons.directions_transit;
   }

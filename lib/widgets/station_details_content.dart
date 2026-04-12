@@ -477,8 +477,9 @@ class StationDetailsContent extends StatelessWidget {
                             final lines = tLineName.split(', ');
                             for (var l in lines) {
                               routeSvg = routeIconByName!(l);
-                              if (routeSvg != null && routeSvg.isNotEmpty)
+                              if (routeSvg != null && routeSvg.isNotEmpty) {
                                 break;
+                              }
                             }
                           }
                           if (routeSvg != null && routeSvg.isNotEmpty) {
@@ -662,8 +663,9 @@ class _TransferListWithTabsState extends State<_TransferListWithTabs> {
         stopId.startsWith('ST_') ||
         stopId.startsWith('STOP_') ||
         int.tryParse(stopId) != null ||
-        stopId.startsWith('B'))
+        stopId.startsWith('B')) {
       return 'Bus';
+    }
     return 'Rail';
   }
 
@@ -727,8 +729,9 @@ class _TransferListWithTabsState extends State<_TransferListWithTabs> {
 
             final cat = _getCategory(tStop.stopId);
             IconData defaultIcon = Icons.train;
-            if (cat == 'Bus' || cat == 'BRT')
+            if (cat == 'Bus' || cat == 'BRT') {
               defaultIcon = Icons.directions_bus;
+            }
             if (cat == 'Ferry') defaultIcon = Icons.directions_boat;
 
             return InkWell(
