@@ -26,6 +26,8 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
   bool _loading = true;
   List<gtfs.Stop> _routeStops = [];
   List<LatLng> _lineShape = [];
+  List<String> _firstStationNames = [];
+  List<String> _lastStationNames = [];
 
   @override
   void initState() {
@@ -92,6 +94,8 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
       final targetTripIds = <String>{};
       String? targetShapeId;
       final orderedStopIds = <String>[];
+      final allFirstStopIds = <String>{};
+      final allLastStopIds = <String>{};
 
       if (isBus) {
         final busContent = await gtfsSyncService.getGtfsFile(tripsFile);
@@ -108,6 +112,10 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
                 for (int j = 6; j < row.length; j++) {
                   final sid = row[j].trim();
                   if (sid.isNotEmpty) stops.add(sid);
+                }
+                if (stops.isNotEmpty) {
+                  allFirstStopIds.add(stops.first);
+                  allLastStopIds.add(stops.last);
                 }
                 if (stops.length > bestStops.length) {
                   bestStops = stops;
@@ -205,6 +213,24 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
                 (a, b) =>
                     (a['sequence'] as int).compareTo(b['sequence'] as int),
               );
+              final referenceFirst = longestTrip.first['stop_id'] as String;
+              final referenceLast = longestTrip.last['stop_id'] as String;
+
+              for (final trip in tripStopsMap.values) {
+                if (trip.isNotEmpty) {
+                  trip.sort(
+                    (a, b) =>
+                        (a['sequence'] as int).compareTo(b['sequence'] as int),
+                  );
+                  final thisFirst = trip.first['stop_id'] as String;
+                  final thisLast = trip.last['stop_id'] as String;
+                  if (thisLast == referenceLast ||
+                      thisFirst == referenceFirst) {
+                    allFirstStopIds.add(thisFirst);
+                    allLastStopIds.add(thisLast);
+                  }
+                }
+              }
               for (final st in longestTrip) {
                 orderedStopIds.add(st['stop_id'] as String);
               }
@@ -216,6 +242,8 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
       final stopsContent = await gtfsSyncService.getGtfsFile(stopsFile);
       final stopsLines = const LineSplitter().convert(stopsContent);
       final Map<String, gtfs.Stop> stopsMap = {};
+      final resolvedFirstStops = <String, String>{};
+      final resolvedLastStops = <String, String>{};
 
       if (stopsLines.length > 1) {
         final headerRow = _parseCsvLine(stopsLines.first);
@@ -237,11 +265,19 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
           if (row.isEmpty || row.length <= idIdx) continue;
           final stopId = row[idIdx];
 
-          if (orderedStopIds.contains(stopId)) {
-            String valueAt(int idx) =>
-                (idx >= 0 && idx < row.length) ? row[idx].trim() : '';
-            final thaiName = valueAt(thaiIdx);
+          String valueAt(int idx) =>
+              (idx >= 0 && idx < row.length) ? row[idx].trim() : '';
+          final thaiName = valueAt(thaiIdx);
+          final pName = thaiName.isNotEmpty ? thaiName : valueAt(nameIdx);
 
+          if (allFirstStopIds.contains(stopId)) {
+            resolvedFirstStops[stopId] = pName;
+          }
+          if (allLastStopIds.contains(stopId)) {
+            resolvedLastStops[stopId] = pName;
+          }
+
+          if (orderedStopIds.contains(stopId)) {
             stopsMap[stopId] = gtfs.Stop(
               stopId: stopId,
               name: valueAt(nameIdx),
@@ -307,6 +343,18 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
       setState(() {
         _routeStops = resultStops;
         _lineShape = linePoints;
+        _firstStationNames = allFirstStopIds
+            .map((id) => resolvedFirstStops[id])
+            .where((n) => n != null && n.isNotEmpty)
+            .cast<String>()
+            .toSet()
+            .toList();
+        _lastStationNames = allLastStopIds
+            .map((id) => resolvedLastStops[id])
+            .where((n) => n != null && n.isNotEmpty)
+            .cast<String>()
+            .toSet()
+            .toList();
         _loading = false;
       });
     } catch (e) {
@@ -446,12 +494,22 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
             ),
             if (!_loading && _routeStops.isNotEmpty) ...[
               const SizedBox(height: 8),
-              Text(
-                '${_routeStops.first.name} - ${_routeStops.last.name}',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
+              Builder(
+                builder: (context) {
+                  final startText = _firstStationNames.isNotEmpty
+                      ? _firstStationNames.join(', ')
+                      : _routeStops.first.name;
+                  final endText = _lastStationNames.isNotEmpty
+                      ? _lastStationNames.join(', ')
+                      : _routeStops.last.name;
+                  return Text(
+                    '$startText - $endText',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  );
+                },
               ),
             ],
           ],

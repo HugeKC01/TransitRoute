@@ -106,13 +106,26 @@ class TerminalLoader {
         ).map((e) => e.trim()).toList();
         final sStopIdIdx = sHeader.indexOf('stop_id');
         final sNameIdx = sHeader.indexOf('stop_name');
+        final sThaiNameIdx = sHeader.indexOf('stop_name_th');
 
         final stopNames = <String, String>{};
-        if (sStopIdIdx >= 0 && sNameIdx >= 0) {
+        if (sStopIdIdx >= 0) {
           for (int i = 1; i < stopsLines.length; i++) {
             final row = _parseCsvLine(stopsLines[i]);
-            if (row.length > sStopIdIdx && row.length > sNameIdx) {
-              stopNames[row[sStopIdIdx]] = row[sNameIdx];
+            if (row.length > sStopIdIdx) {
+              String name = '';
+              if (sThaiNameIdx >= 0 &&
+                  row.length > sThaiNameIdx &&
+                  row[sThaiNameIdx].trim().isNotEmpty) {
+                name = row[sThaiNameIdx].trim();
+              } else if (sNameIdx >= 0 &&
+                  row.length > sNameIdx &&
+                  row[sNameIdx].trim().isNotEmpty) {
+                name = row[sNameIdx].trim();
+              }
+              if (name.isNotEmpty) {
+                stopNames[row[sStopIdIdx].trim()] = name;
+              }
             }
           }
         }
@@ -141,13 +154,37 @@ class TerminalLoader {
             (a, b) => (a['sequence'] as int).compareTo(b['sequence'] as int),
           );
 
-          final firstStopId = sequence.first['stop_id'] as String;
-          final lastStopId = sequence.last['stop_id'] as String;
+          final referenceFirst = sequence.first['stop_id'] as String;
+          final referenceLast = sequence.last['stop_id'] as String;
 
-          final firstName = stopNames[firstStopId] ?? firstStopId;
-          final lastName = stopNames[lastStopId] ?? lastStopId;
+          final allFirstIds = <String>{};
+          final allLastIds = <String>{};
 
-          terminals[routeId] = '$firstName - $lastName';
+          for (final tId in tIds) {
+            final tSeq = tripStopsMap[tId]!;
+            if (tSeq.isNotEmpty) {
+              tSeq.sort(
+                (a, b) =>
+                    (a['sequence'] as int).compareTo(b['sequence'] as int),
+              );
+              final tFirst = tSeq.first['stop_id'] as String;
+              final tLast = tSeq.last['stop_id'] as String;
+              if (tFirst == referenceFirst || tLast == referenceLast) {
+                allFirstIds.add(tFirst);
+                allLastIds.add(tLast);
+              }
+            }
+          }
+
+          final firstNames = allFirstIds
+              .map((id) => stopNames[id] ?? id)
+              .toList();
+          final lastNames = allLastIds
+              .map((id) => stopNames[id] ?? id)
+              .toList();
+
+          terminals[routeId] =
+              '${firstNames.join(', ')} - ${lastNames.join(', ')}';
         }
       } catch (e) {
         // file missing or syntax error, just continue
