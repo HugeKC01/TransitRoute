@@ -327,10 +327,15 @@ class StationDetailsContent extends StatelessWidget {
                               height: 48,
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: theme.brightness == Brightness.dark
+                                color: (routeIcon != null && routeIcon.isNotEmpty)
                                     ? Colors.white
-                                    : sLineColor.withValues(alpha: 0.15),
+                                    : (theme.brightness == Brightness.dark
+                                        ? Colors.white
+                                        : sLineColor.withValues(alpha: 0.15)),
                                 shape: BoxShape.circle,
+                                border: (routeIcon != null && routeIcon.isNotEmpty)
+                                    ? Border.all(color: sLineColor, width: 3)
+                                    : null,
                               ),
                               child: routeIcon != null && routeIcon.isNotEmpty
                                   ? SvgPicture.asset(routeIcon, width: 24, height: 24)

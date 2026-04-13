@@ -1,16 +1,33 @@
-# route
+# TransitRoute
 
-A new Flutter project.
+TransitRoute is a prototype public transit app for the Bangkok metropolitan area, developed as a senior project by students at King Mongkut’s University of Technology Thonburi (KMUTT).
 
-## Getting Started
+## Features
 
-This project is a starting point for a Flutter application.
+- Search for routes, stops, and lines across Bangkok’s buses, ferries, and metro
+- View estimated travel times and fare information
+- Access timetables and real-time service updates
+- Interactive map and detailed station information
+- Data sourced from public GTFS feeds and local transit agencies
 
-A few resources to get you started if this is your first Flutter project:
+## Disclaimer
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+This application is a prototype. Data may be incomplete or outdated. Please verify travel times and fares with official staff for accuracy.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Data Sources
+
+- Mobility Database (GTFS): https://mobilitydatabase.org/feeds/gtfs/mdb-1831
+- Chao Phraya Express Boat: https://www.chaophrayaexpressboat.com/chaophrayaexpressboat
+- BMTA: https://www.bmta.co.th/bus-lines
+- BEM Metro: https://metro.bemplc.co.th/?lang=th
+- BTS SkyTrain: https://www.bts.co.th/
+
+## License
+
+- Transit data: CC-BY-4.0
+- App code: Apache 2.0
+
+## Open Source Packages
+
+This app uses Flutter and open source packages including:
+archive, cloud_firestore, collection, cupertino_icons, firebase_core, firebase_storage, flutter_map, flutter_svg, google_fonts, http, latlong2, location, path_provider, shared_preferences, sqflite, url_launcher.

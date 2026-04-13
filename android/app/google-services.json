@@ -7,47 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:657797516641:android:95cce7964f4648327b8920",
+        "mobilesdk_app_id": "1:657797516641:android:ac2e10e7d658b87e7b8920",
         "android_client_info": {
-          "package_name": "com.example.route"
-        }
-      },
-      "oauth_client": [],
-      "api_key": [
-        {
-          "current_key": "AIzaSyClLkFzPrn-rSrKkhjewYV2Ebbq84c5Vb4"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": []
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:657797516641:android:7cf5ac765f925f037b8920",
-        "android_client_info": {
-          "package_name": "com.hugekc.route_transit"
-        }
-      },
-      "oauth_client": [],
-      "api_key": [
-        {
-          "current_key": "AIzaSyClLkFzPrn-rSrKkhjewYV2Ebbq84c5Vb4"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": []
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:657797516641:android:b090d6581e1c8ced7b8920",
-        "android_client_info": {
-          "package_name": "com.hugekc.routetransit"
+          "package_name": "com.hugekc.transitroute"
         }
       },
       "oauth_client": [],
