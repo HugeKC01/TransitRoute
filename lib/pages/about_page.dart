@@ -74,7 +74,48 @@ class AboutPage extends StatelessWidget {
           ),
           const SizedBox(height: 32),
 
-          // Disclaimer / Welcome Text
+          // Disclaimer
+          Card(
+            clipBehavior: Clip.antiAlias,
+            color: theme.colorScheme.errorContainer,
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        color: theme.colorScheme.onErrorContainer,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Disclaimer of Government Affiliation',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: theme.colorScheme.onErrorContainer,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'TransitRoute is an independent prototype developed for an academic senior project. This app does not represent, nor is it affiliated with, endorsed by, or officially connected to the Thai government, the MRTA, the BMTA, or any other government agency. Information provided may be estimated or outdated; please consult official staff for accurate details.',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onErrorContainer,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 32),
+
+          // Welcome Text
           Card(
             clipBehavior: Clip.antiAlias,
             color: theme.colorScheme.surfaceContainerHighest,

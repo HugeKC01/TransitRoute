@@ -19,6 +19,7 @@ import 'package:route/services/transit_update_service.dart';
 
 import 'pages/more_page.dart';
 import 'pages/cards_page.dart';
+import 'pages/about_page.dart';
 import 'pages/transit_updates_list_page.dart';
 import 'pages/transport_lines_page.dart';
 import 'pages/navigation_page.dart';
@@ -2145,6 +2146,80 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
+              if (directionOptions.isEmpty) ...[
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(32),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.15),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(32),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              Theme.of(context).colorScheme.surface.withValues(
+                                    alpha: Theme.of(context).brightness ==
+                                            Brightness.dark
+                                        ? 0.4
+                                        : 0.6,
+                                  ),
+                              Theme.of(context).colorScheme.surface.withValues(
+                                    alpha: Theme.of(context).brightness ==
+                                            Brightness.dark
+                                        ? 0.2
+                                        : 0.4,
+                                  ),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(32),
+                          border: Border.all(
+                            color: Colors.white.withValues(
+                              alpha: Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? 0.15
+                                  : 0.4,
+                            ),
+                            width: 1.2,
+                          ),
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: IconButton(
+                            icon: const Icon(Icons.info_outline),
+                            tooltip: 'About',
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const AboutPage(),
+                                ),
+                              );
+                            },
+                            iconSize: 28,
+                            padding: const EdgeInsets.all(12),
+                            constraints: const BoxConstraints(
+                              minWidth: 56,
+                              minHeight: 56,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
               if (directionOptions.isEmpty) _buildFilterMenu(isWide),
               const SizedBox(height: 16),
               Container(
