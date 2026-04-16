@@ -245,6 +245,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   final MapController _mapController = MapController();
   final LayerHitNotifier<int> _routeHitNotifier = ValueNotifier(null);
 
+  final GlobalKey _headerGlobalKey = GlobalKey();
+
   List<FavoritePin> _favoritePins = [];
   bool _isGtfsDataLoaded = false;
   List<LatLng> _initialCameraPts = [];
@@ -2723,7 +2725,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     return MenuItemButton(onPressed: () => onChanged(!value), child: content);
   }
 
-  Widget _buildWideLayout(BuildContext context, Widget headerOverlay) {
+  Widget _buildWideLayout(BuildContext context, Widget headerOverlay, Widget headerWidget) {
     final width = MediaQuery.of(context).size.width;
 
     // ensure the side panel is at least 320px wide so route options text does not overflow
@@ -2819,7 +2821,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // The header
-              _buildHomeHeader(context, true),
+              headerWidget, // <-- Replace _buildHomeHeader(context, true) with this
 
               // The floating options panel underneath
               Expanded(
@@ -2990,7 +2992,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildPhoneLayout(BuildContext context, Widget headerOverlay) {
+  Widget _buildPhoneLayout(BuildContext context, Widget headerOverlay, Widget headerWidget) {
     final theme = Theme.of(context);
 
     return ValueListenableBuilder<bool>(
@@ -3087,7 +3089,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _buildHomeHeader(context, false),
+                        headerWidget, // <-- Replace _buildHomeHeader(context, false) with this
                         Flexible(
                           child: Padding(
                             padding: const EdgeInsets.only(top: 16.0),
@@ -3373,7 +3375,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildHeaderOverlay(BuildContext context, bool isWideLayout) {
+  Widget _buildHeaderOverlay(BuildContext context, bool isWideLayout, Widget headerWidget) {
     final horizontal = isWideLayout ? 24.0 : 16.0;
     final topInset = MediaQuery.of(context).padding.top;
     final top = topInset + 12.0;
@@ -3384,7 +3386,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         padding: EdgeInsets.only(top: top, left: horizontal, right: horizontal),
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: maxWidth),
-          child: _buildHomeHeader(context, isWideLayout),
+          child: headerWidget, // <-- Use headerWidget here
         ),
       ),
     );
@@ -3699,6 +3701,13 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     final searchBar = SearchBar(
       controller: _collapsedSearchController,
       focusNode: _collapsedSearchFocus,
+
+      onTap: () {
+        if (!_collapsedSearchFocus.hasFocus) {
+          _collapsedSearchFocus.requestFocus();
+        }
+      },
+
       constraints: const BoxConstraints(minHeight: 48, maxHeight: 48),
       leading: ListenableBuilder(
         listenable: Listenable.merge([
@@ -4086,6 +4095,13 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     final searchBar = SearchBar(
       controller: controller,
       focusNode: focusNode,
+
+      onTap: () {
+        if (!focusNode.hasFocus) {
+          focusNode.requestFocus();
+        }
+      },
+
       constraints: const BoxConstraints(minHeight: 48, maxHeight: 48),
       leading: ListenableBuilder(
         listenable: Listenable.merge([controller, focusNode]),
@@ -5497,11 +5513,19 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   }
 
   Widget _buildHomeContent(BuildContext context, bool isWideLayout) {
-    final headerOverlay = _buildHeaderOverlay(context, isWideLayout);
+    // 1. Wrap the header with the GlobalKey
+    final headerWidget = KeyedSubtree(
+      key: _headerGlobalKey,
+      child: _buildHomeHeader(context, isWideLayout),
+    );
+    
+    // 2. Pass the persistent headerWidget down
+    final headerOverlay = _buildHeaderOverlay(context, isWideLayout, headerWidget);
+    
     return SizedBox.expand(
       child: isWideLayout
-          ? _buildWideLayout(context, headerOverlay)
-          : _buildPhoneLayout(context, headerOverlay),
+          ? _buildWideLayout(context, headerOverlay, headerWidget)
+          : _buildPhoneLayout(context, headerOverlay, headerWidget),
     );
   }
 
