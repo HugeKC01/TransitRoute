@@ -4537,12 +4537,19 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       builder: (BuildContext context) {
         return AlertDialog(
           title: const Text('Welcome / ยินดีต้อนรับ'),
-          content: const Text(
-            'TransitRoute is an independent prototype developed as part of a senior project by students at King Mongkut\'s University of Technology Thonburi (KMUTT). This app does not represent, nor is it affiliated with, endorsed by, or officially connected to the Thai government, or any government agency.\n\n'
-            'The data in this app covers only the Bangkok metropolitan area and may contain inaccuracies or incomplete information. For example, travel time and fare data are partially estimated and may be outdated. Users should verify with official staff for the most accurate information.\n\n'
-            '---\n\n'
-            'TransitRoute เป็นเพียงต้นแบบที่พัฒนาขึ้นเพื่อเป็นส่วนหนึ่งของโครงงานก่อนจบการศึกษาของนักศึกษามหาวิทยาลัยเทคโนโลยีพระจอมเกล้าธนบุรี (KMUTT) แอปนี้ไม่ได้เป็นตัวแทน และไม่มีความเกี่ยวข้อง ไม่ได้รับการรับรอง หรือมีความเชื่อมโยงอย่างเป็นทางการกับรัฐบาลไทยหรือหน่วยงานรัฐบาล\n\n'
-            'ข้อมูลในแอปนี้ครอบคลุมเฉพาะพื้นที่กรุงเทพมหานครเท่านั้น และอาจมีความคลาดเคลื่อนหรือไม่สมบูรณ์ของข้อมูล อาทิ ข้อมูลเวลาเดินทางและค่าโดยสารมีการใช้ประมาณเป็นบางส่วนอาจมีความคลาดเคลื่อนและไม่เป็นปัจจุบัน ผู้ใช้ควรสอบถามกับเจ้าหน้าที่อีกครั้งเพื่อความถูกต้องของข้อมูล',
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text(
+                  'TransitRoute is an independent prototype developed as part of a senior project by students at King Mongkut\'s University of Technology Thonburi (KMUTT). This app does not represent, nor is it affiliated with, endorsed by, or officially connected to the Thai government, or any government agency.\n\n'
+                  'The data in this app covers only the Bangkok metropolitan area and may contain inaccuracies or incomplete information. For example, travel time and fare data are partially estimated and may be outdated. Users should verify with official staff for the most accurate information.\n\n'
+                  '---\n\n'
+                  'TransitRoute เป็นเพียงต้นแบบที่พัฒนาขึ้นเพื่อเป็นส่วนหนึ่งของโครงงานก่อนจบการศึกษาของนักศึกษามหาวิทยาลัยเทคโนโลยีพระจอมเกล้าธนบุรี (KMUTT) แอปนี้ไม่ได้เป็นตัวแทน และไม่มีความเกี่ยวข้อง ไม่ได้รับการรับรอง หรือมีความเชื่อมโยงอย่างเป็นทางการกับรัฐบาลไทยหรือหน่วยงานรัฐบาล\n\n'
+                  'ข้อมูลในแอปนี้ครอบคลุมเฉพาะพื้นที่กรุงเทพมหานครเท่านั้น และอาจมีความคลาดเคลื่อนหรือไม่สมบูรณ์ของข้อมูล อาทิ ข้อมูลเวลาเดินทางและค่าโดยสารมีการใช้ประมาณเป็นบางส่วนอาจมีความคลาดเคลื่อนและไม่เป็นปัจจุบัน ผู้ใช้ควรสอบถามกับเจ้าหน้าที่อีกครั้งเพื่อความถูกต้องของข้อมูล',
+                ),
+              ],
+            ),
           ),
           actions: <Widget>[
             TextButton(
