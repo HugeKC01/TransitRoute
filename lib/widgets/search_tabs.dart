@@ -98,13 +98,31 @@ class _ServiceTabsState extends State<ServiceTabs>
     super.dispose();
   }
 
+  Color _getLineColor(String lineName, int serviceType) {
+    if (widget.lineColors.containsKey(lineName)) {
+      return widget.lineColors[lineName]!;
+    }
+    final firstLine = lineName.split(',').first.trim();
+    if (widget.lineColors.containsKey(firstLine)) {
+      return widget.lineColors[firstLine]!;
+    }
+    switch (serviceType) {
+      case 3:
+        return Colors.blue;
+      case 4:
+        return Colors.orange;
+      default:
+        return Colors.grey;
+    }
+  }
+
   Widget _buildStopTile(
     BuildContext context,
     gtfs.Stop stop,
     String lineName, [
     int serviceType = 3,
   ]) {
-    final lineColor = widget.lineColors[lineName] ?? Colors.grey;
+    final lineColor = _getLineColor(lineName, serviceType);
     final theme = Theme.of(context);
 
     IconData getIconForType(int type) {
@@ -284,6 +302,7 @@ class _ServiceTabsState extends State<ServiceTabs>
     required Map<String, List<gtfs.Stop>> groupedStops,
     required String? selectedLine,
     required ValueChanged<String?> onLineChanged,
+    required int serviceType,
   }) {
     final lines = groupedStops.keys.toList()..sort();
     final effectiveSelectedLine =
@@ -327,7 +346,7 @@ class _ServiceTabsState extends State<ServiceTabs>
                 itemLabel: (item) => item ?? 'All Lines',
                 itemLeading: (item) {
                   if (item == null) return null;
-                  final color = widget.lineColors[item] ?? Colors.grey;
+                  final color = _getLineColor(item, serviceType);
                   if (widget.routeIconByName != null) {
                     final routeIcon = widget.routeIconByName!(item);
                     if (routeIcon != null && routeIcon.isNotEmpty) {
@@ -364,7 +383,7 @@ class _ServiceTabsState extends State<ServiceTabs>
                     final item = listItems[index];
 
                     if (item.isHeader) {
-                      final color = widget.lineColors[item.line] ?? Colors.grey;
+                      final color = _getLineColor(item.line, serviceType);
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -481,6 +500,7 @@ class _ServiceTabsState extends State<ServiceTabs>
                   selectedLine: _selectedMetroLine,
                   onLineChanged: (val) =>
                       setState(() => _selectedMetroLine = val),
+                  serviceType: 1,
                 ),
                 _buildTabView(
                   context,
@@ -488,6 +508,7 @@ class _ServiceTabsState extends State<ServiceTabs>
                   selectedLine: _selectedTrainLine,
                   onLineChanged: (val) =>
                       setState(() => _selectedTrainLine = val),
+                  serviceType: 2,
                 ),
                 _buildTabView(
                   context,
@@ -495,6 +516,7 @@ class _ServiceTabsState extends State<ServiceTabs>
                   selectedLine: _selectedBusLine,
                   onLineChanged: (val) =>
                       setState(() => _selectedBusLine = val),
+                  serviceType: 3,
                 ),
                 _buildTabView(
                   context,
@@ -502,6 +524,7 @@ class _ServiceTabsState extends State<ServiceTabs>
                   selectedLine: _selectedFerryLine,
                   onLineChanged: (val) =>
                       setState(() => _selectedFerryLine = val),
+                  serviceType: 4,
                 ),
               ],
             ),
