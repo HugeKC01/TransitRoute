@@ -61,6 +61,12 @@ class _MyAppState extends State<MyApp> {
   Color _accentColor = Colors.blue;
   ThemeMode _themeMode = ThemeMode.system;
   bool _isReady = false;
+  bool _showConsole = false;
+  void _handleTap() {
+    setState(() {
+      _showConsole = !_showConsole;
+    });
+  }
 
   @override
   void initState() {
@@ -138,23 +144,55 @@ class _MyAppState extends State<MyApp> {
               onThemeModeChanged: _saveThemeMode,
             )
           : Scaffold(
-              body: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CircularProgressIndicator(color: _accentColor),
-                    const SizedBox(height: 24),
-                    Text(
-                      'Loading Transit Data...',
-                      style: GoogleFonts.googleSans(
-                        textStyle: TextStyle(
-                          color: _accentColor,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
+              body: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _handleTap,
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircularProgressIndicator(color: _accentColor),
+                      const SizedBox(height: 24),
+                      Text(
+                        'Loading Transit Data...',
+                        style: GoogleFonts.googleSans(
+                          textStyle: TextStyle(
+                            color: _accentColor,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                      if (_showConsole)
+                        Container(
+                          margin: const EdgeInsets.only(top: 24),
+                          padding: const EdgeInsets.all(16),
+                          constraints: const BoxConstraints(maxWidth: 400, maxHeight: 200),
+                          decoration: BoxDecoration(
+                            color: Colors.black87,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: ValueListenableBuilder<List<String>>(
+                            valueListenable: gtfsSyncService.consoleLogs,
+                            builder: (context, logs, child) {
+                              return ListView.builder(
+                                itemCount: logs.length,
+                                itemBuilder: (context, index) {
+                                  return Text(
+                                    '> ${logs[index]}',
+                                    style: const TextStyle(
+                                      color: Colors.greenAccent,
+                                      fontFamily: 'monospace',
+                                      fontSize: 12,
+                                    ),
+                                  );
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -5424,7 +5462,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                 : null,
           ),
           if (!_isGtfsDataLoaded)
-            Container(
+            Material(
               color: theme.colorScheme.surface,
               child: Center(
                 child: Column(

@@ -17,8 +17,16 @@ class GtfsSyncService {
   bool _isInit = false;
   late final String _localGtfsPath;
 
+  final ValueNotifier<List<String>> consoleLogs = ValueNotifier([]);
+
+  void _log(String message) {
+    debugPrint(message);
+    consoleLogs.value = List.from(consoleLogs.value)..add(message);
+  }
+
   /// Call this when the app starts
   Future<void> initAndSync() async {
+    _log('Initializing GTFS sync service...');
     final docDir = await getApplicationDocumentsDirectory();
     _localGtfsPath = '${docDir.path}/$_gtfsLocalDir';
     _isInit = true;
@@ -26,7 +34,7 @@ class GtfsSyncService {
     try {
       await _checkForUpdates();
     } catch (e) {
-      debugPrint('Failed to sync GTFS data: $e');
+      _log('Failed to sync GTFS data: $e');
     }
   }
 
@@ -34,14 +42,15 @@ class GtfsSyncService {
     final prefs = await SharedPreferences.getInstance();
     final localVersion = prefs.getInt(_versionKey) ?? 0;
 
-    debugPrint('Current local GTFS version: $localVersion');
+    _log('Current local GTFS version: $localVersion');
 
     // Fetch latest version from Firebase Storage
+    _log('Fetching remote GTFS version...');
     final versionRef = _storage.ref().child(_gtfsJsonFilename);
     final versionData = await versionRef.getData();
 
     if (versionData == null) {
-      debugPrint('No GTFS version data found in Firebase.');
+      _log('No GTFS version data found in Firebase.');
       return;
     }
 
@@ -49,15 +58,15 @@ class GtfsSyncService {
     final jsonMap = json.decode(jsonStr) as Map<String, dynamic>;
     final remoteVersion = jsonMap['version'] as int? ?? 0;
 
-    debugPrint('Latest remote GTFS version: $remoteVersion');
+    _log('Latest remote GTFS version: $remoteVersion');
 
     if (remoteVersion > localVersion) {
-      debugPrint('New GTFS version detected. Downloading...');
+      _log('New GTFS version detected. Downloading...');
       await _downloadAndExtractGtfs();
       await prefs.setInt(_versionKey, remoteVersion);
-      debugPrint('Successfully updated GTFS data to version $remoteVersion');
+      _log('Successfully updated GTFS data to version $remoteVersion');
     } else {
-      debugPrint('GTFS data is up to date.');
+      _log('GTFS data is up to date.');
     }
   }
 

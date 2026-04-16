@@ -103,7 +103,7 @@ class AboutPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'TransitRoute is an independent prototype developed for an academic senior project. This app does not represent, nor is it affiliated with, endorsed by, or officially connected to the Thai government, the MRTA, the BMTA, or any other government agency. Information provided may be estimated or outdated; please consult official staff for accurate details.',
+                    'TransitRoute is an independent academic prototype developed solely as a student senior project. This application does not represent, nor is it affiliated with, endorsed by, sponsored by, or officially connected to the Thai government or any of the aforementioned government agencies or private transit corporations. The data in this application covers the Bangkok metropolitan area and may contain inaccuracies or incomplete information. Travel times, routes, and fare data are partially estimated and may be outdated due to real-world transit changes. Users should always verify routes, schedules, and fares with official transit staff and official government announcements for the most accurate information.',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.onErrorContainer,
                       height: 1.4,
@@ -144,10 +144,10 @@ class AboutPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'This application is a prototype developed as part of a senior project by students at King Mongkut\'s University of Technology Thonburi (KMUTT).\n\n'
+                    'TransitRoute is an independent prototype developed as part of a senior project by students at King Mongkut\'s University of Technology Thonburi (KMUTT). This app does not represent, nor is it affiliated with, endorsed by, or officially connected to the Thai government, or any government agency.\n\n'
                     'The data in this app covers only the Bangkok metropolitan area and may contain inaccuracies or incomplete information. For example, travel time and fare data are partially estimated and may be outdated. Users should verify with official staff for the most accurate information.\n\n'
                     '---\n\n'
-                    'แอปพลิเคชันนี้เป็นเพียงต้นแบบที่พัฒนาขึ้นเพื่อเป็นส่วนหนึ่งของโครงงานก่อนจบการศึกษาของนักศึกษามหาวิทยาลัยเทคโนโลยีพระจอมเกล้าธนบุรี (KMUTT)\n\n'
+                    'TransitRoute เป็นเพียงต้นแบบที่พัฒนาขึ้นเพื่อเป็นส่วนหนึ่งของโครงงานก่อนจบการศึกษาของนักศึกษามหาวิทยาลัยเทคโนโลยีพระจอมเกล้าธนบุรี (KMUTT) แอปนี้ไม่ได้เป็นตัวแทน และไม่มีความเกี่ยวข้อง ไม่ได้รับการรับรอง หรือมีความเชื่อมโยงอย่างเป็นทางการกับรัฐบาลไทยหรือหน่วยงานรัฐบาล\n\n'
                     'ข้อมูลในแอปนี้ครอบคลุมเฉพาะพื้นที่กรุงเทพมหานครเท่านั้น และอาจมีความคลาดเคลื่อนหรือไม่สมบูรณ์ของข้อมูล อาทิ ข้อมูลเวลาเดินทางและค่าโดยสารมีการใช้ประมาณเป็นบางส่วนอาจมีความคลาดเคลื่อนและไม่เป็นปัจจุบัน ผู้ใช้ควรสอบถามกับเจ้าหน้าที่อีกครั้งเพื่อความถูกต้องของข้อมูล',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
@@ -176,7 +176,7 @@ class AboutPage extends StatelessWidget {
                 const Padding(
                   padding: EdgeInsets.all(16.0),
                   child: Text(
-                    'Transit data (routes, stops, timetables) is sourced from public GTFS data and individual transit agency websites. We credit the local transit authorities and agencies for making their data available on the web.',
+                    'The transit data, route information, and fare calculations used in this application are sourced from public information provided by:',
                   ),
                 ),
                 Divider(height: 1, color: theme.colorScheme.outlineVariant),
@@ -211,27 +211,112 @@ class AboutPage extends StatelessWidget {
                   },
                 ),
                 Divider(height: 1, color: theme.colorScheme.outlineVariant),
-                const ListTile(
-                  title: Text('Chao Phraya Express Boat'),
-                  subtitle: Text(
+                ListTile(
+                  title: const Text('OpenStreetMap'),
+                  subtitle: const Text('https://www.openstreetmap.org/'),
+                  trailing: const Icon(Icons.open_in_browser),
+                  onTap: () async {
+                    final uri = Uri.parse('https://www.openstreetmap.org/');
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri);
+                    }
+                  },
+                ),
+                ListTile(
+                  title: const Text('Overpass Turbo'),
+                  subtitle: const Text('https://overpass-turbo.eu/'),
+                  trailing: const Icon(Icons.open_in_browser),
+                  onTap: () async {
+                    final uri = Uri.parse('https://overpass-turbo.eu/');
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri);
+                    }
+                  },
+                ),
+                ListTile(
+                  title: const Text('Chao Phraya Express Boat'),
+                  subtitle: const Text(
                     'https://www.chaophrayaexpressboat.com/chaophrayaexpressboat',
                   ),
+                  trailing: const Icon(Icons.open_in_browser),
+                  onTap: () async {
+                    final uri = Uri.parse(
+                      'https://www.chaophrayaexpressboat.com/chaophrayaexpressboat',
+                    );
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri);
+                    }
+                  },
                 ),
-                const ListTile(
-                  title: Text('BMTA'),
-                  subtitle: Text('https://www.bmta.co.th/bus-lines'),
+                ListTile(
+                  title: const Text('Bangkok Mass Transit Authority (BMTA)'),
+                  subtitle: const Text('https://www.bmta.co.th/bus-lines'),
+                  trailing: const Icon(Icons.open_in_browser),
+                  onTap: () async {
+                    final uri = Uri.parse('https://www.bmta.co.th/bus-lines');
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri);
+                    }
+                  },
                 ),
-                const ListTile(
-                  title: Text('BEM Metro'),
-                  subtitle: Text('https://metro.bemplc.co.th/?lang=th'),
+                ListTile(
+                  title: const Text('Bangkok Expressway and Metro Public Company Limited (BEM)'),
+                  subtitle: const Text('https://metro.bemplc.co.th/?lang=th'),
+                  trailing: const Icon(Icons.open_in_browser),
+                  onTap: () async {
+                    final uri = Uri.parse(
+                      'https://metro.bemplc.co.th/?lang=th',
+                    );
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri);
+                    }
+                  },
                 ),
-                const ListTile(
-                  title: Text('BTS SkyTrain'),
-                  subtitle: Text('https://www.bts.co.th/'),
+                ListTile(
+                  title: const Text('Bangkok Mass Transit System Public Company Limited (BTSC)'),
+                  subtitle: const Text('https://www.bts.co.th/'),
+                  trailing: const Icon(Icons.open_in_browser),
+                  onTap: () async {
+                    final uri = Uri.parse('https://www.bts.co.th/');
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri);
+                    }
+                  },
                 ),
-                const ListTile(
-                  title: Text('สำนักงานนโยบายและแผนการขนส่งและจราจร (สนข.) กระทรวงคมนาคม'),
-                  subtitle: Text('https://www.otp.go.th'),
+                ListTile(
+                  title: const Text('Mass Rapid Transit Authority of Thailand (MRTA)'),
+                  subtitle: const Text('https://www.mrta.co.th/'),
+                  trailing: const Icon(Icons.open_in_browser),
+                  onTap: () async {
+                    final uri = Uri.parse('https://www.mrta.co.th/');
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri);
+                    }
+                  },
+                ),
+                ListTile(
+                  title: const Text('Thai Smile Group'),
+                  subtitle: const Text('https://thaismilegroup.com/'),
+                  trailing: const Icon(Icons.open_in_browser),
+                  onTap: () async {
+                    final uri = Uri.parse('https://thaismilegroup.com/');
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri);
+                    }
+                  },
+                ),
+                ListTile(
+                  title: const Text(
+                    'Office of Transport and Traffic Policy and Planning (OTP), Ministry of Transport',
+                  ),
+                  subtitle: const Text('https://www.otp.go.th'),
+                  trailing: const Icon(Icons.open_in_browser),
+                  onTap: () async {
+                    final uri = Uri.parse('https://www.otp.go.th');
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri);
+                    }
+                  },
                 ),
               ],
             ),
@@ -275,6 +360,43 @@ class AboutPage extends StatelessWidget {
           ),
           const SizedBox(height: 24),
 
+          // OpenStreetMap License
+          Text(
+            'OpenStreetMap License',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Text(
+                    'OpenStreetMap® is open data, licensed under the Open Data Commons Open Database License (ODbL) by the OpenStreetMap Foundation (OSMF).',
+                  ),
+                ),
+                Divider(height: 1, color: theme.colorScheme.outlineVariant),
+                ListTile(
+                  leading: const Icon(Icons.open_in_browser),
+                  title: const Text('OpenStreetMap Copyright and License'),
+                  subtitle: const Text('https://www.openstreetmap.org/copyright'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () async {
+                    final uri = Uri.parse('https://www.openstreetmap.org/copyright');
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri);
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
           // Asset Credits
           Text(
             'Assets & Design',
@@ -288,6 +410,29 @@ class AboutPage extends StatelessWidget {
               padding: EdgeInsets.all(16.0),
               child: Text(
                 'Icons and UI elements use Material Design, Cupertino Icons, and custom SVG assets. Map imagery and tiles are rendered via Flutter Map and OpenStreetMap.',
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Trademarks & Image Credits
+          Text(
+            'Trademarks & Image Credits',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Text(
+                'The transit system logos and icons used within this application are registered trademarks of their respective owners:\n'
+                '• MRT: Mass Rapid Transit Authority of Thailand (MRTA)\n'
+                '• BTS: Bangkok Mass Transit System Public Company Limited (BTSC)\n'
+                '• SRT Red Lines & ARL: State Railway of Thailand (SRT)\n'
+                '• Bangkok BRT: Bangkok Metropolitan Administration (BMA)\n\n'
+                'These logo images were sourced from Wikimedia Commons (Public Domain) and are used strictly for nominative identification purposes to assist users in navigating the transit systems.',
               ),
             ),
           ),
