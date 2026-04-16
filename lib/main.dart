@@ -3424,6 +3424,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                 children: [
                   Builder(
                     builder: (context) {
+                      bool isBusNotBRT = serviceType == 3 &&
+                          !(stop.stopId.startsWith('BRT') || lineName.toUpperCase().contains('BRT'));
                       String? routeIcon;
                       if (serviceType == 1 || lineName.toUpperCase() == 'BRT') {
                         routeIcon = _getRouteIcon(lineName);
@@ -3448,7 +3450,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                                 height: 24,
                               ),
                             ),
-                            if (stop.code != null && stop.code!.isNotEmpty) ...[
+                            if (!isBusNotBRT && stop.code != null && stop.code!.isNotEmpty) ...[
                               const SizedBox(width: 8),
                               Container(
                                 padding: const EdgeInsets.symmetric(
@@ -3493,7 +3495,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                                   : Colors.white,
                               size: 16,
                             ),
-                            if (stop.code != null && stop.code!.isNotEmpty) ...[
+                            if (!isBusNotBRT && stop.code != null && stop.code!.isNotEmpty) ...[
                               const SizedBox(width: 6),
                               Text(
                                 stop.code!,
@@ -4498,10 +4500,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         return AlertDialog(
           title: const Text('Welcome / ยินดีต้อนรับ'),
           content: const Text(
-            'This application is a prototype developed as part of a senior project by students at King Mongkut\'s University of Technology Thonburi (KMUTT).\n\n'
+            'TransitRoute is an independent prototype developed as part of a senior project by students at King Mongkut\'s University of Technology Thonburi (KMUTT). This app does not represent, nor is it affiliated with, endorsed by, or officially connected to the Thai government, or any government agency.\n\n'
             'The data in this app covers only the Bangkok metropolitan area and may contain inaccuracies or incomplete information. For example, travel time and fare data are partially estimated and may be outdated. Users should verify with official staff for the most accurate information.\n\n'
             '---\n\n'
-            'แอปพลิเคชันนี้เป็นเพียงต้นแบบที่พัฒนาขึ้นเพื่อเป็นส่วนหนึ่งของโครงงานก่อนจบการศึกษาของนักศึกษามหาวิทยาลัยเทคโนโลยีพระจอมเกล้าธนบุรี (KMUTT)\n\n'
+            'TransitRoute เป็นเพียงต้นแบบที่พัฒนาขึ้นเพื่อเป็นส่วนหนึ่งของโครงงานก่อนจบการศึกษาของนักศึกษามหาวิทยาลัยเทคโนโลยีพระจอมเกล้าธนบุรี (KMUTT) แอปนี้ไม่ได้เป็นตัวแทน และไม่มีความเกี่ยวข้อง ไม่ได้รับการรับรอง หรือมีความเชื่อมโยงอย่างเป็นทางการกับรัฐบาลไทยหรือหน่วยงานรัฐบาล\n\n'
             'ข้อมูลในแอปนี้ครอบคลุมเฉพาะพื้นที่กรุงเทพมหานครเท่านั้น และอาจมีความคลาดเคลื่อนหรือไม่สมบูรณ์ของข้อมูล อาทิ ข้อมูลเวลาเดินทางและค่าโดยสารมีการใช้ประมาณเป็นบางส่วนอาจมีความคลาดเคลื่อนและไม่เป็นปัจจุบัน ผู้ใช้ควรสอบถามกับเจ้าหน้าที่อีกครั้งเพื่อความถูกต้องของข้อมูล',
           ),
           actions: <Widget>[

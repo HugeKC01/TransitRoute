@@ -229,6 +229,10 @@ class AboutPage extends StatelessWidget {
                   title: Text('BTS SkyTrain'),
                   subtitle: Text('https://www.bts.co.th/'),
                 ),
+                const ListTile(
+                  title: Text('สำนักงานนโยบายและแผนการขนส่งและจราจร (สนข.) กระทรวงคมนาคม'),
+                  subtitle: Text('https://www.otp.go.th'),
+                ),
               ],
             ),
           ),

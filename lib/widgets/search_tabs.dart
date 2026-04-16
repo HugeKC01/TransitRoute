@@ -141,6 +141,8 @@ class _ServiceTabsState extends State<ServiceTabs>
                 children: [
                   Builder(
                     builder: (context) {
+                      bool isBusNotBRT = serviceType == 3 &&
+                          !(stop.stopId.startsWith('BRT') || lineName.contains('BRT'));
                       String? routeIcon;
                       if (serviceType == 1 && widget.routeIconByName != null) {
                         routeIcon = widget.routeIconByName!(lineName);
@@ -166,7 +168,7 @@ class _ServiceTabsState extends State<ServiceTabs>
                                 height: 24,
                               ),
                             ),
-                            if (stop.code != null && stop.code!.isNotEmpty) ...[
+                            if (!isBusNotBRT && stop.code != null && stop.code!.isNotEmpty) ...[
                               const SizedBox(width: 8),
                               Container(
                                 padding: const EdgeInsets.symmetric(
@@ -226,7 +228,7 @@ class _ServiceTabsState extends State<ServiceTabs>
                                   : Colors.white,
                               size: 16,
                             ),
-                            if (stop.code != null && stop.code!.isNotEmpty) ...[
+                            if (!isBusNotBRT && stop.code != null && stop.code!.isNotEmpty) ...[
                               const SizedBox(width: 4),
                               Text(
                                 stop.code!,
