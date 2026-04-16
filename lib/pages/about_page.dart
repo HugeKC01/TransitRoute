@@ -4,6 +4,19 @@ import 'package:url_launcher/url_launcher.dart';
 class AboutPage extends StatelessWidget {
   const AboutPage({super.key});
 
+  // Helper method to handle launching URLs cleanly
+  Future<void> _launchWebUrl(String urlString) async {
+    final uri = Uri.parse(urlString);
+    try {
+      // LaunchMode.externalApplication ensures it opens in Chrome/Safari
+      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        debugPrint('Could not launch $urlString');
+      }
+    } catch (e) {
+      debugPrint('Error launching URL: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -181,142 +194,71 @@ class AboutPage extends StatelessWidget {
                 ),
                 Divider(height: 1, color: theme.colorScheme.outlineVariant),
                 ListTile(
-                  title: const Text('Mobility Database (GTFS)'),
-                  subtitle: const Text(
-                    'https://mobilitydatabase.org/feeds/gtfs/mdb-1831',
-                  ),
+                  title: const Text('Mobility Database'),
+                  subtitle: const Text('https://mobilitydatabase.org/feeds/gtfs/mdb-1831'),
                   trailing: const Icon(Icons.open_in_browser),
-                  onTap: () async {
-                    final uri = Uri.parse(
-                      'https://mobilitydatabase.org/feeds/gtfs/mdb-1831',
-                    );
-                    if (await canLaunchUrl(uri)) {
-                      await launchUrl(uri);
-                    }
-                  },
+                  onTap: () => _launchWebUrl('https://mobilitydatabase.org/feeds/gtfs/mdb-1831'),
                 ),
                 ListTile(
                   title: const Text('License: CC-BY-4.0'),
-                  subtitle: const Text(
-                    'https://creativecommons.org/licenses/by/4.0/',
-                  ),
+                  subtitle: const Text('https://creativecommons.org/licenses/by/4.0/'),
                   trailing: const Icon(Icons.open_in_browser),
-                  onTap: () async {
-                    final uri = Uri.parse(
-                      'https://creativecommons.org/licenses/by/4.0/',
-                    );
-                    if (await canLaunchUrl(uri)) {
-                      await launchUrl(uri);
-                    }
-                  },
+                  onTap: () => _launchWebUrl('https://creativecommons.org/licenses/by/4.0/'),
                 ),
                 Divider(height: 1, color: theme.colorScheme.outlineVariant),
                 ListTile(
                   title: const Text('OpenStreetMap'),
                   subtitle: const Text('https://www.openstreetmap.org/'),
                   trailing: const Icon(Icons.open_in_browser),
-                  onTap: () async {
-                    final uri = Uri.parse('https://www.openstreetmap.org/');
-                    if (await canLaunchUrl(uri)) {
-                      await launchUrl(uri);
-                    }
-                  },
+                  onTap: () => _launchWebUrl('https://www.openstreetmap.org/'),
                 ),
                 ListTile(
                   title: const Text('Overpass Turbo'),
                   subtitle: const Text('https://overpass-turbo.eu/'),
                   trailing: const Icon(Icons.open_in_browser),
-                  onTap: () async {
-                    final uri = Uri.parse('https://overpass-turbo.eu/');
-                    if (await canLaunchUrl(uri)) {
-                      await launchUrl(uri);
-                    }
-                  },
+                  onTap: () => _launchWebUrl('https://overpass-turbo.eu/'),
                 ),
                 ListTile(
                   title: const Text('Chao Phraya Express Boat'),
-                  subtitle: const Text(
-                    'https://www.chaophrayaexpressboat.com/chaophrayaexpressboat',
-                  ),
+                  subtitle: const Text('https://www.chaophrayaexpressboat.com/chaophrayaexpressboat'),
                   trailing: const Icon(Icons.open_in_browser),
-                  onTap: () async {
-                    final uri = Uri.parse(
-                      'https://www.chaophrayaexpressboat.com/chaophrayaexpressboat',
-                    );
-                    if (await canLaunchUrl(uri)) {
-                      await launchUrl(uri);
-                    }
-                  },
+                  onTap: () => _launchWebUrl('https://www.chaophrayaexpressboat.com/chaophrayaexpressboat'),
                 ),
                 ListTile(
                   title: const Text('Bangkok Mass Transit Authority (BMTA)'),
                   subtitle: const Text('https://www.bmta.co.th/bus-lines'),
                   trailing: const Icon(Icons.open_in_browser),
-                  onTap: () async {
-                    final uri = Uri.parse('https://www.bmta.co.th/bus-lines');
-                    if (await canLaunchUrl(uri)) {
-                      await launchUrl(uri);
-                    }
-                  },
+                  onTap: () => _launchWebUrl('https://www.bmta.co.th/bus-lines'),
                 ),
                 ListTile(
                   title: const Text('Bangkok Expressway and Metro Public Company Limited (BEM)'),
                   subtitle: const Text('https://metro.bemplc.co.th/?lang=th'),
                   trailing: const Icon(Icons.open_in_browser),
-                  onTap: () async {
-                    final uri = Uri.parse(
-                      'https://metro.bemplc.co.th/?lang=th',
-                    );
-                    if (await canLaunchUrl(uri)) {
-                      await launchUrl(uri);
-                    }
-                  },
+                  onTap: () => _launchWebUrl('https://metro.bemplc.co.th/?lang=th'),
                 ),
                 ListTile(
                   title: const Text('Bangkok Mass Transit System Public Company Limited (BTSC)'),
                   subtitle: const Text('https://www.bts.co.th/'),
                   trailing: const Icon(Icons.open_in_browser),
-                  onTap: () async {
-                    final uri = Uri.parse('https://www.bts.co.th/');
-                    if (await canLaunchUrl(uri)) {
-                      await launchUrl(uri);
-                    }
-                  },
+                  onTap: () => _launchWebUrl('https://www.bts.co.th/'),
                 ),
                 ListTile(
                   title: const Text('Mass Rapid Transit Authority of Thailand (MRTA)'),
                   subtitle: const Text('https://www.mrta.co.th/'),
                   trailing: const Icon(Icons.open_in_browser),
-                  onTap: () async {
-                    final uri = Uri.parse('https://www.mrta.co.th/');
-                    if (await canLaunchUrl(uri)) {
-                      await launchUrl(uri);
-                    }
-                  },
+                  onTap: () => _launchWebUrl('https://www.mrta.co.th/'),
                 ),
                 ListTile(
                   title: const Text('Thai Smile Group'),
                   subtitle: const Text('https://thaismilegroup.com/'),
                   trailing: const Icon(Icons.open_in_browser),
-                  onTap: () async {
-                    final uri = Uri.parse('https://thaismilegroup.com/');
-                    if (await canLaunchUrl(uri)) {
-                      await launchUrl(uri);
-                    }
-                  },
+                  onTap: () => _launchWebUrl('https://thaismilegroup.com/'),
                 ),
                 ListTile(
-                  title: const Text(
-                    'Office of Transport and Traffic Policy and Planning (OTP), Ministry of Transport',
-                  ),
+                  title: const Text('Office of Transport and Traffic Policy and Planning (OTP), Ministry of Transport'),
                   subtitle: const Text('https://www.otp.go.th'),
                   trailing: const Icon(Icons.open_in_browser),
-                  onTap: () async {
-                    final uri = Uri.parse('https://www.otp.go.th');
-                    if (await canLaunchUrl(uri)) {
-                      await launchUrl(uri);
-                    }
-                  },
+                  onTap: () => _launchWebUrl('https://www.otp.go.th'),
                 ),
               ],
             ),
@@ -348,12 +290,7 @@ class AboutPage extends StatelessWidget {
                   title: const Text('GTFS About Page'),
                   subtitle: const Text('https://gtfs.org/about/'),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () async {
-                    final uri = Uri.parse('https://gtfs.org/about/');
-                    if (await canLaunchUrl(uri)) {
-                      await launchUrl(uri);
-                    }
-                  },
+                  onTap: () => _launchWebUrl('https://gtfs.org/about/'),
                 ),
               ],
             ),
@@ -385,12 +322,7 @@ class AboutPage extends StatelessWidget {
                   title: const Text('OpenStreetMap Copyright and License'),
                   subtitle: const Text('https://www.openstreetmap.org/copyright'),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () async {
-                    final uri = Uri.parse('https://www.openstreetmap.org/copyright');
-                    if (await canLaunchUrl(uri)) {
-                      await launchUrl(uri);
-                    }
-                  },
+                  onTap: () => _launchWebUrl('https://www.openstreetmap.org/copyright'),
                 ),
               ],
             ),
