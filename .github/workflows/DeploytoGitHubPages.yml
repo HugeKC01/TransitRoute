@@ -5,6 +5,9 @@ on:
   push:
     branches:
       - main # Note: Change to 'main' if your default branch has been renamed
+      
+permissions:
+  contents: write
 
 jobs:
   deploy:
