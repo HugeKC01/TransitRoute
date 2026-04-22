@@ -25,15 +25,9 @@ class DefaultFirebaseOptions {
       case TargetPlatform.iOS:
         return ios;
       case TargetPlatform.macOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for macos - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return macos;
       case TargetPlatform.windows:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for windows - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return windows;
       case TargetPlatform.linux:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for linux - '
@@ -58,7 +52,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyClLkFzPrn-rSrKkhjewYV2Ebbq84c5Vb4',
-    appId: '1:657797516641:android:b090d6581e1c8ced7b8920',
+    appId: '1:657797516641:android:ac2e10e7d658b87e7b8920',
     messagingSenderId: '657797516641',
     projectId: 'route-bkk',
     storageBucket: 'route-bkk.firebasestorage.app',
@@ -72,4 +66,24 @@ class DefaultFirebaseOptions {
     storageBucket: 'route-bkk.firebasestorage.app',
     iosBundleId: 'com.hugekc.routetransit',
   );
+
+  static const FirebaseOptions macos = FirebaseOptions(
+    apiKey: 'AIzaSyAJlBl-72kyiAdZkdZLpv8Cn5Y7VEfCsLQ',
+    appId: '1:657797516641:ios:76405ac2941465347b8920',
+    messagingSenderId: '657797516641',
+    projectId: 'route-bkk',
+    storageBucket: 'route-bkk.firebasestorage.app',
+    iosBundleId: 'com.example.route',
+  );
+
+  static const FirebaseOptions windows = FirebaseOptions(
+    apiKey: 'AIzaSyBSVz-7rcgfjL3M9-1qw3HHYocMT1fUOM8',
+    appId: '1:657797516641:web:466eac15efe09b5c7b8920',
+    messagingSenderId: '657797516641',
+    projectId: 'route-bkk',
+    authDomain: 'route-bkk.firebaseapp.com',
+    storageBucket: 'route-bkk.firebasestorage.app',
+    measurementId: 'G-7TREV3CNY4',
+  );
+
 }
