@@ -4,36 +4,36 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - master
+      - main # Note: Change to 'main' if your default branch has been renamed
 
 jobs:
   deploy:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest # CRITICAL FIX: ubuntu-18.04 is deprecated
+
     steps:
-      - uses: actions/checkout@v2
-
-      - uses: subosito/flutter-action@v1
+      - uses: actions/checkout@v4 # Updated from v2 to avoid Node.js warnings
+      
+      - uses: subosito/flutter-action@v2 # Updated from v1
         with:
-          flutter-version: '3.3.x' 
+          flutter-version: '3.3.x' # Kept your version, but consider updating if your app supports it
           channel: 'stable'
-
+          
       - name: Download Dependencies
         run: flutter pub get
-
+        
       - name: Build
-        run: flutter build web --release  --dart2js-optimization O4
-
-      - run: git config user.name github-actions
+        run: flutter build web --release --dart2js-optimization O4
+        
+      - name: Configure Git
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
         shell: bash
         
-      - run: git config user.email github-actions@github.com
-        shell: bash
-        
-      - run: git --work-tree build/web add --all
-        shell: bash
-        
-      - run: git commit -m "Automatic deployment by github-actions"
-        shell: bash
-        
-      - run: git push origin HEAD:deploy-github-web-page --force
+      - name: Commit and Push to Deployment Branch
+        run: |
+          git --work-tree build/web add --all
+          git commit -m "Automatic deployment by github-actions"
+          # Force pushing the built artifacts to a specific branch within this same repository
+          git push origin HEAD:deploy-github-web-page --force
         shell: bash
