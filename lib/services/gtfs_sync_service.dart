@@ -1,6 +1,6 @@
-import 'dart:io';
+import 'dart:io' as io; // Prefixing to avoid web conflicts
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart'; // Gives us kIsWeb
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -13,9 +13,8 @@ class GtfsSyncService {
   static const _gtfsZipFilename = 'gtfs_data_latest.zip';
   static const _gtfsLocalDir = 'gtfs_data';
 
-  final FirebaseStorage _storage = FirebaseStorage.instance;
   bool _isInit = false;
-  late final String _localGtfsPath;
+  String? _localGtfsPath;
 
   final ValueNotifier<List<String>> consoleLogs = ValueNotifier([]);
 
@@ -27,11 +26,19 @@ class GtfsSyncService {
   /// Call this when the app starts
   Future<void> initAndSync() async {
     _log('Initializing GTFS sync service...');
-    final docDir = await getApplicationDocumentsDirectory();
-    _localGtfsPath = '${docDir.path}/$_gtfsLocalDir';
-    _isInit = true;
+    
+    // CRITICAL FIX: Bypass all local file system logic if running on the web
+    if (kIsWeb) {
+      _log('Running on Web. Local caching disabled. Using bundled assets.');
+      _isInit = true;
+      return; 
+    }
 
     try {
+      final docDir = await getApplicationDocumentsDirectory();
+      _localGtfsPath = '${docDir.path}/$_gtfsLocalDir';
+      _isInit = true;
+      
       await _checkForUpdates();
     } catch (e) {
       _log('Failed to sync GTFS data: $e');
@@ -39,14 +46,15 @@ class GtfsSyncService {
   }
 
   Future<void> _checkForUpdates() async {
+    if (kIsWeb) return; // Safety check
+
     final prefs = await SharedPreferences.getInstance();
     final localVersion = prefs.getInt(_versionKey) ?? 0;
 
     _log('Current local GTFS version: $localVersion');
 
-    // Fetch latest version from Firebase Storage
     _log('Fetching remote GTFS version...');
-    final versionRef = _storage.ref().child(_gtfsJsonFilename);
+    final versionRef = FirebaseStorage.instance.ref().child(_gtfsJsonFilename);
     final versionData = await versionRef.getData();
 
     if (versionData == null) {
@@ -70,24 +78,22 @@ class GtfsSyncService {
     }
   }
 
-  /// Get the current local GTFS version number
   Future<int> getLocalVersion() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getInt(_versionKey) ?? 0;
   }
 
-  /// Manually trigger an update check and return a status message
   Future<String> manualUpdateCheck() async {
+    if (kIsWeb) return 'Web version automatically uses the latest deployed data.';
+
     try {
       final prefs = await SharedPreferences.getInstance();
       final localVersion = prefs.getInt(_versionKey) ?? 0;
 
-      final versionRef = _storage.ref().child(_gtfsJsonFilename);
+      final versionRef = FirebaseStorage.instance.ref().child(_gtfsJsonFilename);
       final versionData = await versionRef.getData();
 
-      if (versionData == null) {
-        return 'No remote version found.';
-      }
+      if (versionData == null) return 'No remote version found.';
 
       final jsonStr = utf8.decode(versionData);
       final jsonMap = json.decode(jsonStr) as Map<String, dynamic>;
@@ -106,34 +112,32 @@ class GtfsSyncService {
   }
 
   Future<void> _downloadAndExtractGtfs() async {
-    final zipRef = _storage.ref().child(_gtfsZipFilename);
+    final zipRef = FirebaseStorage.instance.ref().child(_gtfsZipFilename);
 
-    // Create temporary download path
     final tempDir = await getTemporaryDirectory();
-    final tempZipFile = File('${tempDir.path}/$_gtfsZipFilename');
+    final tempZipFile = io.File('${tempDir.path}/$_gtfsZipFilename');
 
-    // Download the file
     await zipRef.writeToFile(tempZipFile);
 
-    // Create or clear the local target directory
-    final targetDir = Directory(_localGtfsPath);
+    final targetDir = io.Directory(_localGtfsPath!);
     if (await targetDir.exists()) {
       await targetDir.delete(recursive: true);
     }
     await targetDir.create(recursive: true);
 
-    // Extract the zip to the documents directory using memory efficient extract
     await extractFileToDisk(tempZipFile.path, targetDir.path);
-
-    // Clean up
     await tempZipFile.delete();
   }
 
   /// Helper to get file content (checks downloaded files first, falls back to assets)
   Future<String> getGtfsFile(String filename) async {
-    // Strip asset folder prefix if passed in accidentally
     if (filename.startsWith('assets/gtfs_data/')) {
       filename = filename.replaceFirst('assets/gtfs_data/', '');
+    }
+
+    // Always use rootBundle for web
+    if (kIsWeb) {
+      return await rootBundle.loadString('assets/gtfs_data/$filename');
     }
 
     if (!_isInit) {
@@ -141,16 +145,13 @@ class GtfsSyncService {
       _localGtfsPath = '${docDir.path}/$_gtfsLocalDir';
     }
 
-    final localFile = File('$_localGtfsPath/$filename');
+    final localFile = io.File('$_localGtfsPath/$filename');
     if (await localFile.exists()) {
-      // Use locally downloaded file
       return await localFile.readAsString();
     } else {
-      // Fallback to bundled asset
       return await rootBundle.loadString('assets/gtfs_data/$filename');
     }
   }
 }
 
-// Global instance for convenience
 final gtfsSyncService = GtfsSyncService();
