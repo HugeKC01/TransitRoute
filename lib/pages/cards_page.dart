@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class TransitCard {
   final String name;
@@ -30,18 +31,14 @@ class _CardsPageState extends State<CardsPage> {
       type: 'BTS / BRT / Yellow / Pink',
       color: Colors.orange,
       iconInfo: Icons.directions_transit,
-      promotions: ['Monthly Trip Pass', 'One Day Pass'],
+      promotions: ['-'],
     ),
     const TransitCard(
       name: 'MRT Card',
       type: 'MRT Blue / MRT Purple',
       color: Colors.blue,
       iconInfo: Icons.subway,
-      promotions: [
-        'Line Fare Discount',
-        'Transfer Discount: Yellow (Lat Phrao) to Blue - 14 Baht',
-        'Transfer Discount: Blue to Yellow (Lat Phrao) - 15 Baht',
-      ],
+      promotions: ['-'],
     ),
     const TransitCard(
       name: 'EMV Contactless',
@@ -59,13 +56,41 @@ class _CardsPageState extends State<CardsPage> {
 
   final List<TransitCard> myCards = [];
 
+  @override
+  void initState() {
+    super.initState();
+    _loadCards();
+  }
+
+  Future<void> _loadCards() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedCardNames = prefs.getStringList('my_cards') ?? [];
+
+    setState(() {
+      myCards.clear();
+      for (final name in savedCardNames) {
+        final card = allAvailableCards.where((c) => c.name == name).firstOrNull;
+        if (card != null) {
+          myCards.add(card);
+        }
+      }
+    });
+  }
+
+  Future<void> _saveCards() async {
+    final prefs = await SharedPreferences.getInstance();
+    final cardNames = myCards.map((c) => c.name).toList();
+    await prefs.setStringList('my_cards', cardNames);
+  }
+
   void _addCard(TransitCard card) {
     if (!myCards.contains(card)) {
       setState(() {
         myCards.add(card);
       });
+      _saveCards();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('\${card.name} added to your cards!')),
+        SnackBar(content: Text('${card.name} added to your cards!')),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -78,8 +103,9 @@ class _CardsPageState extends State<CardsPage> {
     setState(() {
       myCards.remove(card);
     });
+    _saveCards();
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('\${card.name} removed from your cards.')),
+      SnackBar(content: Text('${card.name} removed from your cards.')),
     );
   }
 

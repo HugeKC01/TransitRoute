@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter_svg/flutter_svg.dart';
 import 'dart:convert';
 import 'package:route/services/gtfs_models.dart' as gtfs;
+import 'package:route/services/terminal_loader.dart';
 import 'package:route/services/route_asset_loader.dart';
 import 'package:route/pages/transport_lines_details_page.dart';
 
@@ -15,14 +17,90 @@ class TransportLinesPage extends StatefulWidget {
 class _TransportLinesPageState extends State<TransportLinesPage> {
   List<gtfs.Route> routes = [];
   Map<String, gtfs.Agency> agencies = {};
+  Map<String, String> routeTerminals = {};
   bool _loading = true;
   String _searchQuery = '';
   String _selectedCategory = 'All';
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _loadRoutes();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<List<gtfs.Route>> _loadBusRoutesFromStops() async {
+    try {
+      final content = await rootBundle.loadString(
+        'assets/gtfs_data/bus_route_stop.txt',
+      );
+      final lines = const LineSplitter().convert(content);
+      if (lines.length <= 1) return [];
+
+      final Map<String, gtfs.Route> busR = {};
+      for (int i = 1; i < lines.length; i++) {
+        final row = _parseCsvLine(lines[i]);
+        if (row.length > 5) {
+          final rShortName = row[1].trim();
+          if (rShortName.isEmpty) continue;
+          final routeId = rShortName.split(' ')[0].trim();
+          final desc = row[2].trim();
+          final typeId = row[3].trim().toLowerCase();
+          final agencyId = row[4].trim();
+
+          String color = '0000FF';
+          if (typeId.contains('air')) {
+            color = '0068b3';
+          } else if (typeId.contains('ngv')) {
+            color = '1752b0';
+          } else {
+            color = 'ff0000';
+          }
+
+          if (!busR.containsKey(routeId)) {
+            busR[routeId] = gtfs.Route(
+              routeId: routeId,
+              agencyId: agencyId,
+              shortName: rShortName,
+              longName: desc,
+              type: '3',
+              color: color,
+              textColor: 'FFFFFF',
+              routeIcon: null,
+              linePrefixes: [],
+            );
+            // Pre-fill routeTerminals
+            routeTerminals[routeId] = desc;
+          } else {
+            // Append to description if it's a different direction
+            final existingDesc = busR[routeId]!.longName;
+            if (!existingDesc.contains(desc.split('-')[0].trim())) {
+              busR[routeId] = gtfs.Route(
+                routeId: busR[routeId]!.routeId,
+                agencyId: busR[routeId]!.agencyId,
+                shortName: busR[routeId]!.shortName,
+                longName: '$existingDesc / $desc',
+                type: busR[routeId]!.type,
+                color: busR[routeId]!.color,
+                textColor: busR[routeId]!.textColor,
+                routeIcon: busR[routeId]!.routeIcon,
+                linePrefixes: busR[routeId]!.linePrefixes,
+              );
+              routeTerminals[routeId] = busR[routeId]!.longName;
+            }
+          }
+        }
+      }
+      return busR.values.toList();
+    } catch (_) {
+      return [];
+    }
   }
 
   Future<void> _loadRoutes() async {
@@ -36,15 +114,26 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
       final ferryRoutes = await RouteAssetLoader.loadRoutes(
         'assets/gtfs_data/ferry_route.txt',
       );
+      final busRoutes = await RouteAssetLoader.loadRoutes(
+        'assets/gtfs_data/bus_route.txt',
+      );
+      final extraBusRoutes = await _loadBusRoutesFromStops();
 
       loadedRoutes.addAll(mainRoutes);
       loadedRoutes.addAll(ferryRoutes);
+      loadedRoutes.addAll(busRoutes);
+      loadedRoutes.addAll(extraBusRoutes);
 
       final agencyContent = await agencyFuture;
       final loadedAgencies = _parseAgencies(agencyContent);
+
+      final terminals = await TerminalLoader.loadAllTerminals();
+
       setState(() {
         routes = loadedRoutes;
         agencies = loadedAgencies;
+        // Merge so we don't overwrite the bus terminals we just populated
+        routeTerminals.addAll(terminals);
         _loading = false;
       });
     } catch (e) {
@@ -136,6 +225,7 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
     final filteredRoutes = _getFilteredRoutes();
     final grouped = _groupRoutes(filteredRoutes);
     final activeCategories = ['All'] + _getAvailableCategories();
+    final groupedWidgets = _buildGroupedRouteWidgets(theme, grouped);
 
     return Scaffold(
       body: CustomScrollView(
@@ -155,9 +245,26 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
                       vertical: 8.0,
                     ),
                     child: TextField(
+                      controller: _searchController,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      keyboardType: TextInputType.text,
+                      autofillHints: const [],
+                      textInputAction: TextInputAction.search,
                       decoration: InputDecoration(
                         hintText: 'Search lines, agencies, or codes...',
                         prefixIcon: const Icon(Icons.search),
+                        suffixIcon: _searchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.close),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() {
+                                    _searchQuery = '';
+                                  });
+                                },
+                              )
+                            : null,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
                           borderSide: BorderSide.none,
@@ -181,11 +288,20 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
                     ),
                     child: Row(
                       children: activeCategories.map((cat) {
+                        final isSelected = _selectedCategory == cat;
                         return Padding(
                           padding: const EdgeInsets.only(right: 8.0),
                           child: ChoiceChip(
+                            showCheckmark: false,
+                            avatar: Icon(
+                              cat == 'All' ? Icons.apps : _iconForCategory(cat),
+                              size: 18,
+                              color: isSelected
+                                  ? theme.colorScheme.onSecondaryContainer
+                                  : theme.colorScheme.onSurfaceVariant,
+                            ),
                             label: Text(cat),
-                            selected: _selectedCategory == cat,
+                            selected: isSelected,
                             onSelected: (selected) {
                               if (selected) {
                                 setState(() {
@@ -234,8 +350,9 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
                 right: 16,
                 top: 8,
               ),
-              sliver: SliverList.list(
-                children: _buildGroupedRouteWidgets(theme, grouped),
+              sliver: SliverList.builder(
+                itemCount: groupedWidgets.length,
+                itemBuilder: (context, index) => groupedWidgets[index],
               ),
             ),
         ],
@@ -357,22 +474,18 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
       route.color,
       theme.colorScheme.primaryContainer,
     );
-    final routeTextColor = _colorFromHexOr(
-      route.textColor,
-      theme.colorScheme.onPrimaryContainer,
-    );
 
-    return Card(
-      elevation: 0,
+    return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
         ),
       ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(24),
         onTap: () {
           final agency = agencies[route.agencyId];
           Navigator.push(
@@ -389,28 +502,32 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
-                width: 56,
-                height: 56,
+                width: 52,
+                height: 52,
                 decoration: BoxDecoration(
-                  color: routeColor,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: routeColor.withValues(alpha: 0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
+                  color: theme.brightness == Brightness.dark
+                      ? Colors.white
+                      : routeColor.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: routeColor, width: 2),
                 ),
                 child: Center(
-                  child: Text(
-                    route.shortName.isNotEmpty ? route.shortName : "—",
-                    style: TextStyle(
-                      color: routeTextColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: route.shortName.length > 3 ? 14 : 18,
-                    ),
-                  ),
+                  child: route.routeIcon != null && route.routeIcon!.isNotEmpty
+                      ? SizedBox(
+                          width: 28,
+                          height: 28,
+                          child: FittedBox(
+                            fit: BoxFit.contain,
+                            child: SvgPicture.asset(route.routeIcon!),
+                          ),
+                        )
+                      : Icon(
+                          _iconForCategory(_transportCategory(route)),
+                          size: 28,
+                          color: theme.brightness == Brightness.dark
+                              ? routeColor
+                              : routeColor,
+                        ),
                 ),
               ),
               const SizedBox(width: 16),
@@ -418,40 +535,57 @@ class _TransportLinesPageState extends State<TransportLinesPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      route.longName,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    if (route.linePrefixes.isNotEmpty)
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 4,
-                        children: route.linePrefixes
-                            .where((p) => p.isNotEmpty)
-                            .map(
-                              (p) => Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: theme.colorScheme.secondaryContainer,
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  p,
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    color:
-                                        theme.colorScheme.onSecondaryContainer,
-                                  ),
+                    Builder(
+                      builder: (context) {
+                        final isBusNotBRT =
+                            _transportCategory(route) == 'Bus' &&
+                            route.routeId != 'BRT';
+                        final heading = isBusNotBRT
+                            ? route.shortName
+                            : route.longName;
+                        final String? terminalText =
+                            routeTerminals[route.routeId];
+                        String? subHeading;
+                        if (isBusNotBRT) {
+                          subHeading = terminalText?.isNotEmpty == true
+                              ? terminalText
+                              : route.longName;
+                        } else {
+                          subHeading = terminalText?.isNotEmpty == true
+                              ? terminalText
+                              : (route.shortName != route.longName
+                                    ? route.shortName
+                                    : null);
+                        }
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              heading.isNotEmpty ? heading : route.routeId,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            if (subHeading != null &&
+                                subHeading.isNotEmpty &&
+                                subHeading != heading) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                subHeading,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
                                 ),
                               ),
-                            )
-                            .toList(),
-                      ),
+                            ],
+                          ],
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),

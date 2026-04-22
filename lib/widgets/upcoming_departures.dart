@@ -3,8 +3,13 @@ import 'package:route/services/timetable_service.dart';
 
 class UpcomingDeparturesWidget extends StatefulWidget {
   final String stopId;
+  final List<String> mergedStopIds;
 
-  const UpcomingDeparturesWidget({super.key, required this.stopId});
+  const UpcomingDeparturesWidget({
+    super.key, 
+    required this.stopId,
+    this.mergedStopIds = const [],
+  });
 
   @override
   State<UpcomingDeparturesWidget> createState() =>
@@ -17,7 +22,28 @@ class _UpcomingDeparturesWidgetState extends State<UpcomingDeparturesWidget> {
   @override
   void initState() {
     super.initState();
-    _timetableFuture = TimetableService.getTimetableForStop(widget.stopId);
+    _loadTimetable();
+  }
+
+  @override
+  void didUpdateWidget(UpcomingDeparturesWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.stopId != oldWidget.stopId || widget.mergedStopIds != oldWidget.mergedStopIds) {
+      _loadTimetable();
+    }
+  }
+
+  void _loadTimetable() {
+    final stopIds = widget.mergedStopIds.isNotEmpty ? widget.mergedStopIds : [widget.stopId];
+    _timetableFuture = _fetchCombinedTimetables(stopIds);
+  }
+
+  Future<List<TimetableEntry>> _fetchCombinedTimetables(List<String> ids) async {
+    final futures = ids.map((id) => TimetableService.getTimetableForStop(id));
+    final results = await Future.wait(futures);
+    final combined = results.expand((list) => list).toList();
+    combined.sort((a, b) => a.departureTime.compareTo(b.departureTime));
+    return combined;
   }
 
   @override
@@ -38,7 +64,13 @@ class _UpcomingDeparturesWidgetState extends State<UpcomingDeparturesWidget> {
         }
 
         if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
-          return const SizedBox.shrink(); // Hide if no valid departures
+          return Padding(
+            padding: const EdgeInsets.only(top: 16.0),
+            child: Text(
+              'No upcoming departures found for this time.',
+              style: TextStyle(color: scheme.onSurfaceVariant),
+            ),
+          );
         }
 
         final now = DateTime.now();
@@ -84,74 +116,68 @@ class _UpcomingDeparturesWidgetState extends State<UpcomingDeparturesWidget> {
         final topEntries = groupedDepartures.values.toList();
 
         if (topEntries.isEmpty) {
-          // If all are finished for the day, show earliest from tomorrow or just hide
-          return const SizedBox.shrink();
+          return Padding(
+            padding: const EdgeInsets.only(top: 16.0),
+            child: Text(
+              'All trips finished for the day.',
+              style: TextStyle(color: scheme.onSurfaceVariant),
+            ),
+          );
         }
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 16),
-            Text(
-              'Upcoming Departures',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: scheme.primaryContainer.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: scheme.primary.withValues(alpha: 0.2),
-                ),
-              ),
-              child: Column(
-                children: topEntries.map((e) {
-                  final groupTitle = '${e.routeId} - ${e.headsign}'
-                      .replaceAll(RegExp(r'^-|-$'), '')
-                      .trim();
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            groupTitle.isEmpty ? 'Train' : groupTitle,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+        return Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: scheme.primaryContainer.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: scheme.primary.withValues(alpha: 0.2)),
+          ),
+          child: Column(
+            children: topEntries.map((e) {
+              final groupTitle = '${e.routeId} - ${e.headsign}'
+                  .replaceAll(RegExp(r'^-|-$'), '')
+                  .trim();
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        groupTitle.isEmpty ? 'Train' : groupTitle,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: scheme.primary,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            e.displayTime,
-                            style: theme.textTheme.labelMedium?.copyWith(
-                              color: scheme.onPrimary,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ],
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  );
-                }).toList(),
-              ),
-            ),
-          ],
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: scheme.primary,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        e.isFrequency
+                            ? (e.headwaySecs != null
+                                  ? 'Every ${e.headwaySecs! ~/ 60}m${e.headwaySecs! % 60 > 0 ? ' ${e.headwaySecs! % 60}s' : ''}'
+                                  : 'Frequent')
+                            : e.displayTime,
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: scheme.onPrimary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
         );
       },
     );

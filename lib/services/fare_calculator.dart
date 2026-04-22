@@ -10,6 +10,7 @@ class FareCalculator {
   Map<String, int> _ferryFlatFares = const {};
   Map<String, int> _ferryZoneMatrix = const {};
   Map<String, String> _ferryZones = const {};
+  Map<String, gtfs.BusRouteInfo> _busRouteInfoMap = const {};
 
   void updateData({
     Map<String, String>? fareTypeMap,
@@ -19,6 +20,7 @@ class FareCalculator {
     Map<String, int>? ferryFlatFares,
     Map<String, int>? ferryZoneMatrix,
     Map<String, String>? ferryZones,
+    Map<String, gtfs.BusRouteInfo>? busRouteInfoMap,
   }) {
     if (fareTypeMap != null) {
       _fareTypeMap = Map<String, String>.from(fareTypeMap);
@@ -41,6 +43,12 @@ class FareCalculator {
     if (ferryZones != null) {
       _ferryZones = Map<String, String>.from(ferryZones);
     }
+    if (busRouteInfoMap != null) {
+      _busRouteInfoMap = Map<String, gtfs.BusRouteInfo>.from(busRouteInfoMap);
+    }
+    if (busRouteInfoMap != null) {
+      _busRouteInfoMap = Map<String, gtfs.BusRouteInfo>.from(busRouteInfoMap);
+    }
   }
 
   // ─────────────────────────────────────────────
@@ -58,8 +66,7 @@ class FareCalculator {
     final id = stopId.trim();
     if (_isBtsStop(id)) return 'BTS';
     if (id.startsWith('F_')) {
-      final prefix = id.split('_').sublist(0, 2).join('_');
-      return prefix;
+      return 'FERRY';
     }
     final match = RegExp(r'^([A-Za-z]+)').firstMatch(id);
     final prefix = match?.group(1)?.toUpperCase() ?? 'UNKNOWN';
@@ -200,6 +207,68 @@ class FareCalculator {
   // ─────────────────────────────────────────────
 
   // ─────────────────────────────────────────────
+  // คำนวณค่ารถเมล์ (Bus)
+  // ─────────────────────────────────────────────
+  int getBusFare(double distanceMeters, String routeShortName) {
+    if (routeShortName == 'BRT') {
+      return 15; // handled elsewhere but just in case
+    }
+
+    final info = _busRouteInfoMap[routeShortName];
+    if (info == null) return 8; // fallback to standard
+
+    double km = distanceMeters / 1000.0;
+    int fare = 8; // Standard
+
+    final typeId = info.typeId.toLowerCase();
+
+    if (typeId == 'air') {
+      if (km >= 18) {
+        fare = 25;
+      } else if (km >= 6) {
+        fare = 20;
+      } else {
+        fare = 15;
+      }
+    } else if (typeId == 'eurotwo') {
+      if (km >= 24) {
+        fare = 25;
+      } else if (km >= 20) {
+        fare = 23;
+      } else if (km >= 16) {
+        fare = 21;
+      } else if (km >= 12) {
+        fare = 19;
+      } else if (km >= 8) {
+        fare = 17;
+      } else if (km >= 4) {
+        fare = 15;
+      } else {
+        fare = 13;
+      }
+    } else if (typeId == 'ngv 489' ||
+        typeId == 'ngv489' ||
+        typeId == 'ngv_489') {
+      if (km >= 16) {
+        fare = 25;
+      } else if (km >= 4) {
+        fare = 20;
+      } else {
+        fare = 15;
+      }
+    } else {
+      // Standard OR Stadard
+      fare = 8;
+    }
+
+    if (info.isExpressway) {
+      fare += 2;
+    }
+
+    return fare;
+  }
+
+  // ─────────────────────────────────────────────
   // คำนวณค่าเรือ Ferry
   // ─────────────────────────────────────────────
   int _calculateFerryFare(List<gtfs.Stop> segment) {
@@ -267,7 +336,9 @@ class FareCalculator {
         total += result['total'] ?? 0;
       } else if (group == 'BRT') {
         total += 15; // Flat fare for BRT
-      } else if (group == 'F_CPX' || group.startsWith('F_')) {
+      } else if (group == 'FERRY' ||
+          group == 'F_CPX' ||
+          group.startsWith('F_')) {
         final fare = _calculateFerryFare(segment);
         total += fare;
       } else {

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../services/gtfs_models.dart' as gtfs;
+
+import 'custom_dropdown.dart';
 
 class ServiceTabs extends StatefulWidget {
   final List<gtfs.Stop> allStops;
@@ -10,6 +13,7 @@ class ServiceTabs extends StatefulWidget {
   final List<String> Function(String)? getLineNames;
   final void Function(gtfs.Stop) onSelect;
   final int Function(gtfs.Stop) getServicePriority;
+  final String? Function(String)? routeIconByName;
 
   const ServiceTabs({
     super.key,
@@ -21,6 +25,7 @@ class ServiceTabs extends StatefulWidget {
     this.getLineNames,
     required this.onSelect,
     required this.getServicePriority,
+    this.routeIconByName,
   });
 
   @override
@@ -36,10 +41,55 @@ class _ServiceTabsState extends State<ServiceTabs>
   String? _selectedBusLine;
   String? _selectedFerryLine;
 
+  late Map<String, List<gtfs.Stop>> _metroStops;
+  late Map<String, List<gtfs.Stop>> _trainStops;
+  late Map<String, List<gtfs.Stop>> _busStops;
+  late Map<String, List<gtfs.Stop>> _ferryStops;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    _calculateStops();
+  }
+
+  @override
+  void didUpdateWidget(ServiceTabs oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.allStops != oldWidget.allStops) {
+      _calculateStops();
+    }
+  }
+
+  void _calculateStops() {
+    _metroStops = {};
+    _trainStops = {};
+    _busStops = {};
+    _ferryStops = {};
+
+    for (final stop in widget.allStops) {
+      final priority = widget.getServicePriority(stop);
+      final targetMap = switch (priority) {
+        1 => _metroStops,
+        2 => _trainStops,
+        3 => _busStops,
+        _ => _ferryStops,
+      };
+
+      if (widget.getLineNames != null) {
+        final lineNames = widget.getLineNames!(stop.stopId);
+        if (lineNames.isEmpty) {
+          targetMap.putIfAbsent('Unknown', () => []).add(stop);
+        } else {
+          for (final lineName in lineNames) {
+            targetMap.putIfAbsent(lineName, () => []).add(stop);
+          }
+        }
+      } else {
+        final lineName = widget.getLineName(stop.stopId) ?? 'Unknown';
+        targetMap.putIfAbsent(lineName, () => []).add(stop);
+      }
+    }
   }
 
   @override
@@ -48,70 +98,202 @@ class _ServiceTabsState extends State<ServiceTabs>
     super.dispose();
   }
 
-  // Group stops by line name
-  Map<String, List<gtfs.Stop>> _groupStopsByLine(
-    List<gtfs.Stop> stops,
-    bool Function(String, gtfs.Stop) filterLine,
-  ) {
-    final Map<String, List<gtfs.Stop>> grouped = {};
-    for (final stop in stops) {
-      if (widget.getLineNames != null) {
-        final lineNames = widget.getLineNames!(stop.stopId);
-        if (lineNames.isEmpty) {
-          if (filterLine('Unknown', stop)) {
-            grouped.putIfAbsent('Unknown', () => []).add(stop);
-          }
-        } else {
-          for (final lineName in lineNames) {
-            if (filterLine(lineName, stop)) {
-              grouped.putIfAbsent(lineName, () => []).add(stop);
-            }
-          }
-        }
-      } else {
-        final lineName = widget.getLineName(stop.stopId) ?? 'Unknown';
-        if (filterLine(lineName, stop)) {
-          grouped.putIfAbsent(lineName, () => []).add(stop);
-        }
-      }
+  Color _getLineColor(String lineName, int serviceType) {
+    if (widget.lineColors.containsKey(lineName)) {
+      return widget.lineColors[lineName]!;
     }
-    return grouped;
+    final firstLine = lineName.split(',').first.trim();
+    if (widget.lineColors.containsKey(firstLine)) {
+      return widget.lineColors[firstLine]!;
+    }
+    switch (serviceType) {
+      case 3:
+        return Colors.blue;
+      case 4:
+        return Colors.orange;
+      default:
+        return Colors.grey;
+    }
   }
 
-  Widget _buildStopTile(BuildContext context, gtfs.Stop stop, String lineName) {
-    final lineColor = widget.lineColors[lineName] ?? Colors.grey;
+  Widget _buildStopTile(
+    BuildContext context,
+    gtfs.Stop stop,
+    String lineName, [
+    int serviceType = 3,
+  ]) {
+    final lineColor = _getLineColor(lineName, serviceType);
     final theme = Theme.of(context);
 
-    return ListTile(
-      leading: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: lineColor,
-          border: Border.all(color: theme.colorScheme.surface, width: 2),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          stop.code ?? '',
-          style: TextStyle(
-            color: (lineColor.computeLuminance() > 0.5)
-                ? Colors.black
-                : Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 10,
+    IconData getIconForType(int type) {
+      switch (type) {
+        case 1:
+          return Icons.subway;
+        case 2:
+          return Icons.train;
+        case 3:
+          return Icons.directions_bus;
+        case 4:
+          return Icons.directions_boat;
+        default:
+          return Icons.directions_transit;
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Material(
+          color: theme.colorScheme.surface.withValues(
+            alpha: 0.9,
+          ), // adjusted opacity to compensate for lack of blue
+          child: InkWell(
+            onTap: () => widget.onSelect(stop),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 12.0,
+              ),
+              child: Row(
+                children: [
+                  Builder(
+                    builder: (context) {
+                      bool isBusNotBRT = serviceType == 3 &&
+                          !(stop.stopId.startsWith('BRT') || lineName.contains('BRT'));
+                      String? routeIcon;
+                      if (serviceType == 1 && widget.routeIconByName != null) {
+                        routeIcon = widget.routeIconByName!(lineName);
+                      }
+
+                      if (routeIcon != null && routeIcon.isNotEmpty) {
+                        return Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: theme.brightness == Brightness.dark
+                                    ? Colors.white
+                                    : lineColor.withValues(alpha: 0.15),
+                                shape: BoxShape.circle,
+                              ),
+                              child: SvgPicture.asset(
+                                routeIcon,
+                                width: 24,
+                                height: 24,
+                              ),
+                            ),
+                            if (!isBusNotBRT && stop.code != null && stop.code!.isNotEmpty) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: lineColor,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  stop.code!,
+                                  style: TextStyle(
+                                    color: (lineColor.computeLuminance() > 0.5)
+                                        ? Colors.black87
+                                        : Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        );
+                      }
+
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: lineColor,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: theme.colorScheme.surface.withValues(
+                              alpha: 0.5,
+                            ),
+                            width: 1.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: lineColor.withValues(alpha: 0.3),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Icon(
+                              getIconForType(serviceType),
+                              color: (lineColor.computeLuminance() > 0.5)
+                                  ? Colors.black87
+                                  : Colors.white,
+                              size: 16,
+                            ),
+                            if (!isBusNotBRT && stop.code != null && stop.code!.isNotEmpty) ...[
+                              const SizedBox(width: 4),
+                              Text(
+                                stop.code!,
+                                style: TextStyle(
+                                  color: (lineColor.computeLuminance() > 0.5)
+                                      ? Colors.black87
+                                      : Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          stop.name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (stop.thaiName != null && stop.thaiName!.isNotEmpty)
+                          Text(
+                            stop.thaiName!,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-          overflow: TextOverflow.ellipsis,
         ),
       ),
-      title: Text(stop.name),
-      subtitle: Text(
-        (stop.thaiName != null && stop.thaiName!.isNotEmpty)
-            ? stop.thaiName!
-            : 'Thai Station provide later',
-        style: theme.textTheme.bodySmall,
-      ),
-      onTap: () => widget.onSelect(stop),
     );
   }
 
@@ -120,6 +302,7 @@ class _ServiceTabsState extends State<ServiceTabs>
     required Map<String, List<gtfs.Stop>> groupedStops,
     required String? selectedLine,
     required ValueChanged<String?> onLineChanged,
+    required int serviceType,
   }) {
     final lines = groupedStops.keys.toList()..sort();
     final effectiveSelectedLine =
@@ -149,50 +332,46 @@ class _ServiceTabsState extends State<ServiceTabs>
       children: [
         if (lines.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: DropdownButton<String?>(
-              isExpanded: true,
-              value: effectiveSelectedLine,
-              underline: Container(
-                height: 1,
-                color: Theme.of(context).colorScheme.outlineVariant,
-              ),
-              items: [
-                const DropdownMenuItem<String?>(
-                  value: null,
-                  child: Text(
-                    'All Lines',
-                    style: TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                ),
-                ...lines.map((line) {
-                  final color = widget.lineColors[line] ?? Colors.grey;
-                  return DropdownMenuItem<String?>(
-                    value: line,
-                    child: Row(
-                      children: [
-                        Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16.0,
+              vertical: 8.0,
+            ),
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              clipBehavior: Clip.antiAlias,
+              child: CustomInlineDropdown<String>(
+                value: effectiveSelectedLine,
+                items: lines,
+                itemLabel: (item) => item ?? 'All Lines',
+                itemLeading: (item) {
+                  if (item == null) return null;
+                  final color = _getLineColor(item, serviceType);
+                  if (widget.routeIconByName != null) {
+                    final routeIcon = widget.routeIconByName!(item);
+                    if (routeIcon != null && routeIcon.isNotEmpty) {
+                      return SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: SvgPicture.asset(
+                          routeIcon,
                           width: 20,
                           height: 20,
-                          margin: const EdgeInsets.only(right: 12),
-                          decoration: BoxDecoration(
-                            color: color,
-                            shape: BoxShape.circle,
-                          ),
                         ),
-                        Expanded(
-                          child: Text(
-                            line,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w500),
-                          ),
-                        ),
-                      ],
+                      );
+                    }
+                  }
+                  return Container(
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
                     ),
                   );
-                }),
-              ],
-              onChanged: onLineChanged,
+                },
+                onChanged: onLineChanged,
+              ),
             ),
           ),
         Expanded(
@@ -204,7 +383,7 @@ class _ServiceTabsState extends State<ServiceTabs>
                     final item = listItems[index];
 
                     if (item.isHeader) {
-                      final color = widget.lineColors[item.line] ?? Colors.grey;
+                      final color = _getLineColor(item.line, serviceType);
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -220,13 +399,34 @@ class _ServiceTabsState extends State<ServiceTabs>
                             ),
                             child: Row(
                               children: [
-                                Container(
-                                  width: 12,
-                                  height: 12,
-                                  decoration: BoxDecoration(
-                                    color: color,
-                                    shape: BoxShape.circle,
-                                  ),
+                                Builder(
+                                  builder: (context) {
+                                    if (widget.routeIconByName != null) {
+                                      final routeIcon = widget.routeIconByName!(
+                                        item.line,
+                                      );
+                                      if (routeIcon != null &&
+                                          routeIcon.isNotEmpty) {
+                                        return SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: SvgPicture.asset(
+                                            routeIcon,
+                                            width: 16,
+                                            height: 16,
+                                          ),
+                                        );
+                                      }
+                                    }
+                                    return Container(
+                                      width: 12,
+                                      height: 12,
+                                      decoration: BoxDecoration(
+                                        color: color,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    );
+                                  },
                                 ),
                                 const SizedBox(width: 8),
                                 Expanded(
@@ -249,7 +449,12 @@ class _ServiceTabsState extends State<ServiceTabs>
                         ],
                       );
                     } else if (item.stop != null) {
-                      return _buildStopTile(context, item.stop!, item.line);
+                      return _buildStopTile(
+                        context,
+                        item.stop!,
+                        item.line,
+                        widget.getServicePriority(item.stop!),
+                      );
                     }
 
                     return const SizedBox.shrink();
@@ -263,28 +468,11 @@ class _ServiceTabsState extends State<ServiceTabs>
   @override
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
-    final height =
-        mediaQuery.size.height *
-        0.7; // Take 70% of the screen height by default
+    final isWideWindow = mediaQuery.size.width > 600;
+    // On wide windows, let it take more space but stick to the left.
+    final height = mediaQuery.size.height * (isWideWindow ? 0.8 : 0.7);
 
-    final metroStops = _groupStopsByLine(
-      widget.allStops,
-      (line, stop) => widget.getServicePriority(stop) == 1,
-    );
-    final trainStops = _groupStopsByLine(
-      widget.allStops,
-      (line, stop) => widget.getServicePriority(stop) == 2,
-    );
-    final busStops = _groupStopsByLine(
-      widget.allStops,
-      (line, stop) => widget.getServicePriority(stop) == 3,
-    );
-    final ferryStops = _groupStopsByLine(
-      widget.allStops,
-      (line, stop) => widget.getServicePriority(stop) == 4,
-    );
-
-    return SizedBox(
+    Widget mainContent = SizedBox(
       height: height,
       child: Column(
         children: [
@@ -308,37 +496,46 @@ class _ServiceTabsState extends State<ServiceTabs>
               children: [
                 _buildTabView(
                   context,
-                  groupedStops: metroStops,
+                  groupedStops: _metroStops,
                   selectedLine: _selectedMetroLine,
                   onLineChanged: (val) =>
                       setState(() => _selectedMetroLine = val),
+                  serviceType: 1,
                 ),
                 _buildTabView(
                   context,
-                  groupedStops: trainStops,
+                  groupedStops: _trainStops,
                   selectedLine: _selectedTrainLine,
                   onLineChanged: (val) =>
                       setState(() => _selectedTrainLine = val),
+                  serviceType: 2,
                 ),
                 _buildTabView(
                   context,
-                  groupedStops: busStops,
+                  groupedStops: _busStops,
                   selectedLine: _selectedBusLine,
                   onLineChanged: (val) =>
                       setState(() => _selectedBusLine = val),
+                  serviceType: 3,
                 ),
                 _buildTabView(
                   context,
-                  groupedStops: ferryStops,
+                  groupedStops: _ferryStops,
                   selectedLine: _selectedFerryLine,
                   onLineChanged: (val) =>
                       setState(() => _selectedFerryLine = val),
+                  serviceType: 4,
                 ),
               ],
             ),
           ),
         ],
       ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8.0, bottom: 16.0),
+      child: mainContent,
     );
   }
 }

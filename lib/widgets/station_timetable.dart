@@ -18,9 +18,13 @@ class _StationTimetableSectionState extends State<StationTimetableSection> {
   void initState() {
     super.initState();
     final now = DateTime.now();
-    final isWeekend =
-        now.weekday == DateTime.saturday || now.weekday == DateTime.sunday;
-    _selectedDay = isWeekend ? 'SUN_SAT' : 'WKD';
+    if (now.weekday == DateTime.saturday) {
+      _selectedDay = 'SAT';
+    } else if (now.weekday == DateTime.sunday) {
+      _selectedDay = 'SUN';
+    } else {
+      _selectedDay = 'WKD';
+    }
     _loadTimetable();
   }
 
@@ -29,6 +33,16 @@ class _StationTimetableSectionState extends State<StationTimetableSection> {
       widget.stopId,
       serviceId: _selectedDay,
     );
+  }
+
+  @override
+  void didUpdateWidget(StationTimetableSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.stopId != widget.stopId) {
+      setState(() {
+        _loadTimetable();
+      });
+    }
   }
 
   @override
@@ -56,7 +70,8 @@ class _StationTimetableSectionState extends State<StationTimetableSection> {
               value: _selectedDay,
               items: const [
                 DropdownMenuItem(value: 'WKD', child: Text('Weekday')),
-                DropdownMenuItem(value: 'SUN_SAT', child: Text('Weekend')),
+                DropdownMenuItem(value: 'SAT', child: Text('Saturday')),
+                DropdownMenuItem(value: 'SUN', child: Text('Sunday/Holiday')),
               ],
               onChanged: (value) {
                 if (value != null && value != _selectedDay) {
@@ -156,38 +171,103 @@ class _StationTimetableSectionState extends State<StationTimetableSection> {
                       ),
                       Padding(
                         padding: const EdgeInsets.all(12),
-                        child: Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: List.generate(times.length, (index) {
-                            final t = times[index];
-                            final isNext = index == nextDepartureIndex;
-                            return Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: isNext ? scheme.primary : scheme.surface,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: isNext
-                                      ? scheme.primary
-                                      : scheme.outlineVariant.withValues(
-                                          alpha: 0.5,
+                        child: times.every((t) => t.isFrequency)
+                            ? Column(
+                                children: times.map((t) {
+                                  final start =
+                                      t.startTime
+                                          ?.split(':')
+                                          .take(2)
+                                          .join(':') ??
+                                      '';
+                                  final end =
+                                      t.endTime?.split(':').take(2).join(':') ??
+                                      '';
+                                  var freqText = 'Freq';
+                                  if (t.headwaySecs != null) {
+                                    final mins = t.headwaySecs! ~/ 60;
+                                    final sec = t.headwaySecs! % 60;
+                                    freqText = sec > 0
+                                        ? 'Every $mins min ${sec}s'
+                                        : 'Every $mins mins';
+                                  }
+
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 8.0),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          '$start - $end',
+                                          style: theme.textTheme.bodyMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w600,
+                                              ),
                                         ),
-                                ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 4,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: scheme.primaryContainer,
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            freqText,
+                                            style: theme.textTheme.labelMedium
+                                                ?.copyWith(
+                                                  color:
+                                                      scheme.onPrimaryContainer,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
+                              )
+                            : Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: List.generate(times.length, (index) {
+                                  final t = times[index];
+                                  final isNext = index == nextDepartureIndex;
+                                  return Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 6,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: isNext
+                                          ? scheme.primary
+                                          : scheme.surface,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: isNext
+                                            ? scheme.primary
+                                            : scheme.outlineVariant.withValues(
+                                                alpha: 0.5,
+                                              ),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      t.displayTime,
+                                      style: theme.textTheme.bodyMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                            color: isNext
+                                                ? scheme.onPrimary
+                                                : null,
+                                          ),
+                                    ),
+                                  );
+                                }),
                               ),
-                              child: Text(
-                                t.displayTime,
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                  color: isNext ? scheme.onPrimary : null,
-                                ),
-                              ),
-                            );
-                          }),
-                        ),
                       ),
                     ],
                   ),

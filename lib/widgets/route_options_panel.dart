@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:route/services/direction_service.dart';
-import 'package:route/services/route_formatters.dart';
+import 'formatters.dart';
 
 class RouteOptionsPanel extends StatelessWidget {
   const RouteOptionsPanel({
@@ -12,6 +13,9 @@ class RouteOptionsPanel extends StatelessWidget {
     required this.onStartNavigation,
     required this.lineNameResolver,
     required this.lineColors,
+    required this.selectedSortMode,
+    required this.onSortModeChanged,
+    this.routeIconResolver,
   });
 
   final List<DirectionOption> options;
@@ -21,6 +25,9 @@ class RouteOptionsPanel extends StatelessWidget {
   final ValueChanged<DirectionOption> onStartNavigation;
   final LineNameResolver lineNameResolver;
   final Map<String, Color> lineColors;
+  final String selectedSortMode;
+  final ValueChanged<String?> onSortModeChanged;
+  final String? Function(String)? routeIconResolver;
 
   @override
   Widget build(BuildContext context) {
@@ -59,28 +66,73 @@ class RouteOptionsPanel extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Available Routes',
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
               Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
+                  horizontal: 12,
+                  vertical: 6,
                 ),
                 decoration: BoxDecoration(
                   color: theme.colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(16),
                 ),
-                child: Text(
-                  '${options.length} options',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: theme.colorScheme.onPrimaryContainer,
-                    fontWeight: FontWeight.w600,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.route,
+                      size: 18,
+                      color: theme.colorScheme.onPrimaryContainer,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${options.length} Routes',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: theme.colorScheme.onPrimaryContainer,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Row(
+                children: [
+                  Text(
+                    'Sort by:',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  DropdownButton<String>(
+                    value: selectedSortMode,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    icon: Icon(
+                      Icons.sort,
+                      size: 18,
+                      color: theme.colorScheme.primary,
+                    ),
+                    underline: const SizedBox.shrink(),
+                    onChanged: onSortModeChanged,
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'Default',
+                        child: Text('Default'),
+                      ),
+                      DropdownMenuItem(value: 'Price', child: Text('Price')),
+                      DropdownMenuItem(
+                        value: 'Distance',
+                        child: Text('Distance'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Fastest',
+                        child: Text('Fastest'),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ],
           ),
@@ -96,6 +148,7 @@ class RouteOptionsPanel extends StatelessWidget {
               onStartNavigation: () => onStartNavigation(options[index]),
               lineNameResolver: lineNameResolver,
               lineColors: lineColors,
+              routeIconResolver: routeIconResolver,
               highlightType: index == fastestIndex
                   ? _HighlightType.fastest
                   : index == cheapestIndex
@@ -123,6 +176,7 @@ class _RouteOptionCard extends StatelessWidget {
     required this.onStartNavigation,
     required this.lineNameResolver,
     required this.lineColors,
+    this.routeIconResolver,
     this.highlightType,
     required this.showShortestTag,
     required this.showFastestTag,
@@ -136,6 +190,7 @@ class _RouteOptionCard extends StatelessWidget {
   final VoidCallback onStartNavigation;
   final LineNameResolver lineNameResolver;
   final Map<String, Color> lineColors;
+  final String? Function(String)? routeIconResolver;
   final _HighlightType? highlightType;
   final bool showShortestTag;
   final bool showFastestTag;
@@ -177,7 +232,11 @@ class _RouteOptionCard extends StatelessWidget {
     final headlineTags = filteredTags.take(3).toList();
     final remainingTags = filteredTags.length - headlineTags.length;
     final distanceText = formatDistance(option.distanceMeters);
-    final lineSegments = splitRouteByLine(stops, lineNameResolver);
+    final displaySegments = option.segments.where((s) {
+      if (s.mode == TravelMode.transit && s.routeShortName != null) return true;
+      if (s.mode == TravelMode.walk && s.distanceMeters > 0) return true;
+      return false;
+    }).toList();
 
     final theme = Theme.of(context);
     final highlightColor = switch (highlightType) {
@@ -238,17 +297,7 @@ class _RouteOptionCard extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              label,
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: theme.colorScheme.onSurface,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            if (headlineTags.isNotEmpty) ...[
-                              const SizedBox(height: 6),
+                            if (headlineTags.isNotEmpty)
                               Wrap(
                                 spacing: 6,
                                 runSpacing: 6,
@@ -260,7 +309,22 @@ class _RouteOptionCard extends StatelessWidget {
                                           ? const Color(0xFF2E7D32)
                                           : tag == 'Cheapest'
                                           ? const Color(0xFFF9A825)
+                                          : tag == 'Fewest stops'
+                                          ? const Color(0xFF0288D1)
+                                          : tag == 'Low transfers'
+                                          ? const Color(0xFF8E24AA)
                                           : theme.colorScheme.primary,
+                                      icon: tag == 'Fastest'
+                                          ? Icons.bolt
+                                          : tag == 'Cheapest'
+                                          ? Icons.savings
+                                          : tag == 'Shortest'
+                                          ? Icons.straighten
+                                          : tag == 'Fewest stops'
+                                          ? Icons.signpost
+                                          : tag == 'Low transfers'
+                                          ? Icons.swap_horiz
+                                          : null,
                                     ),
                                   ),
                                   if (remainingTags > 0)
@@ -269,8 +333,17 @@ class _RouteOptionCard extends StatelessWidget {
                                       color: theme.colorScheme.secondary,
                                     ),
                                 ],
+                              )
+                            else
+                              Text(
+                                label,
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: theme.colorScheme.onSurface,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                            ],
                           ],
                         ),
                       ),
@@ -279,34 +352,80 @@ class _RouteOptionCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Row(
-                            crossAxisAlignment: CrossAxisAlignment.baseline,
-                            textBaseline: TextBaseline.alphabetic,
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
-                              Text(
-                                '${option.minutes}',
-                                style: theme.textTheme.headlineSmall?.copyWith(
-                                  fontWeight: FontWeight.w900,
-                                  color: applyHighlight
-                                      ? highlightColor
-                                      : theme.colorScheme.primary,
-                                ),
+                              Icon(
+                                Icons.schedule,
+                                size: 18,
+                                color: applyHighlight
+                                    ? highlightColor
+                                    : theme.colorScheme.primary,
                               ),
-                              const SizedBox(width: 2),
-                              Text(
-                                'min',
-                                style: theme.textTheme.labelMedium?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                  color: theme.colorScheme.onSurfaceVariant,
+                              const SizedBox(width: 6),
+                              Text.rich(
+                                TextSpan(
+                                  children: [
+                                    TextSpan(
+                                      text: '~${option.minutes}',
+                                      style: theme.textTheme.titleLarge
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w900,
+                                            color: applyHighlight
+                                                ? highlightColor
+                                                : theme.colorScheme.primary,
+                                          ),
+                                    ),
+                                    TextSpan(
+                                      text: ' min',
+                                      style: theme.textTheme.labelMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                            color: theme
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                          ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
-                          Text(
-                            '฿${option.fareBreakdown['total'] ?? 0}',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: theme.colorScheme.onSurface,
-                            ),
+                          const SizedBox(height: 4),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.payments_outlined,
+                                size: 16,
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                              const SizedBox(width: 6),
+                              Text.rich(
+                                TextSpan(
+                                  children: [
+                                    TextSpan(
+                                      text:
+                                          '~${option.fareBreakdown['total'] ?? 0}',
+                                      style: theme.textTheme.titleMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                            color: theme.colorScheme.onSurface,
+                                          ),
+                                    ),
+                                    TextSpan(
+                                      text: ' ฿',
+                                      style: theme.textTheme.labelMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                            color: theme
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -348,7 +467,7 @@ class _RouteOptionCard extends StatelessWidget {
                   ],
 
                   // Transit Line Visualizer
-                  if (lineSegments.isNotEmpty) ...[
+                  if (displaySegments.isNotEmpty) ...[
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -360,7 +479,11 @@ class _RouteOptionCard extends StatelessWidget {
                         scrollDirection: Axis.horizontal,
                         child: Row(
                           children: [
-                            for (int i = 0; i < lineSegments.length; i++) ...[
+                            for (
+                              int i = 0;
+                              i < displaySegments.length;
+                              i++
+                            ) ...[
                               if (i > 0)
                                 Padding(
                                   padding: const EdgeInsets.symmetric(
@@ -374,66 +497,96 @@ class _RouteOptionCard extends StatelessWidget {
                                 ),
                               Builder(
                                 builder: (context) {
-                                  final lineName = resolveSegmentLineName(
-                                    lineSegments[i],
-                                    lineNameResolver,
-                                  );
-                                  final color =
-                                      lineColors[lineName] ??
-                                      theme.colorScheme.primary;
-                                  final textColor =
-                                      color.computeLuminance() > 0.5
-                                      ? Colors.black87
-                                      : Colors.white;
+                                  final segment = displaySegments[i];
+                                  final isWalk =
+                                      segment.mode == TravelMode.walk;
 
-                                  IconData getTransportIcon(String name) {
-                                    final lower = name.toLowerCase();
-                                    if (lower.contains('walk')) {
+                                  final lineName = isWalk
+                                      ? formatDistance(segment.distanceMeters)
+                                      : (segment.routeShortName ??
+                                            'Unknown line');
+
+                                  final color = isWalk
+                                      ? theme
+                                            .colorScheme
+                                            .surfaceContainerHighest
+                                      : (lineColors[lineName] ??
+                                            theme.colorScheme.primary);
+
+                                  final textColor = isWalk
+                                      ? theme.colorScheme.onSurface
+                                      : (color.computeLuminance() > 0.5
+                                            ? Colors.black87
+                                            : Colors.white);
+
+                                  final String? iconPath =
+                                      (!isWalk && routeIconResolver != null)
+                                      ? routeIconResolver!(lineName)
+                                      : null;
+
+                                  IconData getTransportIcon(
+                                    RouteSegment segment,
+                                  ) {
+                                    if (segment.mode == TravelMode.walk) {
                                       return Icons.directions_walk;
                                     }
-                                    if (lower.contains('bus')) {
-                                      return Icons.directions_bus;
-                                    }
-                                    if (lower.contains('boat') ||
-                                        lower.contains('ferry')) {
+                                    if (segment.isFerry) {
                                       return Icons.directions_boat;
+                                    }
+                                    if (segment.isBus) {
+                                      return Icons.directions_bus;
                                     }
                                     return Icons.directions_transit;
                                   }
 
                                   return Container(
                                     padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 6,
+                                      horizontal: 8,
+                                      vertical: 4,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: color,
+                                      color: iconPath != null
+                                          ? color.withValues(alpha: 0.15)
+                                          : color,
+                                      border: iconPath != null
+                                          ? Border.all(color: color)
+                                          : null,
                                       borderRadius: BorderRadius.circular(8),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: color.withValues(alpha: 0.3),
-                                          blurRadius: 4,
-                                          offset: const Offset(0, 2),
-                                        ),
-                                      ],
                                     ),
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Icon(
-                                          getTransportIcon(lineName),
-                                          size: 16,
-                                          color: textColor,
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Text(
-                                          lineName,
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.bold,
+                                        if (iconPath != null) ...[
+                                          SvgPicture.asset(
+                                            iconPath,
+                                            height: 16,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            lineName,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                              color:
+                                                  theme.colorScheme.onSurface,
+                                            ),
+                                          ),
+                                        ] else ...[
+                                          Icon(
+                                            getTransportIcon(segment),
+                                            size: 16,
                                             color: textColor,
                                           ),
-                                        ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            lineName,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                              color: textColor,
+                                            ),
+                                          ),
+                                        ],
                                       ],
                                     ),
                                   );
@@ -496,16 +649,15 @@ class _RouteOptionCard extends StatelessWidget {
                               tooltip: 'Details',
                             ),
                             const SizedBox(width: 8),
-                            FilledButton.icon(
+                            IconButton.filled(
                               onPressed: onStartNavigation,
-                              icon: const Icon(Icons.navigation, size: 18),
-                              label: const Text('Go'),
-                              style: FilledButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                ),
-                                minimumSize: const Size(0, 40),
+                              icon: const Icon(Icons.navigation, size: 20),
+                              constraints: const BoxConstraints.tightFor(
+                                width: 40,
+                                height: 40,
                               ),
+                              padding: EdgeInsets.zero,
+                              tooltip: 'Go',
                             ),
                           ],
                         ),
@@ -522,28 +674,46 @@ class _RouteOptionCard extends StatelessWidget {
 }
 
 class _TagPill extends StatelessWidget {
-  const _TagPill({required this.label, required this.color});
+  const _TagPill({required this.label, required this.color, this.icon});
 
   final String label;
   final Color color;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final hsl = HSLColor.fromColor(color);
+    final textColor = isDark
+        ? hsl.withLightness(hsl.lightness.clamp(0.7, 1.0)).toColor()
+        : hsl.withLightness(hsl.lightness.clamp(0.2, 0.4)).toColor();
+    final bgColor = color.withValues(alpha: isDark ? 0.25 : 0.15);
+
+    final content = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
+        color: bgColor,
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: color,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 14, color: textColor),
+            const SizedBox(width: 4),
+          ],
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+            ),
+          ),
+        ],
       ),
     );
+
+    return content;
   }
 }

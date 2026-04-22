@@ -43,3 +43,12 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+/android/key.properties
+upload-keystore.jks
+
+/scripts/firebase-keys.json
+
+# Firebase Service Account Key
+scripts/firebase-key.json
+scripts/.gtfs_version
+

@@ -8,7 +8,19 @@ class TransitUpdateService extends ChangeNotifier {
   factory TransitUpdateService() => _instance;
 
   TransitUpdateService._internal() {
-    _reports.addAll(TransitUpdatesRepository.sampleReports);
+    _initReports();
+  }
+
+  Future<void> _initReports() async {
+    await fetchAndSyncReports();
+  }
+
+  Future<List<TransitReport>> fetchAndSyncReports() async {
+    final fetched = await TransitUpdatesRepository.fetchLatestReports();
+    _reports.clear();
+    _reports.addAll(fetched);
+    notifyListeners();
+    return activeReports;
   }
 
   final List<TransitReport> _reports = [];
@@ -18,6 +30,31 @@ class TransitUpdateService extends ChangeNotifier {
   void addReport(TransitReport report) {
     _reports.insert(0, report);
     notifyListeners();
+  }
+
+  Future<void> upvote(String id) async {
+    final index = _reports.indexWhere((r) => r.id == id);
+    if (index != -1) {
+      final report = _reports[index];
+      _reports[index] = report.copyWith(upvotes: report.upvotes + 1);
+      notifyListeners();
+      await TransitUpdatesRepository.upvoteReport(id);
+    }
+  }
+
+  Future<void> voteResolve(String id) async {
+    final index = _reports.indexWhere((r) => r.id == id);
+    if (index != -1) {
+      final report = _reports[index];
+      final newResolveVotes = report.resolveVotes + 1;
+      final newResolved = newResolveVotes >= 5; // Reaches threshold
+      _reports[index] = report.copyWith(
+        resolveVotes: newResolveVotes,
+        resolved: report.resolved || newResolved,
+      );
+      notifyListeners();
+      await TransitUpdatesRepository.voteResolveReport(id);
+    }
   }
 
   /// Returns severely impacted lines (e.g. train malfunction, closure, severity >= 3)

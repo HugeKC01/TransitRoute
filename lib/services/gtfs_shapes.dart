@@ -1,7 +1,9 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart';
+import 'package:route/services/gtfs_sync_service.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:route/services/gtfs_models.dart' as gtfs;
 
@@ -23,12 +25,22 @@ class ShapeSegment {
 
 class GtfsShapesService {
   Future<List<ShapeSegment>> loadSegments({
-    required String shapesAsset,
+    required List<String> shapesAssets,
     required Map<String, Color> routeColors,
     String? tripsAsset,
     Map<String, gtfs.Trip>? tripMap,
   }) async {
-    final shapes = await _parseShapes(shapesAsset);
+    final shapes = <String, List<_SeqPoint>>{};
+    for (final asset in shapesAssets) {
+      final s = await _parseShapes(asset);
+      for (final entry in s.entries) {
+        shapes.putIfAbsent(entry.key, () => []).addAll(entry.value);
+      }
+    }
+    // Re-sort just in case
+    for (final key in shapes.keys) {
+      shapes[key]!.sort((a, b) => a.seq.compareTo(b.seq));
+    }
     Map<String, String> shapeToRoute = {};
     Map<String, Color> shapeToColor = {};
     if (tripMap != null) {
@@ -55,7 +67,20 @@ class GtfsShapesService {
       if (seqPoints.length < 2) continue;
       final points = seqPoints.map((sp) => sp.point).toList();
       final pointNames = seqPoints.map((sp) => sp.name).toList();
-      final routeId = shapeToRoute[shapeId];
+      String? routeId = shapeToRoute[shapeId];
+      if (routeId == null) {
+        if (shapeId.startsWith('EASTERN')) {
+          routeId = 'SE';
+        } else if (shapeId.startsWith('NORTH&NORTHEST')) {
+          routeId = 'SNNE';
+        } else if (shapeId.startsWith('SOUTHERN')) {
+          routeId = 'SS';
+        } else if (shapeId.startsWith('MAEKLONG')) {
+          routeId = 'SM';
+        } else if (shapeId.startsWith('THONBURI')) {
+          routeId = 'ST';
+        }
+      }
       final color =
           shapeToColor[shapeId] ??
           ((routeId != null && routeColors.containsKey(routeId))
@@ -75,8 +100,12 @@ class GtfsShapesService {
   }
 
   Future<Map<String, List<_SeqPoint>>> _parseShapes(String assetPath) async {
-    final text = await rootBundle.loadString(assetPath);
+    final text = await gtfsSyncService.getGtfsFile(assetPath);
     if (text.trim().isEmpty) return <String, List<_SeqPoint>>{};
+    return await compute(_parseShapesIsolate, text);
+  }
+
+  static Map<String, List<_SeqPoint>> _parseShapesIsolate(String text) {
     final lines = const LineSplitter()
         .convert(text)
         .map((l) => l.trimRight())
@@ -132,7 +161,7 @@ class GtfsShapesService {
   }
 
   Future<_ShapeTripMeta> _parseShapeTripMeta(String assetPath) async {
-    final text = await rootBundle.loadString(assetPath);
+    final text = await gtfsSyncService.getGtfsFile(assetPath);
     if (text.trim().isEmpty) {
       return const _ShapeTripMeta(shapeToRoute: {}, shapeToColor: {});
     }
@@ -176,7 +205,7 @@ class GtfsShapesService {
     return _ShapeTripMeta(shapeToRoute: mapRoute, shapeToColor: mapColor);
   }
 
-  List<String> _splitCsvLine(String line) {
+  static List<String> _splitCsvLine(String line) {
     final out = <String>[];
     final buf = StringBuffer();
     var inQuotes = false;

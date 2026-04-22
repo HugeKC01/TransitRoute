@@ -31,6 +31,7 @@ class Route {
   final String type; // e.g., "BTS", "MRT", "Train", "Bus", "Ferry"
   final String? color;
   final String? textColor;
+  final String? routeIcon;
   final List<String> linePrefixes;
 
   Route({
@@ -41,6 +42,7 @@ class Route {
     required this.type,
     this.color,
     this.textColor,
+    this.routeIcon,
     required this.linePrefixes,
   });
 }
@@ -182,5 +184,17 @@ class Frequency {
     required this.startTime,
     required this.endTime,
     required this.headwaySecs,
+  });
+}
+
+class BusRouteInfo {
+  final String routeShortName;
+  final String typeId;
+  final bool isExpressway;
+
+  BusRouteInfo({
+    required this.routeShortName,
+    required this.typeId,
+    required this.isExpressway,
   });
 }
