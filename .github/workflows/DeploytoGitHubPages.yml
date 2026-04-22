@@ -1,0 +1,39 @@
+name: Deploy to GitHub Pages
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: subosito/flutter-action@v1
+        with:
+          flutter-version: '3.3.x' 
+          channel: 'stable'
+
+      - name: Download Dependencies
+        run: flutter pub get
+
+      - name: Build
+        run: flutter build web --release  --dart2js-optimization O4
+
+      - run: git config user.name github-actions
+        shell: bash
+        
+      - run: git config user.email github-actions@github.com
+        shell: bash
+        
+      - run: git --work-tree build/web add --all
+        shell: bash
+        
+      - run: git commit -m "Automatic deployment by github-actions"
+        shell: bash
+        
+      - run: git push origin HEAD:deploy-github-web-page --force
+        shell: bash
