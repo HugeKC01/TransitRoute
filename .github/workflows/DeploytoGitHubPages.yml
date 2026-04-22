@@ -15,7 +15,6 @@ jobs:
       
       - uses: subosito/flutter-action@v2 # Updated from v1
         with:
-          flutter-version: '3.3.x' # Kept your version, but consider updating if your app supports it
           channel: 'stable'
           
       - name: Download Dependencies
