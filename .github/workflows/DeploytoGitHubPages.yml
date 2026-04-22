@@ -24,7 +24,7 @@ jobs:
         run: flutter pub get
         
       - name: Build
-        run: flutter build web --release --dart2js-optimization O4
+        run: flutter build web --release --dart2js-optimization O4 --base-href "/TransitRoute/"
         
       - name: Configure Git
         run: |
