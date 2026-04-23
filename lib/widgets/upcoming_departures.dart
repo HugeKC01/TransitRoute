@@ -74,36 +74,56 @@ class _UpcomingDeparturesWidgetState extends State<UpcomingDeparturesWidget> {
         }
 
         final now = DateTime.now();
-        final currentTimeString =
-            '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
+
+        // GTFS departure times can go past 24:00 (e.g. 25:30 = 1:30am next day).
+        // We compute the current time as "GTFS seconds from midnight" of the
+        // service day. If it's before 03:00 we treat it as the continuation of
+        // yesterday's service (add 24 h so "01:30" becomes "25:30").
+        int toGtfsSeconds(String timeStr) {
+          final parts = timeStr.split(':');
+          if (parts.length < 2) return 0;
+          final h = int.tryParse(parts[0]) ?? 0;
+          final m = int.tryParse(parts[1]) ?? 0;
+          final s = parts.length >= 3 ? (int.tryParse(parts[2]) ?? 0) : 0;
+          return h * 3600 + m * 60 + s;
+        }
+
+        int nowGtfsSecs = now.hour * 3600 + now.minute * 60 + now.second;
+        // If before 3am assume we're still in yesterday's service day.
+        if (now.hour < 3) nowGtfsSecs += 24 * 3600;
 
         final validEntries = snapshot.data!;
 
-        // Find next departures (simplified strictly by time string comparison for fixed schedules, or just show active frequency)
         final displayEntries = <TimetableEntry>[];
         for (var e in validEntries) {
           if (e.isFrequency) {
-            // Check if current time falls in frequency
-            if (e.startTime != null &&
-                e.endTime != null &&
-                currentTimeString.compareTo(e.startTime!) >= 0 &&
-                currentTimeString.compareTo(e.endTime!) <= 0) {
-              displayEntries.add(e);
+            if (e.startTime != null && e.endTime != null) {
+              final start = toGtfsSeconds(e.startTime!);
+              final end = toGtfsSeconds(e.endTime!);
+              if (nowGtfsSecs >= start && nowGtfsSecs <= end) {
+                displayEntries.add(e);
+              }
             }
           } else {
-            // Include if it departs after now, up to a small limit
-            if (e.departureTime.isNotEmpty &&
-                e.departureTime.compareTo(currentTimeString) >= 0) {
-              displayEntries.add(e);
+            if (e.departureTime.isNotEmpty) {
+              final depSecs = toGtfsSeconds(e.departureTime);
+              if (depSecs >= nowGtfsSecs) {
+                displayEntries.add(e);
+              }
             }
           }
         }
 
         displayEntries.sort((a, b) {
-          final tA = a.isFrequency ? a.startTime! : a.departureTime;
-          final tB = b.isFrequency ? b.startTime! : b.departureTime;
+          final tA = toGtfsSeconds(
+            a.isFrequency ? (a.startTime ?? '99:99') : a.departureTime,
+          );
+          final tB = toGtfsSeconds(
+            b.isFrequency ? (b.startTime ?? '99:99') : b.departureTime,
+          );
           return tA.compareTo(tB);
         });
+
 
         // Find the next departure for each trip/route
         final groupedDepartures = <String, TimetableEntry>{};

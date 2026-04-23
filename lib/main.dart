@@ -1307,233 +1307,277 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     });
   }
 
-  Widget _buildPinpointPanelContent(BuildContext context, gtfs.Pinpoint pinpoint) {
+  Widget _buildPinpointPanelContent(
+    BuildContext context,
+    gtfs.Pinpoint pinpoint,
+  ) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final bottomInset = MediaQuery.of(context).padding.bottom;
+    final scheme = theme.colorScheme;
     final placeColor = _pinpointColor(pinpoint.placeType);
     final placeIcon = _pinpointIcon(pinpoint.placeType);
     final category = _pinpointCategory(pinpoint.placeType);
 
     final bool isFavorite = _favoritePins.any(
-      (p) => p.point.latitude == pinpoint.lat && p.point.longitude == pinpoint.lon,
+      (p) =>
+          p.point.latitude == pinpoint.lat &&
+          p.point.longitude == pinpoint.lon,
     );
 
-    Widget infoChip(String label, String value) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: colorScheme.outlineVariant),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label.toUpperCase(),
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        16,
+        0,
+        16,
+        MediaQuery.of(context).padding.bottom + 16,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Hero card — same style as StationDetailsContent._buildHeroCard
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: scheme.surface.withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: scheme.outlineVariant.withValues(alpha: 0.3),
               ),
             ),
-            const SizedBox(height: 2),
-            Text(
-              value,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    Widget quickAction({
-      required IconData icon,
-      required String title,
-      required String subtitle,
-      required VoidCallback onTap,
-    }) {
-      return Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: colorScheme.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(icon, color: colorScheme.primary),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Category icon circle
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: placeColor.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(placeIcon, size: 24, color: placeColor),
+                    ),
+                    const SizedBox(width: 14),
+                    // Name column
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            pinpoint.name,
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          if (pinpoint.nameEn != null &&
+                              pinpoint.nameEn!.isNotEmpty &&
+                              pinpoint.nameEn != pinpoint.name)
+                            Text(
+                              pinpoint.nameEn!,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    // Favorite button
+                    IconButton(
+                      icon: Icon(
+                        isFavorite ? Icons.favorite : Icons.favorite_border,
+                      ),
+                      color: isFavorite ? Colors.red : scheme.onSurfaceVariant,
+                      onPressed: () {
+                        setState(() {
+                          final point = LatLng(pinpoint.lat, pinpoint.lon);
+                          if (isFavorite) {
+                            _favoritePins.removeWhere(
+                              (p) =>
+                                  p.point.latitude == point.latitude &&
+                                  p.point.longitude == point.longitude,
+                            );
+                          } else {
+                            _favoritePins.add(
+                              FavoritePin(pinpoint.name, point),
+                            );
+                          }
+                          _saveFavoritePins();
+                          _recalculateMapLayers();
+                        });
+                      },
+                      style: IconButton.styleFrom(
+                        backgroundColor: scheme.surface.withValues(alpha: 0.8),
+                        padding: const EdgeInsets.all(8),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                    // Close button
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () =>
+                          setState(() => _viewingPinpoint = null),
+                      style: IconButton.styleFrom(
+                        backgroundColor: scheme.surface.withValues(alpha: 0.8),
+                        padding: const EdgeInsets.all(8),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title, style: theme.textTheme.titleMedium),
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
+                const SizedBox(height: 16),
+                // Category badge — own row
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: placeColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(placeIcon, size: 14, color: placeColor),
+                          const SizedBox(width: 5),
+                          Text(
+                            category,
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: placeColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                // Coordinates & type chips — new row below category
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: scheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: scheme.outlineVariant),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'COORDINATES',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                              letterSpacing: 0.3,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${pinpoint.lat.toStringAsFixed(4)}, ${pinpoint.lon.toStringAsFixed(4)}',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (pinpoint.placeType.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: scheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: scheme.outlineVariant),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'TYPE',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                                letterSpacing: 0.3,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              pinpoint.placeType.replaceAll('_', ' '),
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
+                  ],
                 ),
-                const Icon(Icons.chevron_right),
+
               ],
             ),
           ),
-        ),
-      );
-    }
-
-    return Container(
-      color: theme.colorScheme.surface,
-      child: SafeArea(
-        top: false,
-        child: SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(24, 24, 24, bottomInset + 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 16),
+          // Action buttons — matching StationDetailsContent._buildQuickActionButtons
+          Row(
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const SizedBox(width: 48),
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: placeColor.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
+              Expanded(
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                    child: Icon(placeIcon, size: 28, color: placeColor),
                   ),
-                  IconButton(
-                    icon: Icon(
-                      isFavorite ? Icons.favorite : Icons.favorite_border,
-                      color: isFavorite ? Colors.redAccent : null,
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        final point = LatLng(pinpoint.lat, pinpoint.lon);
-                        if (isFavorite) {
-                          _favoritePins.removeWhere(
-                            (p) => p.point.latitude == point.latitude && p.point.longitude == point.longitude,
-                          );
-                        } else {
-                          _favoritePins.add(FavoritePin(pinpoint.name, point));
-                        }
-                        _saveFavoritePins();
-                        _recalculateMapLayers();
-                      });
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Center(
-                child: Text(
-                  pinpoint.name,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
+                  onPressed: () {
+                    setState(() => _viewingPinpoint = null);
+                    _assignCustomPointSelection(
+                      LatLng(pinpoint.lat, pinpoint.lon),
+                      asStart: true,
+                    );
+                  },
+                  icon: const Icon(Icons.trip_origin),
+                  label: const Text('Origin'),
                 ),
               ),
-              if (pinpoint.nameEn != null && pinpoint.nameEn != pinpoint.name) ...[
-                const SizedBox(height: 4),
-                Center(
-                  child: Text(
-                    pinpoint.nameEn!,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton.tonalIcon(
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                    textAlign: TextAlign.center,
                   ),
+                  onPressed: () {
+                    setState(() => _viewingPinpoint = null);
+                    _assignCustomPointSelection(
+                      LatLng(pinpoint.lat, pinpoint.lon),
+                      asStart: false,
+                    );
+                  },
+                  icon: const Icon(Icons.flag),
+                  label: const Text('Destination'),
                 ),
-              ],
-              const SizedBox(height: 8),
-              Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: placeColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(placeIcon, size: 16, color: placeColor),
-                      const SizedBox(width: 6),
-                      Text(
-                        category,
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          color: placeColor,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: infoChip('Latitude', pinpoint.lat.toStringAsFixed(6)),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: infoChip('Longitude', pinpoint.lon.toStringAsFixed(6)),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              infoChip('Place Type', pinpoint.placeType.replaceAll('_', ' ')),
-              const SizedBox(height: 24),
-              const Divider(),
-              const SizedBox(height: 8),
-              quickAction(
-                icon: Icons.trip_origin,
-                title: 'Set as Start',
-                subtitle: 'Use this place as your starting point',
-                onTap: () {
-                  setState(() {
-                    _viewingPinpoint = null;
-                  });
-                  _assignCustomPointSelection(
-                    LatLng(pinpoint.lat, pinpoint.lon),
-                    asStart: true,
-                  );
-                },
-              ),
-              quickAction(
-                icon: Icons.flag,
-                title: 'Set as Destination',
-                subtitle: 'Use this place as your destination',
-                onTap: () {
-                  setState(() {
-                    _viewingPinpoint = null;
-                  });
-                  _assignCustomPointSelection(
-                    LatLng(pinpoint.lat, pinpoint.lon),
-                    asStart: false,
-                  );
-                },
               ),
             ],
           ),
-        ),
+        ],
       ),
     );
   }
@@ -1549,197 +1593,188 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     } catch (_) {}
 
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final bottomInset = MediaQuery.of(context).padding.bottom;
+    final scheme = theme.colorScheme;
 
-    Widget infoChip(String label, String value) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: colorScheme.outlineVariant),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label.toUpperCase(),
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
+    final bool isFavorite = matchingPin != null;
+    final label = matchingPin?.label ?? 'Dropped Pin';
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        16,
+        0,
+        16,
+        MediaQuery.of(context).padding.bottom + 16,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Hero card matching StationDetailsContent
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: scheme.surface.withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: scheme.outlineVariant.withValues(alpha: 0.3),
               ),
             ),
-            const SizedBox(height: 2),
-            Text(
-              value,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    Widget quickAction({
-      required IconData icon,
-      required String title,
-      required String subtitle,
-      required VoidCallback onTap,
-    }) {
-      return Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: colorScheme.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(icon, color: colorScheme.primary),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title, style: theme.textTheme.titleMedium),
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(Icons.chevron_right),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      color: theme.colorScheme.surface,
-      child: SafeArea(
-        top: false,
-        child: SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(24, 24, 24, bottomInset + 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const SizedBox(width: 48), // For balance
-                  Text("Location", style: theme.textTheme.titleMedium),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () {
-                      setState(() => _viewingDroppedPin = null);
-                    },
-                  ),
-                ],
-              ),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
-                      width: 44,
-                      height: 44,
+                      padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: Colors.redAccent,
-                        borderRadius: BorderRadius.circular(14),
+                        color: Colors.redAccent.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.place, color: Colors.white),
+                      child: const Icon(
+                        Icons.place,
+                        color: Colors.redAccent,
+                        size: 24,
+                      ),
                     ),
                     const SizedBox(width: 14),
                     Expanded(
-                      child: Text(
-                        matchingPin?.label ?? "Dropped Pin",
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            label,
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            'Custom location',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        isFavorite ? Icons.favorite : Icons.favorite_border,
+                      ),
+                      color: isFavorite ? Colors.red : scheme.onSurfaceVariant,
+                      onPressed: () {
+                        if (isFavorite) {
+                          setState(() {
+                            _favoritePins.removeWhere(
+                              (p) =>
+                                  p.point.latitude == point.latitude &&
+                                  p.point.longitude == point.longitude,
+                            );
+                          });
+                          _saveFavoritePins();
+                        } else {
+                          _promptSaveFavorite(point);
+                        }
+                      },
+                      style: IconButton.styleFrom(
+                        backgroundColor: scheme.surface.withValues(alpha: 0.8),
+                        padding: const EdgeInsets.all(8),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () =>
+                          setState(() => _viewingDroppedPin = null),
+                      style: IconButton.styleFrom(
+                        backgroundColor: scheme.surface.withValues(alpha: 0.8),
+                        padding: const EdgeInsets.all(8),
+                        visualDensity: VisualDensity.compact,
                       ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 12,
-                runSpacing: 8,
-                children: [
-                  infoChip(
-                    "Coordinates",
-                    "Lat ${point.latitude.toStringAsFixed(4)}, Lon ${point.longitude.toStringAsFixed(4)}",
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              if (matchingPin != null)
-                quickAction(
-                  icon: Icons.favorite,
-                  title: "Remove from Favorites",
-                  subtitle: "Delete this location from favorites",
-                  onTap: () {
-                    setState(() {
-                      _favoritePins.removeWhere(
-                        (p) =>
-                            p.point.latitude == point.latitude &&
-                            p.point.longitude == point.longitude,
-                      );
-                    });
-                    _saveFavoritePins();
-                  },
-                )
-              else
-                quickAction(
-                  icon: Icons.favorite_border,
-                  title: "Save to Favorites",
-                  subtitle: "Save this location as a favorite pin",
-                  onTap: () {
-                    _promptSaveFavorite(point);
-                  },
+                const SizedBox(height: 16),
+                // Coordinate chip
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: scheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: scheme.outlineVariant),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'COORDINATES',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                              letterSpacing: 0.3,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${point.latitude.toStringAsFixed(4)}, ${point.longitude.toStringAsFixed(4)}',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              quickAction(
-                icon: Icons.trip_origin,
-                title: "Set as origin",
-                subtitle: "Plan a route starting here",
-                onTap: () {
-                  _assignCustomPointSelection(point, asStart: true);
-                  setState(() => _viewingDroppedPin = null);
-                },
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Action buttons matching StationDetailsContent
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  onPressed: () {
+                    _assignCustomPointSelection(point, asStart: true);
+                    setState(() => _viewingDroppedPin = null);
+                  },
+                  icon: const Icon(Icons.trip_origin),
+                  label: const Text('Origin'),
+                ),
               ),
-              quickAction(
-                icon: Icons.flag,
-                title: "Set as destination",
-                subtitle: "Use this location as your endpoint",
-                onTap: () {
-                  _assignCustomPointSelection(point, asStart: false);
-                  setState(() => _viewingDroppedPin = null);
-                },
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton.tonalIcon(
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  onPressed: () {
+                    _assignCustomPointSelection(point, asStart: false);
+                    setState(() => _viewingDroppedPin = null);
+                  },
+                  icon: const Icon(Icons.flag),
+                  label: const Text('Destination'),
+                ),
               ),
             ],
           ),
-        ),
+        ],
       ),
     );
   }
@@ -2168,12 +2203,28 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             ),
             onMapEvent: (event) {
               final newZoom = event.camera.zoom;
-              _currentCenter = event.camera.center;
+              final newCenter = event.camera.center;
               final wasShowingBus = _currentZoom >= _busStopZoomThreshold;
               final nowShowingBus = newZoom >= _busStopZoomThreshold;
+
+              // Always track current center (used by _isInViewport).
+              _currentCenter = newCenter;
+
+              // Rebuild markers when a gesture ends or zoom changes tier,
+              // so the viewport-culling bounding box reflects the new position.
+              final isGestureEnd =
+                  event is MapEventMoveEnd ||
+                  event is MapEventDoubleTapZoom ||
+                  event is MapEventScrollWheelZoom ||
+                  event is MapEventFlingAnimation;
+
               if (wasShowingBus != nowShowingBus ||
-                  (newZoom.round() - _currentZoom.round()).abs() >= 1) {
-                setState(() => _currentZoom = newZoom);
+                  (newZoom.round() - _currentZoom.round()).abs() >= 1 ||
+                  isGestureEnd) {
+                setState(() {
+                  _currentZoom = newZoom;
+                  _recalculateMapLayers();
+                });
               }
             },
             onTap: (tapPosition, point) {
@@ -2928,11 +2979,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               builder: (ctx, setSheetState) {
                 // Rebuild sheet using the latest map states.
                 return SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
+                  child: SingleChildScrollView(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
                         Center(
                           child: Container(
                             width: 48,
@@ -3046,7 +3098,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                               fullWidth: true,
                             ),
                         ],
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 );
@@ -3994,6 +4047,95 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     );
   }
 
+  List<gtfs.Pinpoint> _filterPinpoints(String query) {
+    final trimmed = query.trim().toLowerCase();
+    if (trimmed.isEmpty || pinpoints.isEmpty) return const [];
+    return pinpoints
+        .where((pp) {
+          final name = pp.name.toLowerCase();
+          final nameEn = (pp.nameEn ?? '').toLowerCase();
+          final type = pp.placeType.toLowerCase();
+          return name.contains(trimmed) ||
+              nameEn.contains(trimmed) ||
+              type.contains(trimmed);
+        })
+        .take(10)
+        .toList();
+  }
+
+  Widget _buildPinpointSuggestionTile(gtfs.Pinpoint pp, VoidCallback onTap) {
+    final theme = Theme.of(context);
+    final color = _pinpointColor(pp.placeType);
+    final icon = _pinpointIcon(pp.placeType);
+    final category = _pinpointCategory(pp.placeType);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Material(
+          color: theme.colorScheme.surface.withValues(alpha: 0.9),
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(icon, size: 18, color: color),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          pp.name,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (pp.nameEn != null && pp.nameEn!.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            pp.nameEn!,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: theme.textTheme.bodySmall?.color ?? Colors.grey,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                        const SizedBox(height: 2),
+                        Text(
+                          category,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: color,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildWideDirectionSearchResults(BuildContext context) {
     var isStart = true;
     if (_destSearchFocus.hasFocus) {
@@ -4034,7 +4176,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     }
 
     final results = _filterStops(text);
-    if (results.isEmpty) {
+    final ppResults = _filterPinpoints(text);
+    if (results.isEmpty && ppResults.isEmpty) {
       return ListView(
         shrinkWrap: true,
         children: const [
@@ -4047,12 +4190,40 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     }
     return ListView(
       shrinkWrap: true,
-      children: results
-          .map(
-            (stop) =>
-                _buildSearchSuggestionTile(stop, () => closeAndSelect(stop)),
-          )
-          .toList(),
+      children: [
+        ...results
+            .map(
+              (stop) =>
+                  _buildSearchSuggestionTile(stop, () => closeAndSelect(stop)),
+            ),
+        if (ppResults.isNotEmpty) ...[
+          const Divider(indent: 16, endIndent: 16),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(32, 4, 16, 4),
+            child: Text(
+              'Important Places',
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          ...ppResults
+              .map(
+                (pp) => _buildPinpointSuggestionTile(pp, () {
+                  if (isStart) _startSearchFocus.unfocus();
+                  if (!isStart) _destSearchFocus.unfocus();
+                  setState(() {
+                    _viewingPinpoint = pp;
+                    _viewingStop = null;
+                    _viewingDroppedPin = null;
+                    _viewingDetailsOption = null;
+                  });
+                  final zoom = math.max(_mapController.camera.zoom, 14).toDouble();
+                  _mapController.move(LatLng(pp.lat, pp.lon), zoom);
+                }),
+              ),
+        ],
+      ],
     );
   }
 
@@ -4076,7 +4247,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     }
 
     final results = _filterStops(text);
-    if (results.isEmpty) {
+    final ppResults = _filterPinpoints(text);
+    if (results.isEmpty && ppResults.isEmpty) {
       return ListView(
         shrinkWrap: true,
         children: const [
@@ -4089,14 +4261,42 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     }
     return ListView(
       shrinkWrap: true,
-      children: results
-          .map(
-            (stop) => _buildSearchSuggestionTile(stop, () {
-              _collapsedSearchFocus.unfocus();
-              _handleCollapsedStopSelection(stop);
-            }),
-          )
-          .toList(),
+      children: [
+        ...results
+            .map(
+              (stop) => _buildSearchSuggestionTile(stop, () {
+                _collapsedSearchFocus.unfocus();
+                _handleCollapsedStopSelection(stop);
+              }),
+            ),
+        if (ppResults.isNotEmpty) ...[
+          const Divider(indent: 16, endIndent: 16),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(32, 4, 16, 4),
+            child: Text(
+              'Important Places',
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          ...ppResults
+              .map(
+                (pp) => _buildPinpointSuggestionTile(pp, () {
+                  _collapsedSearchFocus.unfocus();
+                  _collapsedSearchController.clear();
+                  setState(() {
+                    _viewingPinpoint = pp;
+                    _viewingStop = null;
+                    _viewingDroppedPin = null;
+                    _viewingDetailsOption = null;
+                  });
+                  final zoom = math.max(_mapController.camera.zoom, 14).toDouble();
+                  _mapController.move(LatLng(pp.lat, pp.lon), zoom);
+                }),
+              ),
+        ],
+      ],
     );
   }
 
@@ -5473,6 +5673,19 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     return s.toUpperCase();
   }
 
+  // Returns true if lat/lon is within the camera's visible bounds expanded by
+  // [bufferFactor] times the visible span in each direction.
+  bool _isInViewport(double lat, double lon, {double bufferFactor = 0.5}) {
+    final camera = _mapController.camera;
+    final bounds = camera.visibleBounds;
+    final latSpan = (bounds.north - bounds.south).abs();
+    final lonSpan = (bounds.east - bounds.west).abs();
+    return lat >= bounds.south - latSpan * bufferFactor &&
+        lat <= bounds.north + latSpan * bufferFactor &&
+        lon >= bounds.west - lonSpan * bufferFactor &&
+        lon <= bounds.east + lonSpan * bufferFactor;
+  }
+
   void _recalculateMapLayers() {
     _routeStopIds = <String>{};
     for (final seg in activeRouteSegments) {
@@ -5527,6 +5740,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               !_routeStopIds.contains(stop.stopId)) {
             return false;
           }
+          // Viewport culling — only render markers near the visible area
+          if (!_isInViewport(stop.lat, stop.lon)) return false;
           return true;
         })
         .map((stop) {
@@ -5583,6 +5798,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               !_routeStopIds.contains(stop.stopId)) {
             return false;
           }
+          if (!_isInViewport(stop.lat, stop.lon)) return false;
           return true;
         })
         .map((stop) {
@@ -5640,6 +5856,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           if (activeRouteSegments.isNotEmpty) return false;
           final cat = _pinpointCategory(pp.placeType);
           if (!(_pinpointCategoryToggles[cat] ?? true)) return false;
+          if (!_isInViewport(pp.lat, pp.lon)) return false;
           return true;
         })
         .map((pp) {
@@ -5883,8 +6100,21 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           setState(() => _selectedNavIndex = 0);
           final point = LatLng(lat, lon);
           _mapController.move(point, 15);
+
+          // Check if this saved location is actually an important place (pinpoint)
+          gtfs.Pinpoint? matchedPinpoint;
+          try {
+            matchedPinpoint = pinpoints.firstWhere(
+              (pp) => pp.lat == lat && pp.lon == lon,
+            );
+          } catch (_) {}
+
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            _showDroppedPinDetails(context, point);
+            if (matchedPinpoint != null) {
+              _showPinpointDetails(context, matchedPinpoint);
+            } else {
+              _showDroppedPinDetails(context, point);
+            }
           });
         },
         profile: _profile,
