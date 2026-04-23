@@ -198,3 +198,21 @@ class BusRouteInfo {
     required this.isExpressway,
   });
 }
+
+class Pinpoint {
+  final String id;
+  final String name;
+  final String? nameEn;
+  final double lat;
+  final double lon;
+  final String placeType;
+
+  Pinpoint({
+    required this.id,
+    required this.name,
+    this.nameEn,
+    required this.lat,
+    required this.lon,
+    required this.placeType,
+  });
+}

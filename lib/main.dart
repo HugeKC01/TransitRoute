@@ -366,6 +366,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   List<ShapeSegment> shapeSegments = [];
   List<gtfs.Stop> busStops = [];
   List<gtfs.Stop> ferryStops = [];
+  List<gtfs.Pinpoint> pinpoints = [];
   Map<String, String> fareTypeMap = {};
   Map<String, gtfs.BusRouteInfo> busRouteInfoMap = {};
   Map<String, int> fareDataMap = {};
@@ -386,9 +387,21 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   bool _showMetroPins = true;
   bool _showBusPins = true;
   bool _showFerryPins = true;
+  bool _showPinpoints = true;
+  final Map<String, bool> _pinpointCategoryToggles = {
+    'Education': true,
+    'Healthcare': true,
+    'Shopping': true,
+    'Government': true,
+    'Worship': true,
+    'Hospitality': true,
+    'Parks & Recreation': true,
+    'Other': true,
+  };
 
   List<Marker> _cachedBusMarkers = [];
   List<Marker> _cachedFerryMarkers = [];
+  List<Marker> _cachedPinpointMarkers = [];
   List<Polyline<int>> _cachedShapePolylines = [];
   Set<String> _routeStopIds = {};
 
@@ -524,6 +537,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   DirectionOption? _viewingDetailsOption;
   gtfs.Stop? _viewingStop;
   LatLng? _viewingDroppedPin;
+  gtfs.Pinpoint? _viewingPinpoint;
   int selectedDirectionIndex = 0;
 
   Future<void> _findDirection() async {
@@ -557,6 +571,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       directionOptions.clear();
       _viewingStop = null;
       _viewingDroppedPin = null;
+      _viewingPinpoint = null;
       _recalculateMapLayers();
     });
 
@@ -1120,6 +1135,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     setState(() {
       _viewingStop = stop;
       _viewingDroppedPin = null;
+      _viewingPinpoint = null;
       _viewingDetailsOption = null;
     });
   }
@@ -1199,8 +1215,327 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     setState(() {
       _viewingDroppedPin = point;
       _viewingStop = null;
+      _viewingPinpoint = null;
       _viewingDetailsOption = null;
     });
+  }
+
+  // ── Pinpoint helpers ──
+
+  static const Map<String, List<String>> _pinpointCategoryTypes = {
+    'Education': [
+      'university', 'school', 'college', 'kindergarten', 'cram_school',
+      'language_school', 'music_school', 'dancing_school', 'cooking_school',
+      'sport_school', 'prep_school',
+    ],
+    'Healthcare': ['hospital', 'clinic'],
+    'Shopping': [
+      'mall', 'department_store', 'marketplace', 'convenience',
+      'department_store;wholesale', 'mall;supermarket',
+    ],
+    'Government': ['government', 'courthouse', 'townhall', 'police', 'diplomatic'],
+    'Worship': ['place_of_worship'],
+    'Hospitality': ['hotel', 'hostel', 'guest_house', 'resort', 'hotel;guest_house'],
+    'Parks & Recreation': ['park', 'garden', 'dog_park', 'water_park', 'sports_centre'],
+  };
+
+  String _pinpointCategory(String placeType) {
+    for (final entry in _pinpointCategoryTypes.entries) {
+      if (entry.value.contains(placeType)) return entry.key;
+    }
+    return 'Other';
+  }
+
+  IconData _pinpointIcon(String placeType) {
+    switch (_pinpointCategory(placeType)) {
+      case 'Education':         return Icons.school;
+      case 'Healthcare':        return Icons.local_hospital;
+      case 'Shopping':          return Icons.shopping_bag;
+      case 'Government':        return Icons.account_balance;
+      case 'Worship':           return Icons.temple_buddhist;
+      case 'Hospitality':       return Icons.hotel;
+      case 'Parks & Recreation': return Icons.park;
+      default:                  return Icons.place;
+    }
+  }
+
+  Color _pinpointColor(String placeType) {
+    switch (_pinpointCategory(placeType)) {
+      case 'Education':         return Colors.indigo;
+      case 'Healthcare':        return Colors.red.shade700;
+      case 'Shopping':          return Colors.pink;
+      case 'Government':        return Colors.blueGrey;
+      case 'Worship':           return Colors.amber.shade800;
+      case 'Hospitality':       return Colors.deepPurple;
+      case 'Parks & Recreation': return Colors.green.shade700;
+      default:                  return Colors.grey.shade700;
+    }
+  }
+
+  IconData _pinpointCategoryIcon(String category) {
+    switch (category) {
+      case 'Education':         return Icons.school;
+      case 'Healthcare':        return Icons.local_hospital;
+      case 'Shopping':          return Icons.shopping_bag;
+      case 'Government':        return Icons.account_balance;
+      case 'Worship':           return Icons.temple_buddhist;
+      case 'Hospitality':       return Icons.hotel;
+      case 'Parks & Recreation': return Icons.park;
+      default:                  return Icons.place;
+    }
+  }
+
+  Color _pinpointCategoryColor(String category) {
+    switch (category) {
+      case 'Education':         return Colors.indigo;
+      case 'Healthcare':        return Colors.red.shade700;
+      case 'Shopping':          return Colors.pink;
+      case 'Government':        return Colors.blueGrey;
+      case 'Worship':           return Colors.amber.shade800;
+      case 'Hospitality':       return Colors.deepPurple;
+      case 'Parks & Recreation': return Colors.green.shade700;
+      default:                  return Colors.grey.shade700;
+    }
+  }
+
+  void _showPinpointDetails(BuildContext context, gtfs.Pinpoint pinpoint) {
+    setState(() {
+      _viewingPinpoint = pinpoint;
+      _viewingStop = null;
+      _viewingDroppedPin = null;
+      _viewingDetailsOption = null;
+    });
+  }
+
+  Widget _buildPinpointPanelContent(BuildContext context, gtfs.Pinpoint pinpoint) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    final placeColor = _pinpointColor(pinpoint.placeType);
+    final placeIcon = _pinpointIcon(pinpoint.placeType);
+    final category = _pinpointCategory(pinpoint.placeType);
+
+    final bool isFavorite = _favoritePins.any(
+      (p) => p.point.latitude == pinpoint.lat && p.point.longitude == pinpoint.lon,
+    );
+
+    Widget infoChip(String label, String value) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: colorScheme.outlineVariant),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label.toUpperCase(),
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              value,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    Widget quickAction({
+      required IconData icon,
+      required String title,
+      required String subtitle,
+      required VoidCallback onTap,
+    }) {
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: colorScheme.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(icon, color: colorScheme.primary),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: theme.textTheme.titleMedium),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      color: theme.colorScheme.surface,
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(24, 24, 24, bottomInset + 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const SizedBox(width: 48),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: placeColor.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(placeIcon, size: 28, color: placeColor),
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      isFavorite ? Icons.favorite : Icons.favorite_border,
+                      color: isFavorite ? Colors.redAccent : null,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        final point = LatLng(pinpoint.lat, pinpoint.lon);
+                        if (isFavorite) {
+                          _favoritePins.removeWhere(
+                            (p) => p.point.latitude == point.latitude && p.point.longitude == point.longitude,
+                          );
+                        } else {
+                          _favoritePins.add(FavoritePin(pinpoint.name, point));
+                        }
+                        _saveFavoritePins();
+                        _recalculateMapLayers();
+                      });
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Center(
+                child: Text(
+                  pinpoint.name,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              if (pinpoint.nameEn != null && pinpoint.nameEn != pinpoint.name) ...[
+                const SizedBox(height: 4),
+                Center(
+                  child: Text(
+                    pinpoint.nameEn!,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 8),
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: placeColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(placeIcon, size: 16, color: placeColor),
+                      const SizedBox(width: 6),
+                      Text(
+                        category,
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: placeColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: infoChip('Latitude', pinpoint.lat.toStringAsFixed(6)),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: infoChip('Longitude', pinpoint.lon.toStringAsFixed(6)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              infoChip('Place Type', pinpoint.placeType.replaceAll('_', ' ')),
+              const SizedBox(height: 24),
+              const Divider(),
+              const SizedBox(height: 8),
+              quickAction(
+                icon: Icons.trip_origin,
+                title: 'Set as Start',
+                subtitle: 'Use this place as your starting point',
+                onTap: () {
+                  setState(() {
+                    _viewingPinpoint = null;
+                  });
+                  _assignCustomPointSelection(
+                    LatLng(pinpoint.lat, pinpoint.lon),
+                    asStart: true,
+                  );
+                },
+              ),
+              quickAction(
+                icon: Icons.flag,
+                title: 'Set as Destination',
+                subtitle: 'Use this place as your destination',
+                onTap: () {
+                  setState(() {
+                    _viewingPinpoint = null;
+                  });
+                  _assignCustomPointSelection(
+                    LatLng(pinpoint.lat, pinpoint.lon),
+                    asStart: false,
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildDroppedPinPanelContent(BuildContext context, LatLng point) {
@@ -1562,6 +1897,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     if (_viewingDroppedPin != null) {
       return _buildDroppedPinPanelContent(context, _viewingDroppedPin!);
     }
+    if (_viewingPinpoint != null) {
+      return _buildPinpointPanelContent(context, _viewingPinpoint!);
+    }
     if (_viewingStop != null) {
       final stop = _viewingStop!;
       final lineName = _getLineName(stop.stopId);
@@ -1724,7 +2062,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     final hasPanelContent =
         directionOptions.isNotEmpty ||
         _viewingStop != null ||
-        _viewingDroppedPin != null;
+        _viewingDroppedPin != null ||
+        _viewingPinpoint != null;
 
     // Responsive bottom offset that animates up if there are routes
     final zoomBottomOffset = isWide
@@ -1739,6 +2078,10 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     final showFerryStops =
         _showFerryPins &&
         ferryStops.isNotEmpty &&
+        _currentZoom >= _busStopZoomThreshold;
+    final showPinpoints =
+        _showPinpoints &&
+        pinpoints.isNotEmpty &&
         _currentZoom >= _busStopZoomThreshold;
 
     final rawFilteredRailStops = railStops.where((stop) {
@@ -1886,6 +2229,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                 polylines: _cachedActiveDirectionPolylines,
               ),
 
+            if (showPinpoints) MarkerLayer(markers: _cachedPinpointMarkers),
             if (showBusStops) MarkerLayer(markers: _cachedBusMarkers),
             if (showFerryStops) MarkerLayer(markers: _cachedFerryMarkers),
             if (_favoritePins.isNotEmpty)
@@ -2482,6 +2826,30 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           _recalculateMapLayers();
         }),
       ),
+      const Divider(),
+      _buildFilterMenuItem(
+        'Important Places',
+        Icons.location_city,
+        Colors.deepOrange,
+        _showPinpoints,
+        (val) => setState(() {
+          _showPinpoints = val;
+          _recalculateMapLayers();
+        }),
+      ),
+      if (_showPinpoints) ...[
+        for (final category in _pinpointCategoryToggles.keys)
+          _buildFilterMenuItem(
+            '  $category',
+            _pinpointCategoryIcon(category),
+            _pinpointCategoryColor(category),
+            _pinpointCategoryToggles[category]!,
+            (val) => setState(() {
+              _pinpointCategoryToggles[category] = val;
+              _recalculateMapLayers();
+            }),
+          ),
+      ],
     ];
 
     Widget buildButton(bool isOpen, VoidCallback onPressed) {
@@ -2646,6 +3014,38 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                           },
                           fullWidth: true,
                         ),
+                        const Divider(),
+                        _buildFilterMenuItem(
+                          'Important Places',
+                          Icons.location_city,
+                          Colors.deepOrange,
+                          _showPinpoints,
+                          (val) {
+                            setState(() {
+                              _showPinpoints = val;
+                              _recalculateMapLayers();
+                            });
+                            setSheetState(() {});
+                          },
+                          fullWidth: true,
+                        ),
+                        if (_showPinpoints) ...[
+                          for (final category in _pinpointCategoryToggles.keys)
+                            _buildFilterMenuItem(
+                              '  $category',
+                              _pinpointCategoryIcon(category),
+                              _pinpointCategoryColor(category),
+                              _pinpointCategoryToggles[category]!,
+                              (val) {
+                                setState(() {
+                                  _pinpointCategoryToggles[category] = val;
+                                  _recalculateMapLayers();
+                                });
+                                setSheetState(() {});
+                              },
+                              fullWidth: true,
+                            ),
+                        ],
                       ],
                     ),
                   ),
@@ -2867,6 +3267,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                             directionOptions.isNotEmpty ||
                             _viewingStop != null ||
                             _viewingDroppedPin != null ||
+                            _viewingPinpoint != null ||
                             isAnyWideSearching;
                         return AnimatedSwitcher(
                           duration: const Duration(milliseconds: 350),
@@ -3033,7 +3434,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             final hasPanelContent =
                 directionOptions.isNotEmpty ||
                 _viewingStop != null ||
-                _viewingDroppedPin != null;
+                _viewingDroppedPin != null ||
+                _viewingPinpoint != null;
             // Dynamic initial sheet height when content exist
             final sheetInitialSize = hasPanelContent ? 0.45 : 0.0;
 
@@ -4420,6 +4822,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     final busStopList = await _parseBusStopsFromAsset(
       'assets/gtfs_data/bus_stop.txt',
     );
+    final pinpointList = await _parsePinpointsFromAsset(
+      'assets/gtfs_data/pinpoint.txt',
+    );
     // Load fare mappings used for fare calculation
     await _loadFareMappings();
     // Build linePrefixes and lineColors from routes
@@ -4518,6 +4923,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       busStops = busStopList;
       _busStopIdSetCache = null; // Clear cache on update
       this.ferryStops = ferryStops;
+      pinpoints = pinpointList;
       linePrefixes = prefixMap;
       lineColors = colorMap;
       stopLookup = stopMap;
@@ -4708,6 +5114,54 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         );
       }
       return stops;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<List<gtfs.Pinpoint>> _parsePinpointsFromAsset(String assetPath) async {
+    try {
+      final content = await gtfsSyncService.getGtfsFile(assetPath);
+      final lines = const LineSplitter().convert(content);
+      if (lines.length <= 1) return [];
+      final header = _parseCsvLine(lines.first).map((s) => s.trim()).toList();
+      int idxId = header.indexOf('stop_id');
+      if (idxId < 0) idxId = 0;
+      int idxName = header.indexOf('stop_name');
+      if (idxName < 0) idxName = 1;
+      int idxNameEn = header.indexOf('stop_name_en');
+      if (idxNameEn < 0) idxNameEn = 2;
+      int idxLat = header.indexOf('stop_lat');
+      if (idxLat < 0) idxLat = 3;
+      int idxLon = header.indexOf('stop_lon');
+      if (idxLon < 0) idxLon = 4;
+      int idxDesc = header.indexOf('stop_desc');
+      if (idxDesc < 0) idxDesc = 5;
+      final result = <gtfs.Pinpoint>[];
+      for (var i = 1; i < lines.length; i++) {
+        final line = lines[i].trimRight();
+        if (line.isEmpty) continue;
+        final row = _parseCsvLine(line);
+        if (row.length <= idxLat || row.length <= idxLon) continue;
+        final id = row[idxId].trim();
+        final name = row[idxName].trim();
+        final nameEn = (row.length > idxNameEn) ? row[idxNameEn].trim() : null;
+        final lat = double.tryParse(row[idxLat].trim());
+        final lon = double.tryParse(row[idxLon].trim());
+        final desc = (row.length > idxDesc) ? row[idxDesc].trim() : '';
+        if (name.isEmpty || lat == null || lon == null) continue;
+        result.add(
+          gtfs.Pinpoint(
+            id: id.isEmpty ? 'PP_$i' : id,
+            name: name,
+            nameEn: (nameEn != null && nameEn.isNotEmpty) ? nameEn : null,
+            lat: lat,
+            lon: lon,
+            placeType: desc.isNotEmpty ? desc : 'other',
+          ),
+        );
+      }
+      return result;
     } catch (_) {
       return [];
     }
@@ -5181,6 +5635,48 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         })
         .toList();
 
+    _cachedPinpointMarkers = pinpoints
+        .where((pp) {
+          if (activeRouteSegments.isNotEmpty) return false;
+          final cat = _pinpointCategory(pp.placeType);
+          if (!(_pinpointCategoryToggles[cat] ?? true)) return false;
+          return true;
+        })
+        .map((pp) {
+          final color = _pinpointColor(pp.placeType);
+          final icon = _pinpointIcon(pp.placeType);
+          return Marker(
+            point: LatLng(pp.lat, pp.lon),
+            width: 22,
+            height: 22,
+            child: GestureDetector(
+              onTap: () => _showPinpointDetails(context, pp),
+              child: Tooltip(
+                message: pp.nameEn ?? pp.name,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.2),
+                        blurRadius: 3,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  child: Icon(icon, color: Colors.white, size: 12),
+                ),
+              ),
+            ),
+          );
+        })
+        .toList();
+
     _cachedInactiveDirectionPolylines.clear();
     if (directionOptions.isNotEmpty) {
       for (int i = 0; i < directionOptions.length; i++) {
@@ -5411,6 +5907,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           directionOptions.isEmpty &&
           _viewingStop == null &&
           _viewingDroppedPin == null &&
+          _viewingPinpoint == null &&
           !_collapsedSearchFocus.hasFocus &&
           !_startSearchFocus.hasFocus &&
           !_destSearchFocus.hasFocus &&
@@ -5426,6 +5923,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             _destSearchFocus.unfocus();
           } else if (_collapsedSearchController.text.isNotEmpty) {
             _collapsedSearchController.clear();
+          } else if (_viewingPinpoint != null) {
+            _viewingPinpoint = null;
           } else if (_viewingStop != null) {
             _viewingStop = null;
           } else if (_viewingDroppedPin != null) {
