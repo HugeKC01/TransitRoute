@@ -133,7 +133,12 @@ class StationDetailsContent extends StatelessWidget {
           ],
           _SectionHeader('Timetable & Departures'),
           const SizedBox(height: 12),
-          StationTimetableSection(stopId: stop.stopId),
+          StationTimetableSection(
+            stopId: stop.stopId,
+            mergedStopIds: mergedGroupStops.isNotEmpty
+                ? mergedGroupStops.map((s) => s.stopId).toList()
+                : const [],
+          ),
           const SizedBox(height: 24),
           _SectionHeader('Details'),
           const SizedBox(height: 12),

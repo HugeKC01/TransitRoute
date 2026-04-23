@@ -3,7 +3,12 @@ import 'package:route/services/timetable_service.dart';
 
 class StationTimetableSection extends StatefulWidget {
   final String stopId;
-  const StationTimetableSection({super.key, required this.stopId});
+  final List<String> mergedStopIds;
+  const StationTimetableSection({
+    super.key,
+    required this.stopId,
+    this.mergedStopIds = const [],
+  });
 
   @override
   State<StationTimetableSection> createState() =>
@@ -29,16 +34,30 @@ class _StationTimetableSectionState extends State<StationTimetableSection> {
   }
 
   void _loadTimetable() {
-    _timetableFuture = TimetableService.getTimetableForStop(
-      widget.stopId,
-      serviceId: _selectedDay,
+    final ids = widget.mergedStopIds.isNotEmpty
+        ? widget.mergedStopIds
+        : [widget.stopId];
+    _timetableFuture = _fetchCombined(ids, _selectedDay);
+  }
+
+  Future<List<TimetableEntry>> _fetchCombined(
+    List<String> ids,
+    String serviceId,
+  ) async {
+    final futures = ids.map(
+      (id) => TimetableService.getTimetableForStop(id, serviceId: serviceId),
     );
+    final results = await Future.wait(futures);
+    final combined = results.expand((list) => list).toList();
+    combined.sort((a, b) => a.departureTime.compareTo(b.departureTime));
+    return combined;
   }
 
   @override
   void didUpdateWidget(StationTimetableSection oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.stopId != widget.stopId) {
+    if (oldWidget.stopId != widget.stopId ||
+        oldWidget.mergedStopIds != widget.mergedStopIds) {
       setState(() {
         _loadTimetable();
       });
