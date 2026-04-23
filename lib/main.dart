@@ -402,6 +402,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   List<Marker> _cachedBusMarkers = [];
   List<Marker> _cachedFerryMarkers = [];
   List<Marker> _cachedPinpointMarkers = [];
+  List<Marker> _cachedFavoritePinMarkers = []; // non-stop favorite pins
   List<Polyline<int>> _cachedShapePolylines = [];
   Set<String> _routeStopIds = {};
 
@@ -575,8 +576,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       _recalculateMapLayers();
     });
 
-    // Give the UI a moment to show the loading indicator before heavy computation
-    await Future.delayed(const Duration(milliseconds: 50));
+    // Yield a microtask so the loading indicator paints before heavy work.
+    await Future.microtask(() {});
 
     try {
       final result = await _directionService.findDirections(
@@ -2221,9 +2222,11 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               if (wasShowingBus != nowShowingBus ||
                   (newZoom.round() - _currentZoom.round()).abs() >= 1 ||
                   isGestureEnd) {
+                // Compute new marker lists BEFORE setState so the rebuild
+                // immediately has the correct data — avoids a second pass.
+                _recalculateMapLayers();
                 setState(() {
                   _currentZoom = newZoom;
-                  _recalculateMapLayers();
                 });
               }
             },
@@ -2283,56 +2286,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             if (showPinpoints) MarkerLayer(markers: _cachedPinpointMarkers),
             if (showBusStops) MarkerLayer(markers: _cachedBusMarkers),
             if (showFerryStops) MarkerLayer(markers: _cachedFerryMarkers),
-            if (_favoritePins.isNotEmpty)
-              MarkerLayer(
-                markers: _favoritePins
-                    .where((pin) {
-                      // Only draw the generic heart pin if it's not a transit stop.
-                      // Transit stops handle their own "favorite" red border rendering.
-                      return !allStops.any(
-                        (s) =>
-                            s.lat == pin.point.latitude &&
-                            s.lon == pin.point.longitude,
-                      );
-                    })
-                    .map((pin) {
-                      return Marker(
-                        point: pin.point,
-                        width: 24,
-                        height: 24,
-                        child: GestureDetector(
-                          onTap: () =>
-                              _showDroppedPinDetails(context, pin.point),
-                          child: Tooltip(
-                            message: 'Favorite Pin',
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.surface,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: Colors.redAccent,
-                                  width: 2,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.2),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: const Icon(
-                                Icons.favorite,
-                                color: Colors.redAccent,
-                                size: 14,
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    })
-                    .toList(),
-              ),
+            if (_cachedFavoritePinMarkers.isNotEmpty)
+              MarkerLayer(markers: _cachedFavoritePinMarkers),
             if (filteredRailStops.isNotEmpty)
               MarkerLayer(
                 markers: filteredRailStops.map((stop) {
@@ -3191,8 +3146,11 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
     return Stack(
       children: [
-        // Map fills the entire background
-        Positioned.fill(child: _buildMap(context)),
+        // Map fills the entire background — RepaintBoundary lets the
+        // compositor cache the map raster independently from UI overlays.
+        Positioned.fill(
+          child: RepaintBoundary(child: _buildMap(context)),
+        ),
 
         // Map blur when search is active
         Positioned.fill(
@@ -3494,7 +3452,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
 
             return Stack(
               children: [
-                Positioned.fill(child: _buildMap(context)),
+                Positioned.fill(
+                  child: RepaintBoundary(child: _buildMap(context)),
+                ),
 
                 // Map blur when search is active
                 if (isAnySearching)
@@ -4976,11 +4936,24 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     _locationSub = location.onLocationChanged.listen((
       LocationData currentLocation,
     ) {
-      if (mounted) {
-        setState(() {
+      if (!mounted) return;
+      // Throttle: only trigger a rebuild when the device has moved >~20 m
+      // (avoids 1-Hz full-widget-tree rebuilds while standing still).
+      final prev = _userLocation;
+      if (prev != null &&
+          currentLocation.latitude != null &&
+          currentLocation.longitude != null) {
+        final dlat = (currentLocation.latitude! - (prev.latitude ?? 0)).abs();
+        final dlon = (currentLocation.longitude! - (prev.longitude ?? 0)).abs();
+        if (dlat < 0.0002 && dlon < 0.0002) {
+          // Position hasn't changed meaningfully — update silently without rebuild
           _userLocation = currentLocation;
-        });
+          return;
+        }
       }
+      setState(() {
+        _userLocation = currentLocation;
+      });
     });
   }
 
@@ -5000,33 +4973,36 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   }
 
   Future<void> _loadRoutesAndStops() async {
-    final routes = await _parseRoutesFromAsset('assets/gtfs_data/routes.txt');
-    final busRoutes = await RouteAssetLoader.loadRoutes(
-      'assets/gtfs_data/bus_route.txt',
-    );
-    final ferryRoutes = await RouteAssetLoader.loadRoutes(
-      'assets/gtfs_data/ferry_route.txt',
-    );
-    routes.addAll(busRoutes);
-    routes.addAll(ferryRoutes);
+    // Parallelise all independent asset loads — total time = slowest file
+    // instead of the sum of all files.
+    final results = await Future.wait([
+      _parseRoutesFromAsset('assets/gtfs_data/routes.txt'),          // 0
+      RouteAssetLoader.loadRoutes('assets/gtfs_data/bus_route.txt'), // 1
+      RouteAssetLoader.loadRoutes('assets/gtfs_data/ferry_route.txt'),// 2
+      _loadThaiStopNames(),                                          // 3
+    ]);
 
-    final thaiNames = await _loadThaiStopNames();
-    final stops = await _parseStopsFromAsset(
-      'assets/gtfs_data/stops.txt',
-      thaiNames: thaiNames,
-    );
-    final ferryStops = await RouteAssetLoader.loadStops(
-      'assets/gtfs_data/ferry_stop.txt',
-      thaiNames: thaiNames,
-    );
-    final busStopList = await _parseBusStopsFromAsset(
-      'assets/gtfs_data/bus_stop.txt',
-    );
-    final pinpointList = await _parsePinpointsFromAsset(
-      'assets/gtfs_data/pinpoint.txt',
-    );
-    // Load fare mappings used for fare calculation
-    await _loadFareMappings();
+    final routes = [
+      ...(results[0] as List<gtfs.Route>),
+      ...(results[1] as List<gtfs.Route>),
+      ...(results[2] as List<gtfs.Route>),
+    ];
+    final thaiNames = results[3] as Map<String, String>;
+
+    // Second parallel batch — depends on routes/thaiNames from above
+    final results2 = await Future.wait([
+      _parseStopsFromAsset('assets/gtfs_data/stops.txt', thaiNames: thaiNames), // 0
+      RouteAssetLoader.loadStops('assets/gtfs_data/ferry_stop.txt', thaiNames: thaiNames), // 1
+      _parseBusStopsFromAsset('assets/gtfs_data/bus_stop.txt'),     // 2
+      _parsePinpointsFromAsset('assets/gtfs_data/pinpoint.txt'),    // 3
+      _loadFareMappings(),                                           // 4
+    ]);
+
+    final stops        = results2[0] as List<gtfs.Stop>;
+    final ferryStops   = results2[1] as List<gtfs.Stop>;
+    final busStopList  = results2[2] as List<gtfs.Stop>;
+    final pinpointList = results2[3] as List<gtfs.Pinpoint>;
+    // _loadFareMappings populates instance fields directly (result[4] is void)
     // Build linePrefixes and lineColors from routes
     Map<String, List<String>> prefixMap = {};
     Map<String, Color> colorMap = {};
@@ -5916,6 +5892,51 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         isActive: true,
       );
     }
+
+    // Cache non-transit favourite pin markers. Use a coordinate Set for O(1)
+    // lookup instead of allStops.any() on every build frame.
+    final stopCoordSet = <String>{};
+    for (final s in allStops) {
+      stopCoordSet.add('${s.lat},${s.lon}');
+    }
+    _cachedFavoritePinMarkers = _favoritePins
+        .where((pin) {
+          final key = '${pin.point.latitude},${pin.point.longitude}';
+          return !stopCoordSet.contains(key);
+        })
+        .map((pin) {
+          return Marker(
+            point: pin.point,
+            width: 24,
+            height: 24,
+            child: GestureDetector(
+              onTap: () => _showDroppedPinDetails(context, pin.point),
+              child: Tooltip(
+                message: 'Favorite Pin',
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.redAccent, width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.2),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.favorite,
+                    color: Colors.redAccent,
+                    size: 14,
+                  ),
+                ),
+              ),
+            ),
+          );
+        })
+        .toList();
   }
 
   void _animatedMapMove(
