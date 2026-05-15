@@ -1,2 +1,0 @@
-route_id,agency_id,route_short_name,route_long_name,route_type,route_color,route_text_color,line_prefixes
-BRT,BMTA,BRT,BRT,3,0000FF,FFFFFF,
