@@ -871,12 +871,22 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             }
 
             if (aLocs.isNotEmpty && bLocs.isNotEmpty) {
+              final N = shape.points.length;
+              final isLoop = N > 2 && const Distance().as(
+                LengthUnit.Meter,
+                shape.points.first,
+                shape.points.last,
+              ) < 100;
+
               int bestGap = 999999;
               int bestA = -1;
               int bestB = -1;
               for (final a in aLocs) {
                 for (final b in bLocs) {
-                  final gap = (a - b).abs();
+                  int gap = (a - b).abs();
+                  if (isLoop && gap > N / 2) {
+                    gap = N - gap;
+                  }
                   if (gap < bestGap) {
                     bestGap = gap;
                     bestA = a;
@@ -885,13 +895,23 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                 }
               }
 
-              final isReversed = bestA > bestB;
-              final startIdx = isReversed ? bestB : bestA;
-              final endIdx = isReversed ? bestA : bestB;
-
-              var shapePoints = shape.points.sublist(startIdx, endIdx + 1);
-              if (isReversed) {
-                shapePoints = shapePoints.reversed.toList();
+              List<LatLng> shapePoints;
+              if (isLoop && (bestA - bestB).abs() > N / 2) {
+                if (bestA > bestB) {
+                  shapePoints = shape.points.sublist(bestA, N);
+                  shapePoints.addAll(shape.points.sublist(0, bestB + 1));
+                } else {
+                  shapePoints = shape.points.sublist(0, bestA + 1).reversed.toList();
+                  shapePoints.addAll(shape.points.sublist(bestB, N).reversed.toList());
+                }
+              } else {
+                final isReversed = bestA > bestB;
+                final startIdx = isReversed ? bestB : bestA;
+                final endIdx = isReversed ? bestA : bestB;
+                shapePoints = shape.points.sublist(startIdx, endIdx + 1);
+                if (isReversed) {
+                  shapePoints = shapePoints.reversed.toList();
+                }
               }
               polylines.add(
                 Polyline<int>(
@@ -947,13 +967,30 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                     bestDistB < 500 &&
                     bestA != -1 &&
                     bestB != -1) {
-                  final isReversed = bestA > bestB;
-                  final startIdx = isReversed ? bestB : bestA;
-                  final endIdx = isReversed ? bestA : bestB;
+                  final N = shape.points.length;
+                  final isLoop = N > 2 && const Distance().as(
+                    LengthUnit.Meter,
+                    shape.points.first,
+                    shape.points.last,
+                  ) < 100;
 
-                  var shapePoints = shape.points.sublist(startIdx, endIdx + 1);
-                  if (isReversed) {
-                    shapePoints = shapePoints.reversed.toList();
+                  List<LatLng> shapePoints;
+                  if (isLoop && (bestA - bestB).abs() > N / 2) {
+                    if (bestA > bestB) {
+                      shapePoints = shape.points.sublist(bestA, N);
+                      shapePoints.addAll(shape.points.sublist(0, bestB + 1));
+                    } else {
+                      shapePoints = shape.points.sublist(0, bestA + 1).reversed.toList();
+                      shapePoints.addAll(shape.points.sublist(bestB, N).reversed.toList());
+                    }
+                  } else {
+                    final isReversed = bestA > bestB;
+                    final startIdx = isReversed ? bestB : bestA;
+                    final endIdx = isReversed ? bestA : bestB;
+                    shapePoints = shape.points.sublist(startIdx, endIdx + 1);
+                    if (isReversed) {
+                      shapePoints = shapePoints.reversed.toList();
+                    }
                   }
 
                   polylines.add(
@@ -1007,13 +1044,30 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                     bestDistB < 500 &&
                     bestA != -1 &&
                     bestB != -1) {
-                  final isReversed = bestA > bestB;
-                  final startIdx = isReversed ? bestB : bestA;
-                  final endIdx = isReversed ? bestA : bestB;
+                  final N = shape.points.length;
+                  final isLoop = N > 2 && const Distance().as(
+                    LengthUnit.Meter,
+                    shape.points.first,
+                    shape.points.last,
+                  ) < 100;
 
-                  var shapePoints = shape.points.sublist(startIdx, endIdx + 1);
-                  if (isReversed) {
-                    shapePoints = shapePoints.reversed.toList();
+                  List<LatLng> shapePoints;
+                  if (isLoop && (bestA - bestB).abs() > N / 2) {
+                    if (bestA > bestB) {
+                      shapePoints = shape.points.sublist(bestA, N);
+                      shapePoints.addAll(shape.points.sublist(0, bestB + 1));
+                    } else {
+                      shapePoints = shape.points.sublist(0, bestA + 1).reversed.toList();
+                      shapePoints.addAll(shape.points.sublist(bestB, N).reversed.toList());
+                    }
+                  } else {
+                    final isReversed = bestA > bestB;
+                    final startIdx = isReversed ? bestB : bestA;
+                    final endIdx = isReversed ? bestA : bestB;
+                    shapePoints = shape.points.sublist(startIdx, endIdx + 1);
+                    if (isReversed) {
+                      shapePoints = shapePoints.reversed.toList();
+                    }
                   }
 
                   polylines.add(
@@ -2266,6 +2320,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             TileLayer(
               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
               userAgentPackageName: 'com.example.route',
+              maxNativeZoom: 19,
+              keepBuffer: 5,
+              panBuffer: 2,
             ),
             if (shapeSegments.isNotEmpty)
               PolylineLayer(polylines: _cachedShapePolylines),

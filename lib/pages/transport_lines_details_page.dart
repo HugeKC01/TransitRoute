@@ -399,6 +399,9 @@ class _TransportLinesDetailsPageState extends State<TransportLinesDetailsPage> {
           TileLayer(
             urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
             userAgentPackageName: "com.example.transit_route",
+            maxNativeZoom: 19,
+            keepBuffer: 5,
+            panBuffer: 2,
           ),
           if (_lineShape.isNotEmpty)
             PolylineLayer(

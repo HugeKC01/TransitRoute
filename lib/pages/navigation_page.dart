@@ -233,6 +233,9 @@ class _NavigationPageState extends State<NavigationPage> {
         TileLayer(
           urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
           userAgentPackageName: 'com.example.route',
+          maxNativeZoom: 19,
+          keepBuffer: 5,
+          panBuffer: 2,
         ),
         if (travelledPath.length > 1)
           PolylineLayer(
