@@ -601,11 +601,8 @@ class _FavoritedPinsPageState extends State<_FavoritedPinsPage> {
                                 TileLayer(
                                   urlTemplate:
                                       'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                                  userAgentPackageName:
-                                      'com.example.transitroute',
+                                  userAgentPackageName: 'app.transitroute.user',
                                   maxNativeZoom: 19,
-                                  keepBuffer: 5,
-                                  panBuffer: 2,
                                 ),
                                 MarkerLayer(
                                   markers: [

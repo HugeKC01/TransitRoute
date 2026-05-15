@@ -2319,10 +2319,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
           children: [
             TileLayer(
               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-              userAgentPackageName: 'com.example.route',
+              userAgentPackageName: 'app.transitroute.user',
               maxNativeZoom: 19,
-              keepBuffer: 5,
-              panBuffer: 2,
             ),
             if (shapeSegments.isNotEmpty)
               PolylineLayer(polylines: _cachedShapePolylines),
