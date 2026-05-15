@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:route/services/gtfs_sync_service.dart';
+import 'package:route/services/local_db_service.dart';
 
 class TimetableEntry {
   final String tripId;
@@ -63,9 +64,7 @@ class TimetableService {
     if (_isLoaded) return;
 
     try {
-      final tripContent = await gtfsSyncService.getGtfsFile(
-        'assets/gtfs_data/trips.txt',
-      );
+      final tripContent = await gtfsSyncService.getGtfsFile('assets/gtfs_data/trips.txt');
       final lines = const LineSplitter().convert(tripContent);
       if (lines.length > 1) {
         final header = lines[0].split(',');
@@ -78,15 +77,9 @@ class TimetableService {
           final row = lines[i].split(',');
           if (row.length > tripIdx) {
             final tId = row[tripIdx].trim();
-            final rId = (routeIdx != -1 && row.length > routeIdx)
-                ? row[routeIdx].trim()
-                : '';
-            final svcId = (serviceIdx != -1 && row.length > serviceIdx)
-                ? row[serviceIdx].trim()
-                : '';
-            var hSign = (headsignIdx != -1 && row.length > headsignIdx)
-                ? row[headsignIdx].trim()
-                : '';
+            final rId = (routeIdx != -1 && row.length > routeIdx) ? row[routeIdx].trim() : '';
+            final svcId = (serviceIdx != -1 && row.length > serviceIdx) ? row[serviceIdx].trim() : '';
+            var hSign = (headsignIdx != -1 && row.length > headsignIdx) ? row[headsignIdx].trim() : '';
             if (tId.startsWith('F_')) {
               hSign = 'Ferry';
             }
@@ -104,16 +97,12 @@ class TimetableService {
     } catch (_) {}
 
     try {
-      final fixedContent = await gtfsSyncService.getGtfsFile(
-        'assets/gtfs_data/fixed_timetables.txt',
-      );
+      final fixedContent = await gtfsSyncService.getGtfsFile('assets/gtfs_data/fixed_timetables.txt');
       _fixedTimetableLines = const LineSplitter().convert(fixedContent);
     } catch (_) {}
 
     try {
-      final freqContent = await gtfsSyncService.getGtfsFile(
-        'assets/gtfs_data/frequencies.txt',
-      );
+      final freqContent = await gtfsSyncService.getGtfsFile('assets/gtfs_data/frequencies.txt');
       final lines = const LineSplitter().convert(freqContent);
       if (lines.length > 1) {
         final header = lines[0].split(',');
@@ -137,39 +126,156 @@ class TimetableService {
     } catch (_) {}
 
     try {
-      final content1 = await gtfsSyncService.getGtfsFile(
-        'assets/gtfs_data/stop_times.txt',
-      );
+      final content1 = await gtfsSyncService.getGtfsFile('assets/gtfs_data/stop_times.txt');
       _stopTimesLines = const LineSplitter().convert(content1);
     } catch (_) {}
     try {
-      final content2 = await gtfsSyncService.getGtfsFile(
-        'assets/gtfs_data/bus_stop_times.txt',
-      );
+      final content2 = await gtfsSyncService.getGtfsFile('assets/gtfs_data/bus_stop_times.txt');
       _busStopTimesLines = const LineSplitter().convert(content2);
     } catch (_) {}
     try {
-      final content3 = await gtfsSyncService.getGtfsFile(
-        'assets/gtfs_data/ferry_stop_times.txt',
-      );
+      final content3 = await gtfsSyncService.getGtfsFile('assets/gtfs_data/ferry_stop_times.txt');
       _ferryStopTimesLines = const LineSplitter().convert(content3);
     } catch (_) {}
 
     _isLoaded = true;
   }
 
+  static bool _isServiceValid(String tSvc, String rId, String? serviceId, Set<String> weekendRoutes, bool isWkd, bool isSat, bool isSun) {
+    if (tSvc.isEmpty || tSvc == 'ALL' || tSvc == 'EVERYDAY') {
+      return true;
+    } else if (serviceId != null) {
+      if (tSvc == serviceId) return true;
+      if ((serviceId == 'SAT' || serviceId == 'SUN') && tSvc == 'WKD' && !weekendRoutes.contains(rId)) return true;
+      if ((serviceId == 'SAT' || serviceId == 'SUN') && tSvc == 'SUN_SAT') return true;
+    } else {
+      if (tSvc == 'WKD' && isWkd) return true;
+      if (tSvc == 'SAT' && isSat) return true;
+      if (tSvc == 'SUN' && isSun) return true;
+      if (tSvc == 'SUN_SAT' && (isSat || isSun)) return true;
+      if (tSvc == 'WKD' && (isSat || isSun) && !weekendRoutes.contains(rId)) return true;
+    }
+    return false;
+  }
+
   static Future<List<TimetableEntry>> getTimetableForStop(
     String stopId, {
     String? serviceId,
   }) async {
-    await _loadData();
-    final entries = <TimetableEntry>[];
-
-    // Determine today's service ID if not provided
     final now = DateTime.now();
     final isSat = now.weekday == DateTime.saturday;
     final isSun = now.weekday == DateTime.sunday;
     final isWkd = !isSat && !isSun;
+    final entries = <TimetableEntry>[];
+
+    if (!kIsWeb && localDbService.isReady) {
+      try {
+        final weekendQuery = await localDbService.db.rawQuery("SELECT DISTINCT route_id FROM trips WHERE service_id IN ('SAT', 'SUN', 'SUN_SAT')");
+        final weekendRoutes = weekendQuery.map((row) => row['route_id'] as String).toSet();
+
+        // Query stop_times and frequencies
+        final stopTimesResult = await localDbService.db.rawQuery('''
+          SELECT s.trip_id, s.departure_time, t.route_id, t.trip_headsign, t.service_id,
+                 f.start_time, f.end_time, f.headway_secs
+          FROM stop_times s
+          JOIN trips t ON s.trip_id = t.trip_id
+          LEFT JOIN frequencies f ON s.trip_id = f.trip_id
+          WHERE s.stop_id = ?
+        ''', [stopId]);
+
+        for (final row in stopTimesResult) {
+          final tSvc = (row['service_id'] as String?) ?? '';
+          final rId = (row['route_id'] as String?) ?? '';
+          
+          if (!_isServiceValid(tSvc, rId, serviceId, weekendRoutes, isWkd, isSat, isSun)) {
+            continue;
+          }
+
+          final tId = (row['trip_id'] as String?) ?? '';
+          var hSign = (row['trip_headsign'] as String?) ?? '';
+          if (tId.startsWith('F_')) hSign = 'Ferry';
+
+          if (row['start_time'] != null) {
+            entries.add(TimetableEntry(
+              tripId: tId,
+              routeId: rId,
+              headsign: hSign,
+              departureTime: (row['departure_time'] as String?) ?? '',
+              isFrequency: true,
+              startTime: row['start_time'] as String?,
+              endTime: row['end_time'] as String?,
+              headwaySecs: row['headway_secs'] as int?,
+            ));
+          } else {
+            entries.add(TimetableEntry(
+              tripId: tId,
+              routeId: rId,
+              headsign: hSign,
+              departureTime: (row['departure_time'] as String?) ?? '',
+              isFrequency: false,
+            ));
+          }
+        }
+
+        // Query fixed_timetables
+        final fixedResult = await localDbService.db.rawQuery('''
+          SELECT f.trip_id, f.departure_times, t.route_id, t.trip_headsign, t.service_id
+          FROM fixed_timetables f
+          JOIN trips t ON f.trip_id = t.trip_id
+          WHERE f.stop_id = ?
+        ''', [stopId]);
+
+        for (final row in fixedResult) {
+          final tSvc = (row['service_id'] as String?) ?? '';
+          final rId = (row['route_id'] as String?) ?? '';
+          
+          if (!_isServiceValid(tSvc, rId, serviceId, weekendRoutes, isWkd, isSat, isSun)) {
+            continue;
+          }
+
+          final tId = (row['trip_id'] as String?) ?? '';
+          var hSign = (row['trip_headsign'] as String?) ?? '';
+          if (tId.startsWith('F_')) hSign = 'Ferry';
+
+          final timesStr = (row['departure_times'] as String?) ?? '';
+          final times = timesStr.split(';');
+          for (final t in times) {
+            if (t.trim().isNotEmpty) {
+              entries.add(TimetableEntry(
+                tripId: tId,
+                routeId: rId,
+                headsign: hSign,
+                departureTime: t.trim(),
+                isFrequency: false,
+              ));
+            }
+          }
+        }
+
+        // Deduplicate and sort
+        final uniqueEntries = <String, TimetableEntry>{};
+        for (var e in entries) {
+          final key = e.isFrequency ? '${e.tripId}_${e.startTime}' : '${e.tripId}_${e.departureTime}';
+          uniqueEntries[key] = e;
+        }
+
+        final result = uniqueEntries.values.toList();
+        result.sort((a, b) {
+          final tA = a.isFrequency ? a.startTime! : a.departureTime;
+          final tB = b.isFrequency ? b.startTime! : b.departureTime;
+          return tA.compareTo(tB);
+        });
+
+        return result;
+
+      } catch (e) {
+        debugPrint('Timetable DB Query Failed: $e');
+        // Fallback below
+      }
+    }
+
+    // Fallback logic
+    await _loadData();
 
     // 1. Read fixed_timetables.txt
     try {
@@ -188,44 +294,12 @@ class TimetableService {
               final sId = row[stopIdx].trim();
               if (sId == stopId) {
                 final tId = row[tripIdx].trim();
-                final tInfo =
-                    _tripMap[tId] ??
-                    {'route_id': '', 'headsign': '', 'service_id': ''};
+                final tInfo = _tripMap[tId] ?? {'route_id': '', 'headsign': '', 'service_id': ''};
 
-                // Check calendar service logic
                 final tSvc = tInfo['service_id']!;
                 final rId = tInfo['route_id']!;
-                bool isValid = false;
-                if (tSvc.isEmpty || tSvc == 'ALL' || tSvc == 'EVERYDAY') {
-                  isValid = true;
-                } else if (serviceId != null) {
-                  if (tSvc == serviceId) {
-                    isValid = true;
-                  } else if ((serviceId == 'SAT' || serviceId == 'SUN') &&
-                      tSvc == 'WKD' &&
-                      !_weekendRoutes.contains(rId)) {
-                    isValid = true;
-                  } else if ((serviceId == 'SAT' || serviceId == 'SUN') &&
-                      tSvc == 'SUN_SAT') {
-                    isValid = true;
-                  }
-                } else {
-                  if (tSvc == 'WKD' && isWkd) {
-                    isValid = true;
-                  } else if (tSvc == 'SAT' && isSat) {
-                    isValid = true;
-                  } else if (tSvc == 'SUN' && isSun) {
-                    isValid = true;
-                  } else if (tSvc == 'SUN_SAT' && (isSat || isSun)) {
-                    isValid = true;
-                  } else if (tSvc == 'WKD' &&
-                      (isSat || isSun) &&
-                      !_weekendRoutes.contains(rId)) {
-                    isValid = true;
-                  }
-                }
-
-                if (!isValid) {
+                
+                if (!_isServiceValid(tSvc, rId, serviceId, _weekendRoutes, isWkd, isSat, isSun)) {
                   continue;
                 }
 
@@ -282,44 +356,12 @@ class TimetableService {
                 dTime = row[depIdx].trim();
               }
 
-              final tInfo =
-                  _tripMap[tId] ??
-                  {'route_id': '', 'headsign': '', 'service_id': ''};
+              final tInfo = _tripMap[tId] ?? {'route_id': '', 'headsign': '', 'service_id': ''};
 
-              // Check calendar service logic for frequencies
               final tSvc = tInfo['service_id']!;
               final rId = tInfo['route_id']!;
-              bool isValid = false;
-              if (tSvc.isEmpty || tSvc == 'ALL' || tSvc == 'EVERYDAY') {
-                isValid = true;
-              } else if (serviceId != null) {
-                if (tSvc == serviceId) {
-                  isValid = true;
-                } else if ((serviceId == 'SAT' || serviceId == 'SUN') &&
-                    tSvc == 'WKD' &&
-                    !_weekendRoutes.contains(rId)) {
-                  isValid = true;
-                } else if ((serviceId == 'SAT' || serviceId == 'SUN') &&
-                    tSvc == 'SUN_SAT') {
-                  isValid = true;
-                }
-              } else {
-                if (tSvc == 'WKD' && isWkd) {
-                  isValid = true;
-                } else if (tSvc == 'SAT' && isSat) {
-                  isValid = true;
-                } else if (tSvc == 'SUN' && isSun) {
-                  isValid = true;
-                } else if (tSvc == 'SUN_SAT' && (isSat || isSun)) {
-                  isValid = true;
-                } else if (tSvc == 'WKD' &&
-                    (isSat || isSun) &&
-                    !_weekendRoutes.contains(rId)) {
-                  isValid = true;
-                }
-              }
-
-              if (!isValid) {
+              
+              if (!_isServiceValid(tSvc, rId, serviceId, _weekendRoutes, isWkd, isSat, isSun)) {
                 continue;
               }
 

@@ -14,6 +14,7 @@ import 'package:route/services/transit_update_service.dart';
 import 'package:route/services/timetable_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:route/services/local_db_service.dart';
 
 Map<String, List<Map<String, dynamic>>> _parseStopTimesIsolate(String content) {
   final result = <String, List<Map<String, dynamic>>>{};
@@ -1231,7 +1232,73 @@ class DirectionService {
       return _cachedStopTimes!;
     }
 
-    final stopTimes = await _loadStopTimesFromAssets(_stopTimeAssets);
+    final stopTimes = <String, List<Map<String, dynamic>>>{};
+
+    if (!kIsWeb && localDbService.isReady) {
+      try {
+        final List<Map<String, dynamic>> tripCounts = await localDbService.db.rawQuery('''
+          SELECT t.route_id, t.direction_id, t.trip_id, COUNT(s.stop_id) as stop_count
+          FROM trips t
+          JOIN stop_times s ON t.trip_id = s.trip_id
+          GROUP BY t.route_id, t.direction_id, t.trip_id
+          ORDER BY stop_count DESC
+        ''');
+
+        final targetTripIds = <String>{};
+        final seenRouteDirs = <String>{};
+
+        for (final row in tripCounts) {
+          final rId = row['route_id'] as String?;
+          final dId = row['direction_id'] as String? ?? '0';
+          final tId = row['trip_id'] as String?;
+          
+          if (rId != null && tId != null) {
+            final key = '$rId-$dId';
+            if (!seenRouteDirs.contains(key)) {
+              seenRouteDirs.add(key);
+              targetTripIds.add(tId);
+            }
+          }
+        }
+
+        if (targetTripIds.isNotEmpty) {
+          // SQLite IN clause has a limit (usually 999), so we chunk the queries
+          final tripList = targetTripIds.toList();
+          for (int i = 0; i < tripList.length; i += 500) {
+            final chunk = tripList.sublist(i, i + 500 > tripList.length ? tripList.length : i + 500);
+            final placeholders = List.filled(chunk.length, '?').join(',');
+            
+            final List<Map<String, dynamic>> rows = await localDbService.db.query(
+              'stop_times',
+              columns: ['trip_id', 'stop_id', 'stop_sequence'],
+              where: 'trip_id IN ($placeholders)',
+              whereArgs: chunk,
+              orderBy: 'trip_id, stop_sequence ASC',
+            );
+
+            for (final row in rows) {
+              final tId = (row['trip_id'] as String?) ?? '';
+              if (tId.isNotEmpty) {
+                stopTimes.putIfAbsent(tId, () => []).add({
+                  'stopId': row['stop_id'],
+                  'stopSequence': row['stop_sequence'],
+                });
+              }
+            }
+            await Future.delayed(const Duration(milliseconds: 2));
+          }
+        }
+      } catch (e) {
+        debugPrint('DB stop times load failed: $e');
+      }
+    }
+
+    if (stopTimes.isEmpty) {
+      final parsed = await _loadStopTimesFromAssets(_stopTimeAssets);
+      for (final e in parsed.entries) {
+        stopTimes.putIfAbsent(e.key, () => []).addAll(e.value);
+      }
+    }
 
     try {
       final content = await gtfsSyncService.getGtfsFile(
@@ -1296,100 +1363,102 @@ class DirectionService {
       return _cachedTrips!;
     }
 
-    try {
-      final tripsContent = await gtfsSyncService.getGtfsFile(
-        'assets/gtfs_data/trips.txt',
-      );
-      final lines = const LineSplitter().convert(tripsContent);
-      if (lines.length <= 1) return {};
-      final header = parseCsvLine(lines.first).map((s) => s.trim()).toList();
-      final idxRouteId = header.indexOf('route_id');
-      final idxTripId = header.indexOf('trip_id');
-      final idxServiceId = header.indexOf('service_id');
-      final idxHeadsign = header.indexOf('trip_headsign');
-      final idxDirection = header.indexOf('direction_id');
-      final idxShapeId = header.indexOf('shape_id');
-      final idxShapeColor = header.indexWhere(
-        (value) => value == 'shape_color' || value == 'shape-color',
-      );
-      if (idxRouteId < 0 || idxTripId < 0) {
-        return {};
-      }
-      final result = <String, gtfs.Trip>{};
-      for (int i = 1; i < lines.length; i++) {
-        final row = parseCsvLine(lines[i]);
-        if (row.length <= idxTripId || row.length <= idxRouteId) {
-          continue;
-        }
-        final tripId = row[idxTripId].trim();
-        final routeId = row[idxRouteId].trim();
-        if (tripId.isEmpty || routeId.isEmpty) continue;
-        final serviceId = (idxServiceId >= 0 && row.length > idxServiceId)
-            ? row[idxServiceId].trim()
-            : '';
-        final headsign = (idxHeadsign >= 0 && row.length > idxHeadsign)
-            ? row[idxHeadsign].trim()
-            : '';
-        final directionId = (idxDirection >= 0 && row.length > idxDirection)
-            ? row[idxDirection].trim()
-            : null;
-        final shapeId = (idxShapeId >= 0 && row.length > idxShapeId)
-            ? row[idxShapeId].trim()
-            : null;
-        final shapeColorStr = (idxShapeColor >= 0 && row.length > idxShapeColor)
-            ? row[idxShapeColor].trim()
-            : null;
-        Color? shapeColor;
-        if (shapeColorStr != null && shapeColorStr.isNotEmpty) {
-          shapeColor = _parseHexColor(shapeColorStr);
-        }
-        final trip = gtfs.Trip(
-          tripId: tripId,
-          routeId: routeId,
-          serviceId: serviceId,
-          headsign: headsign,
-          directionId: (directionId != null && directionId.isEmpty)
-              ? null
-              : directionId,
-          shapeId: (shapeId != null && shapeId.isEmpty) ? null : shapeId,
-          shapeColor: shapeColor,
-        );
-        result[tripId] = trip;
-      }
+    final result = <String, gtfs.Trip>{};
 
-      // Also append trips from bus_route_stop.txt
+    if (!kIsWeb && localDbService.isReady) {
       try {
-        final content = await gtfsSyncService.getGtfsFile(
-          'assets/gtfs_data/bus_route_stop.txt',
+        final List<Map<String, dynamic>> rows = await localDbService.db.rawQuery('''
+          SELECT trip_id, route_id, service_id, trip_headsign, direction_id, shape_id, shape_color
+          FROM trips
+          GROUP BY route_id, direction_id, shape_id
+        ''');
+
+        for (final row in rows) {
+          final tripId = (row['trip_id'] as String?) ?? '';
+          if (tripId.isEmpty) continue;
+          
+          final shapeColorStr = row['shape_color'] as String?;
+          Color? shapeColor;
+          if (shapeColorStr != null && shapeColorStr.isNotEmpty) {
+            shapeColor = _parseHexColor(shapeColorStr);
+          }
+          
+          result[tripId] = gtfs.Trip(
+            tripId: tripId,
+            routeId: (row['route_id'] as String?) ?? '',
+            serviceId: (row['service_id'] as String?) ?? '',
+            headsign: (row['trip_headsign'] as String?) ?? '',
+            directionId: row['direction_id'] as String?,
+            shapeId: row['shape_id'] as String?,
+            shapeColor: shapeColor,
+          );
+        }
+      } catch (e) {
+        debugPrint('DB trips load failed: $e');
+      }
+    }
+
+    if (result.isEmpty) {
+      try {
+        final tripsContent = await gtfsSyncService.getGtfsFile(
+          'assets/gtfs_data/trips.txt',
         );
-        final busLines = const LineSplitter().convert(content);
-        if (busLines.length > 1) {
-          for (int i = 1; i < busLines.length; i++) {
-            final line = busLines[i].trimRight();
-            if (line.isEmpty) continue;
-            final row = parseCsvLine(line);
-            if (row.length > 5) {
-              final busLineId = row[0].trim();
-              final routeShortName = row[1].trim();
-              final headsign = row[2].trim(); // description_bus
-              // row[3] = type_id, row[4] = agency_id
-              final shapeIdRaw = row[5].trim();
-              final routeId = routeShortName.split(' ').first;
-              final tripId = 'BUS_$busLineId';
+        final lines = const LineSplitter().convert(tripsContent);
+        if (lines.length > 1) {
+          final header = parseCsvLine(lines.first).map((s) => s.trim()).toList();
+          final idxRouteId = header.indexOf('route_id');
+          final idxTripId = header.indexOf('trip_id');
+          final idxServiceId = header.indexOf('service_id');
+          final idxHeadsign = header.indexOf('trip_headsign');
+          final idxDirection = header.indexOf('direction_id');
+          final idxShapeId = header.indexOf('shape_id');
+          final idxShapeColor = header.indexWhere(
+            (value) => value == 'shape_color' || value == 'shape-color',
+          );
+          if (idxRouteId >= 0 && idxTripId >= 0) {
+            for (int i = 1; i < lines.length; i++) {
+              final row = parseCsvLine(lines[i]);
+              if (row.length <= idxTripId || row.length <= idxRouteId) {
+                continue;
+              }
+              final tripId = row[idxTripId].trim();
+              final routeId = row[idxRouteId].trim();
+              if (tripId.isEmpty || routeId.isEmpty) continue;
+              final serviceId = (idxServiceId >= 0 && row.length > idxServiceId)
+                  ? row[idxServiceId].trim()
+                  : '';
+              final headsign = (idxHeadsign >= 0 && row.length > idxHeadsign)
+                  ? row[idxHeadsign].trim()
+                  : '';
+              final directionId = (idxDirection >= 0 && row.length > idxDirection)
+                  ? row[idxDirection].trim()
+                  : null;
+              final shapeId = (idxShapeId >= 0 && row.length > idxShapeId)
+                  ? row[idxShapeId].trim()
+                  : null;
+              final shapeColorStr = (idxShapeColor >= 0 && row.length > idxShapeColor)
+                  ? row[idxShapeColor].trim()
+                  : null;
+              Color? shapeColor;
+              if (shapeColorStr != null && shapeColorStr.isNotEmpty) {
+                shapeColor = _parseHexColor(shapeColorStr);
+              }
               result[tripId] = gtfs.Trip(
                 tripId: tripId,
                 routeId: routeId,
-                serviceId: 'WKD',
+                serviceId: serviceId,
                 headsign: headsign,
-                directionId: '0',
-                shapeId: shapeIdRaw.isNotEmpty ? shapeIdRaw : null,
-                shapeColor: null,
+                directionId: (directionId != null && directionId.isEmpty)
+                    ? null
+                    : directionId,
+                shapeId: (shapeId != null && shapeId.isEmpty) ? null : shapeId,
+                shapeColor: shapeColor,
               );
             }
           }
         }
       } catch (_) {}
-
+      
       // Add shapes for ferry and BRT
       final auxAssets = [
         'assets/gtfs_data/ferry_trips.txt',
@@ -1426,12 +1495,43 @@ class DirectionService {
           }
         } catch (_) {}
       }
-
-      _cachedTrips = result;
-      return result;
-    } catch (_) {
-      return {};
     }
+
+    // Also append trips from bus_route_stop.txt
+    try {
+      final content = await gtfsSyncService.getGtfsFile(
+        'assets/gtfs_data/bus_route_stop.txt',
+      );
+      final busLines = const LineSplitter().convert(content);
+      if (busLines.length > 1) {
+        for (int i = 1; i < busLines.length; i++) {
+          final line = busLines[i].trimRight();
+          if (line.isEmpty) continue;
+          final row = parseCsvLine(line);
+          if (row.length > 5) {
+            final busLineId = row[0].trim();
+            final routeShortName = row[1].trim();
+            final headsign = row[2].trim(); // description_bus
+            // row[3] = type_id, row[4] = agency_id
+            final shapeIdRaw = row[5].trim();
+            final routeId = routeShortName.split(' ').first;
+            final tripId = 'BUS_$busLineId';
+            result[tripId] = gtfs.Trip(
+              tripId: tripId,
+              routeId: routeId,
+              serviceId: 'WKD',
+              headsign: headsign,
+              directionId: '0',
+              shapeId: shapeIdRaw.isNotEmpty ? shapeIdRaw : null,
+              shapeColor: null,
+            );
+          }
+        }
+      }
+    } catch (_) {}
+
+    _cachedTrips = result;
+    return result;
   }
 
   Color? _parseHexColor(String? hex) {

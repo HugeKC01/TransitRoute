@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:route/services/gtfs_sync_service.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:route/services/gtfs_models.dart' as gtfs;
+import 'package:route/services/local_db_service.dart';
 
 class ShapeSegment {
   final String shapeId;
@@ -100,6 +101,36 @@ class GtfsShapesService {
   }
 
   Future<Map<String, List<_SeqPoint>>> _parseShapes(String assetPath) async {
+    if (!kIsWeb && localDbService.isReady) {
+      final isSource = assetPath.contains('shapes_source');
+      final tableName = isSource ? 'shapes_source' : 'shapes';
+      
+      try {
+        final List<Map<String, dynamic>> maps = await localDbService.db.query(
+          tableName,
+          columns: ['shape_id', 'shape_pt_lat', 'shape_pt_lon', 'shape_pt_sequence', 'shape_pt_name'],
+          orderBy: 'shape_id ASC, shape_pt_sequence ASC'
+        );
+
+        final result = <String, List<_SeqPoint>>{};
+        for (final row in maps) {
+          final id = row['shape_id'] as String;
+          final lat = (row['shape_pt_lat'] as num?)?.toDouble() ?? 0.0;
+          final lon = (row['shape_pt_lon'] as num?)?.toDouble() ?? 0.0;
+          final seq = row['shape_pt_sequence'] as int? ?? 0;
+          final name = row['shape_pt_name'] as String?;
+
+          result.putIfAbsent(id, () => <_SeqPoint>[]).add(
+            _SeqPoint(seq: seq, point: LatLng(lat, lon), name: name)
+          );
+        }
+        return result;
+      } catch (e) {
+        debugPrint('Failed to load shapes from LocalDB: $e');
+        // fallback to parsing
+      }
+    }
+
     final text = await gtfsSyncService.getGtfsFile(assetPath);
     if (text.trim().isEmpty) return <String, List<_SeqPoint>>{};
     return await compute(_parseShapesIsolate, text);

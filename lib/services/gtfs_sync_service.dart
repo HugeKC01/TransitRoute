@@ -6,6 +6,12 @@ import 'package:path_provider/path_provider.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:archive/archive_io.dart';
+import 'package:route/services/local_db_service.dart';
+
+
+void _extractArchiveIsolate(Map<String, String> args) {
+  extractFileToDisk(args['zipPath']!, args['targetPath']!);
+}
 
 class GtfsSyncService {
   static const _versionKey = 'gtfs_local_version';
@@ -15,6 +21,7 @@ class GtfsSyncService {
 
   bool _isInit = false;
   String? _localGtfsPath;
+  String? get localGtfsPath => _localGtfsPath;
 
   final ValueNotifier<List<String>> consoleLogs = ValueNotifier([]);
 
@@ -40,6 +47,13 @@ class GtfsSyncService {
       _isInit = true;
       
       await _checkForUpdates();
+      
+      // Initialize local DB and import data if we are not on web
+      if (!kIsWeb) {
+        await localDbService.init();
+        final currentVersion = await getLocalVersion();
+        await localDbService.importDataIfRequired(currentVersion);
+      }
     } catch (e) {
       _log('Failed to sync GTFS data: $e');
     }
@@ -73,6 +87,12 @@ class GtfsSyncService {
       await _downloadAndExtractGtfs();
       await prefs.setInt(_versionKey, remoteVersion);
       _log('Successfully updated GTFS data to version $remoteVersion');
+      
+      // Re-import the newly downloaded data
+      if (!kIsWeb) {
+        await localDbService.init();
+        await localDbService.importDataIfRequired(remoteVersion);
+      }
     } else {
       _log('GTFS data is up to date.');
     }
@@ -125,7 +145,11 @@ class GtfsSyncService {
     }
     await targetDir.create(recursive: true);
 
-    await extractFileToDisk(tempZipFile.path, targetDir.path);
+    await compute(_extractArchiveIsolate, {
+      'zipPath': tempZipFile.path,
+      'targetPath': targetDir.path,
+    });
+    
     await tempZipFile.delete();
   }
 

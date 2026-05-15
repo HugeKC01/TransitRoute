@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:route/services/gtfs_sync_service.dart';
+import 'package:route/services/local_db_service.dart';
 
 class TerminalLoader {
   static List<String> _parseCsvLine(String line) {
@@ -28,6 +30,63 @@ class TerminalLoader {
 
   static Future<Map<String, String>> loadAllTerminals() async {
     final terminals = <String, String>{};
+
+    if (!kIsWeb && localDbService.isReady) {
+      try {
+        // Query the longest trip for each route
+        final List<Map<String, dynamic>> longestTrips = await localDbService.db.rawQuery('''
+          SELECT t.route_id, t.trip_id, COUNT(s.stop_id) as stop_count
+          FROM trips t
+          JOIN stop_times s ON t.trip_id = s.trip_id
+          GROUP BY t.route_id, t.trip_id
+          ORDER BY stop_count DESC
+        ''');
+
+        // Group by route to only keep the absolute longest trip
+        final routeLongestTrip = <String, String>{};
+        for (final row in longestTrips) {
+          final rId = row['route_id'] as String?;
+          final tId = row['trip_id'] as String?;
+          if (rId != null && tId != null && !routeLongestTrip.containsKey(rId)) {
+            routeLongestTrip[rId] = tId;
+          }
+        }
+
+        // Now for each route's longest trip, find the first and last stop names
+        for (final entry in routeLongestTrip.entries) {
+          final routeId = entry.key;
+          final tripId = entry.value;
+
+          final firstStopQuery = await localDbService.db.rawQuery('''
+            SELECT st.stop_name 
+            FROM stop_times s
+            JOIN stops st ON s.stop_id = st.stop_id
+            WHERE s.trip_id = ?
+            ORDER BY s.stop_sequence ASC LIMIT 1
+          ''', [tripId]);
+
+          final lastStopQuery = await localDbService.db.rawQuery('''
+            SELECT st.stop_name 
+            FROM stop_times s
+            JOIN stops st ON s.stop_id = st.stop_id
+            WHERE s.trip_id = ?
+            ORDER BY s.stop_sequence DESC LIMIT 1
+          ''', [tripId]);
+
+          final firstName = firstStopQuery.isNotEmpty ? (firstStopQuery.first['stop_name'] as String?) ?? '' : '';
+          final lastName = lastStopQuery.isNotEmpty ? (lastStopQuery.first['stop_name'] as String?) ?? '' : '';
+
+          if (firstName.isNotEmpty && lastName.isNotEmpty) {
+            terminals[routeId] = '$firstName - $lastName';
+          }
+        }
+
+        return terminals;
+      } catch (e) {
+        debugPrint('Terminal DB Query Failed: $e');
+        // Fallback below
+      }
+    }
 
     Future<void> processFiles(
       String tripsFile,
