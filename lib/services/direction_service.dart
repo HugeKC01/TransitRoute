@@ -406,22 +406,34 @@ class DirectionService {
     return transfers;
   }
 
-  String? _findClosestStop(LocationPoint point) {
-    if (point.stopId != null) return point.stopId;
-    if (_allStops.isEmpty) return null;
+  List<String> _findClosestStops(LocationPoint point) {
+    if (point.stopId != null) return [point.stopId!];
+    if (_allStops.isEmpty) return [];
 
-    gtfs.Stop? closestStop;
-    double minDistance = double.infinity;
+    final stopsWithDist = _allStops
+        .map((stop) => (stop, geo.haversine(point.lat, point.lon, stop.lat, stop.lon)))
+        .toList();
+    stopsWithDist.sort((a, b) => a.$2.compareTo(b.$2));
 
-    for (final stop in _allStops) {
-      final distance = geo.haversine(point.lat, point.lon, stop.lat, stop.lon);
-      if (distance < minDistance) {
-        minDistance = distance;
-        closestStop = stop;
+    final closestDist = stopsWithDist.first.$2;
+    
+    final selectedIds = <String>[];
+    final seenTypes = <String>{};
+
+    for (final e in stopsWithDist) {
+      if (e.$2 > closestDist + 800 || e.$2 > 1500) break;
+      final type = getRouteTypeForStop(e.$1.stopId) ?? 'unknown';
+      if (!seenTypes.contains(type) || selectedIds.length < 2) {
+        selectedIds.add(e.$1.stopId);
+        seenTypes.add(type);
       }
+      if (selectedIds.length >= 4) break;
     }
-
-    return closestStop?.stopId;
+    
+    if (selectedIds.isEmpty && stopsWithDist.isNotEmpty) {
+      selectedIds.add(stopsWithDist.first.$1.stopId);
+    }
+    return selectedIds;
   }
 
   Future<DirectionResult> findDirections({
@@ -432,24 +444,11 @@ class DirectionService {
   }) async {
     await _ensureGraphsBuilt();
 
-    final startStopId = startPoint.stopId ?? _findClosestStop(startPoint);
-    final destStopId = destPoint.stopId ?? _findClosestStop(destPoint);
+    final startStopIds = _findClosestStops(startPoint);
+    final destStopIds = _findClosestStops(destPoint);
 
-    if (startStopId == null || destStopId == null) {
+    if (startStopIds.isEmpty || destStopIds.isEmpty || _allStops.isEmpty) {
       return DirectionResult.empty();
-    }
-    if (startStopId.isEmpty || destStopId.isEmpty) {
-      return DirectionResult.empty();
-    }
-    if (!_stopLookup.containsKey(startStopId) ||
-        !_stopLookup.containsKey(destStopId) ||
-        _allStops.isEmpty) {
-      return DirectionResult.empty();
-    }
-    if (startStopId == destStopId &&
-        startPoint.stopId != null &&
-        destPoint.stopId != null) {
-      return DirectionResult.empty(); // It's exactly the same transit stop
     }
 
     final stopTimes = await _loadStopTimes();
@@ -678,35 +677,47 @@ class DirectionService {
       entry.tags.addAll(tags);
     }
 
-    final multiRoutes = await _computeMultiModeRoutes(startStopId, destStopId);
-    for (final route in multiRoutes) {
-      addOption(route.stops, route.tags);
-    }
+    for (final startStopId in startStopIds) {
+      if (!_stopLookup.containsKey(startStopId)) continue;
+      for (final destStopId in destStopIds) {
+        if (!_stopLookup.containsKey(destStopId)) continue;
+        if (startStopId == destStopId &&
+            startPoint.stopId != null &&
+            destPoint.stopId != null) {
+          continue; // exactly the same transit stop
+        }
 
-    await Future.delayed(const Duration(milliseconds: 10));
+        final multiRoutes = await _computeMultiModeRoutes(startStopId, destStopId);
+        for (final route in multiRoutes) {
+          addOption(route.stops, route.tags);
+        }
 
-    final selectedTrip = _findDirectTrip(
-      stopTimes: stopTimes,
-      tripMap: tripMap,
-      routeIdToPrefixes: routeIdToPrefixes,
-      startStopId: startStopId,
-      destStopId: destStopId,
-    );
-    if (selectedTrip != null) {
-      addOption(selectedTrip, {'Direct'});
-    }
+        await Future.delayed(const Duration(milliseconds: 2));
 
-    await Future.delayed(const Duration(milliseconds: 10));
+        final selectedTrip = _findDirectTrip(
+          stopTimes: stopTimes,
+          tripMap: tripMap,
+          routeIdToPrefixes: routeIdToPrefixes,
+          startStopId: startStopId,
+          destStopId: destStopId,
+        );
+        if (selectedTrip != null) {
+          addOption(selectedTrip, {'Direct'});
+        }
 
-    final transferRoutes = await _generateTransferRoutes(
-      stopTimes: stopTimes,
-      tripMap: tripMap,
-      routeIdToPrefixes: routeIdToPrefixes,
-      startStopId: startStopId,
-      destStopId: destStopId,
-    );
-    for (final route in transferRoutes) {
-      addOption(route.stops, route.tags);
+        await Future.delayed(const Duration(milliseconds: 2));
+
+        final transferRoutes = await _generateTransferRoutes(
+          stopTimes: stopTimes,
+          tripMap: tripMap,
+          routeIdToPrefixes: routeIdToPrefixes,
+          startStopId: startStopId,
+          destStopId: destStopId,
+        );
+        for (final route in transferRoutes) {
+          addOption(route.stops, route.tags);
+        }
+      }
     }
 
     if (optionMap.isEmpty) {

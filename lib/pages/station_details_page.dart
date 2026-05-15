@@ -102,7 +102,8 @@ class _StationDetailsPageState extends State<StationDetailsPage> {
       children: [
         TileLayer(
           urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          userAgentPackageName: 'com.example.transit_route',
+          userAgentPackageName: 'app.transitroute.user',
+          maxNativeZoom: 19,
         ),
         MarkerLayer(
           markers: [

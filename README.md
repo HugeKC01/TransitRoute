@@ -5,8 +5,28 @@
 > 🌐 **Live Web App:** [https://hugekc01.github.io/TransitRoute](https://hugekc01.github.io/TransitRoute)
 >
 > 📦 **Repository:** [https://github.com/HugeKC01/TransitRoute](https://github.com/HugeKC01/TransitRoute)
+>
+> 📱 **Google Play (Closed Testing):** [Join on Google Play](https://play.google.com/store/apps/details?id=com.hugekc.transitroute)
+>
+> 👥 **Google Group (Required to access):** [transitroute-bkk](https://groups.google.com/g/transitroute-bkk)
 
 This app was developed as a senior project by students at **King Mongkut's University of Technology Thonburi (KMUTT)**.
+
+---
+
+## 📲 Download & Testing
+
+TransitRoute is currently in **Closed Testing** on Google Play. To install it on Android:
+
+1. **Join the Google Group** to get access:
+   👉 [https://groups.google.com/g/transitroute-bkk](https://groups.google.com/g/transitroute-bkk)
+
+2. **Opt in to the test** on Google Play:
+   👉 [https://play.google.com/store/apps/details?id=com.hugekc.transitroute](https://play.google.com/store/apps/details?id=com.hugekc.transitroute)
+
+3. Download and install the app from the Play Store.
+
+> ⚠️ You must join the Google Group first — otherwise the Play Store link will show the app as unavailable.
 
 ---
 
@@ -67,41 +87,6 @@ lib/
     ├── station_details_content.dart
     └── station_timetable.dart
 ```
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-- [Flutter SDK](https://docs.flutter.dev/get-started/install) `^3.9.0`
-- A Firebase project (for transit updates & GTFS sync)
-
-### Setup
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/HugeKC01/TransitRoute.git
-   cd TransitRoute
-   ```
-
-2. **Install dependencies**
-   ```bash
-   flutter pub get
-   ```
-
-3. **Configure Firebase**
-   - Add your `google-services.json` (Android) and `GoogleService-Info.plist` (iOS) to the respective platform directories.
-   - The `lib/firebase_options.dart` file should be generated via `flutterfire configure`.
-
-4. **Run the app**
-   ```bash
-   # Mobile
-   flutter run
-
-   # Web
-   flutter run -d chrome
-   ```
 
 ---
 
